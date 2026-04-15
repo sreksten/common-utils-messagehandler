@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.io.BufferedWriter;
+import java.io.FileWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -53,6 +55,28 @@ class FileMessageHandlerUnitTest {
         @Override
         protected void removeShutdownHook(Thread hook) {
             throw new IllegalStateException("forced");
+        }
+    }
+
+    private static class InterruptingWriteFileMessageHandler extends FileMessageHandler {
+        private InterruptingWriteFileMessageHandler(String filename) {
+            super(filename, true, 4096, false);
+        }
+
+        @Override
+        protected PrintWriter openWriter(Path filePath) throws IOException {
+            return new PrintWriter(new BufferedWriter(new FileWriter(filePath.toFile(), true))) {
+                private boolean interrupted;
+
+                @Override
+                public void println(String x) {
+                    super.println(x);
+                    if (!interrupted) {
+                        interrupted = true;
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            };
         }
     }
 
@@ -322,5 +346,26 @@ class FileMessageHandlerUnitTest {
         }
 
         assertEquals(expectedMessages, infoLines, "Some file info messages were lost under stress");
+    }
+
+    @Test
+    @DisplayName("Should drain queued writes when worker is interrupted mid-write")
+    void shouldDrainQueuedWritesWhenWorkerIsInterruptedMidWrite() throws Exception {
+        Path file = Files.createTempFile("fmh-interrupt-mid-write", ".log");
+        Files.deleteIfExists(file);
+        final int messages = 1200;
+
+        try (FileMessageHandler handler = new InterruptingWriteFileMessageHandler(file.toString())) {
+            for (int i = 0; i < messages; i++) {
+                handler.handleInfoMessage("mid-write-" + i);
+            }
+        }
+
+        long infoLines;
+        try (Stream<String> lines = Files.lines(file)) {
+            infoLines = lines.filter(line -> line.contains("[INFO ]") && line.contains("mid-write-")).count();
+        }
+
+        assertEquals(messages, infoLines, "Queued writes were not drained after worker interruption");
     }
 }

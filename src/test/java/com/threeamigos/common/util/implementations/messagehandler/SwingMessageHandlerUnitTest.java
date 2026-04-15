@@ -7,9 +7,6 @@ import org.junit.jupiter.api.Test;
 
 import javax.swing.*;
 import java.awt.*;
-import java.lang.reflect.Field;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -233,36 +230,5 @@ class SwingMessageHandlerUnitTest {
                 System.setProperty("java.awt.headless", original);
             }
         }
-    }
-
-    @Test
-    @DisplayName("Bundle initialization should exercise both double-check branches")
-    void bundleInitializationShouldExerciseBothDoubleCheckBranches() throws Exception {
-        Field bundleField = SwingMessageHandler.class.getDeclaredField("bundle");
-        bundleField.setAccessible(true);
-        bundleField.set(null, null);
-
-        CountDownLatch started = new CountDownLatch(2);
-        CountDownLatch finished = new CountDownLatch(2);
-
-        Runnable task = () -> {
-            started.countDown();
-            try {
-                new CapturingSwingMessageHandler().handleInfoMessage("bundle");
-            } finally {
-                finished.countDown();
-            }
-        };
-
-        synchronized (SwingMessageHandler.class) {
-            Thread first = new Thread(task, "swing-bundle-1");
-            Thread second = new Thread(task, "swing-bundle-2");
-            first.start();
-            second.start();
-            assertTrue(started.await(1, TimeUnit.SECONDS));
-            Thread.sleep(100);
-        }
-
-        assertTrue(finished.await(2, TimeUnit.SECONDS));
     }
 }

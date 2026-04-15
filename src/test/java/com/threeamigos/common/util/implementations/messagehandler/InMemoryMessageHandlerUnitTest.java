@@ -1,17 +1,15 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
-import com.threeamigos.common.util.implementations.messagehandler.AbstractMessageHandler;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
-import java.lang.reflect.Field;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @DisplayName("InMemoryMessageHandler unit test")
@@ -319,34 +317,65 @@ class InMemoryMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Abstract bundle initialization should exercise both double-check branches")
-    void abstractBundleInitializationShouldExerciseBothDoubleCheckBranches() throws Exception {
-        Field bundleField = AbstractMessageHandler.class.getDeclaredField("bundle");
-        bundleField.setAccessible(true);
-        bundleField.set(null, null);
+    @DisplayName("Snapshot should expose an immutable and internally consistent view")
+    void snapshotShouldExposeImmutableAndConsistentView() {
+        InMemoryMessageHandler sut = new InMemoryMessageHandler();
 
-        CountDownLatch started = new CountDownLatch(2);
-        CountDownLatch finished = new CountDownLatch(2);
+        sut.handleInfoMessage("info");
+        sut.handleWarnMessage("warn");
+        sut.handleErrorMessage("error");
+        sut.handleDebugMessage("debug");
+        sut.handleTraceMessage("trace");
+        sut.handleException("prefix", new RuntimeException("boom"));
 
-        Runnable task = () -> {
-            started.countDown();
+        InMemoryMessageHandler.Snapshot snapshot = sut.snapshot();
+
+        assertEquals(6, snapshot.getAllMessages().size());
+        assertEquals(1, snapshot.getAllInfoMessages().size());
+        assertEquals(1, snapshot.getAllWarnMessages().size());
+        assertEquals(1, snapshot.getAllErrorMessages().size());
+        assertEquals(1, snapshot.getAllDebugMessages().size());
+        assertEquals(1, snapshot.getAllTraceMessages().size());
+        assertEquals(1, snapshot.getAllExceptionMessages().size());
+        assertEquals(1, snapshot.getAllExceptions().size());
+        assertEquals("boom", snapshot.getLastMessage());
+
+        assertThrows(UnsupportedOperationException.class, () -> snapshot.getAllMessages().add("new"));
+        assertThrows(UnsupportedOperationException.class, () -> snapshot.getAllExceptions().add(new RuntimeException("x")));
+    }
+
+    @Test
+    @Timeout(value = 60, unit = TimeUnit.SECONDS)
+    @DisplayName("Snapshot should remain internally consistent under concurrent writes")
+    void snapshotShouldRemainInternallyConsistentUnderConcurrentWrites() throws Exception {
+        final int messageCount = 20_000;
+        InMemoryMessageHandler handler = new InMemoryMessageHandler(messageCount + 10);
+        CountDownLatch start = new CountDownLatch(1);
+
+        Thread writer = new Thread(() -> {
             try {
-                InMemoryMessageHandler handler = new InMemoryMessageHandler();
-                assertThrows(NullPointerException.class, () -> handler.handleInfoMessage((String) null));
-            } finally {
-                finished.countDown();
+                start.await();
+                for (int i = 0; i < messageCount; i++) {
+                    handler.handleInfoMessage("snapshot-msg-" + i);
+                }
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
             }
-        };
+        }, "inmemory-snapshot-writer");
+        writer.start();
+        start.countDown();
 
-        synchronized (AbstractMessageHandler.class) {
-            Thread first = new Thread(task, "abstract-bundle-1");
-            Thread second = new Thread(task, "abstract-bundle-2");
-            first.start();
-            second.start();
-            assertTrue(started.await(1, TimeUnit.SECONDS));
-            Thread.sleep(100);
+        while (writer.isAlive()) {
+            InMemoryMessageHandler.Snapshot snapshot = handler.snapshot();
+            assertEquals(snapshot.getAllInfoMessages().size(), snapshot.getAllMessages().size());
+            if (!snapshot.getAllMessages().isEmpty()) {
+                assertEquals(snapshot.getAllMessages().get(snapshot.getAllMessages().size() - 1), snapshot.getLastMessage());
+            }
         }
 
-        assertTrue(finished.await(2, TimeUnit.SECONDS));
+        writer.join();
+        InMemoryMessageHandler.Snapshot finalSnapshot = handler.snapshot();
+        assertEquals(messageCount, finalSnapshot.getAllInfoMessages().size());
+        assertEquals(messageCount, finalSnapshot.getAllMessages().size());
     }
 }

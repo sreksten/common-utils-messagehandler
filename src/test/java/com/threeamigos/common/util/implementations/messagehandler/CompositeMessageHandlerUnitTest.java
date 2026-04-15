@@ -6,13 +6,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
@@ -649,33 +654,41 @@ class CompositeMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Bundle initialization should exercise both double-check branches")
-    void bundleInitializationShouldExerciseBothDoubleCheckBranches() throws Exception {
-        Field bundleField = CompositeMessageHandler.class.getDeclaredField("bundle");
-        bundleField.setAccessible(true);
-        bundleField.set(null, null);
+    @Timeout(value = 90, unit = TimeUnit.SECONDS)
+    @DisplayName("Should fan out info messages under very high concurrent load")
+    void shouldFanOutInfoMessagesUnderVeryHighConcurrentLoad() throws Exception {
+        final int threadCount = 32;
+        final int messagesPerThread = 1500;
+        final int expectedMessages = threadCount * messagesPerThread;
 
-        CountDownLatch started = new CountDownLatch(2);
-        CountDownLatch finished = new CountDownLatch(2);
+        InMemoryMessageHandler sink = new InMemoryMessageHandler(expectedMessages + 10);
+        CompositeMessageHandler sut = new CompositeMessageHandler(sink);
 
-        Runnable task = () -> {
-            started.countDown();
-            try {
-                assertThrows(NullPointerException.class, () -> new CompositeMessageHandler((Collection<MessageHandler>) null));
-            } finally {
-                finished.countDown();
-            }
-        };
+        ExecutorService producerPool = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<?>> futures = new ArrayList<>();
 
-        synchronized (CompositeMessageHandler.class) {
-            Thread first = new Thread(task, "composite-bundle-1");
-            Thread second = new Thread(task, "composite-bundle-2");
-            first.start();
-            second.start();
-            assertTrue(started.await(1, TimeUnit.SECONDS));
-            Thread.sleep(100);
+        for (int t = 0; t < threadCount; t++) {
+            final int threadId = t;
+            futures.add(producerPool.submit(() -> {
+                start.await();
+                for (int i = 0; i < messagesPerThread; i++) {
+                    int messageIndex = i;
+                    sut.handleInfoMessage(() -> "stress-composite-" + threadId + "-" + messageIndex);
+                }
+                return null;
+            }));
         }
 
-        assertTrue(finished.await(2, TimeUnit.SECONDS));
+        start.countDown();
+        for (Future<?> future : futures) {
+            future.get(60, TimeUnit.SECONDS);
+        }
+        producerPool.shutdown();
+        assertTrue(producerPool.awaitTermination(10, TimeUnit.SECONDS));
+
+        List<String> allInfoMessages = sink.getAllInfoMessages();
+        assertEquals(expectedMessages, allInfoMessages.size(), "Some composite info messages were lost under stress");
+        assertEquals(expectedMessages, new HashSet<>(allInfoMessages).size(), "Expected unique stress messages");
     }
 }

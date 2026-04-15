@@ -50,11 +50,11 @@ public class JULMessageHandler extends AbstractMessageHandler {
 
     @Override
     protected void handleExceptionImpl(final Exception exception) {
-        logger.log(Level.SEVERE, exception.getMessage(), exception);
+        logger.log(Level.SEVERE, ExceptionMessageFormatter.detail(exception), exception);
     }
 
     @Override
     protected void handleExceptionImpl(final String message, final Exception exception) {
-        logger.log(Level.SEVERE, message + ": " + exception.getMessage(), exception);
+        logger.log(Level.SEVERE, ExceptionMessageFormatter.withPrefix(message, exception), exception);
     }
 }

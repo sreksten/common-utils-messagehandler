@@ -68,7 +68,7 @@ public class ConsoleMessageHandler extends AbstractOutputMessageHandler {
     protected void handleExceptionImpl(final Exception exception) {
         Runnable task = () -> {
             synchronized (PRINT_LOCK) {
-                System.err.println(format("EXCEP", exception.getMessage()));
+                System.err.println(format("EXCEP", ExceptionMessageFormatter.detail(exception)));
                 exception.printStackTrace(System.err);
             }
         };
@@ -80,7 +80,7 @@ public class ConsoleMessageHandler extends AbstractOutputMessageHandler {
         Runnable task = () -> {
             synchronized (PRINT_LOCK) {
                 System.err.println(format("EXCEP", message));
-                System.err.println(format("EXCEP", exception.getMessage()));
+                System.err.println(format("EXCEP", ExceptionMessageFormatter.detail(exception)));
                 exception.printStackTrace(System.err);
             }
         };

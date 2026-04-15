@@ -15,23 +15,9 @@ import java.util.ResourceBundle;
  */
 public class SwingMessageHandler extends AbstractMessageHandler {
 
-    private static volatile ResourceBundle bundle;
-
-    private static ResourceBundle getBundle() {
-        ResourceBundle local = bundle;
-        if (local == null) {
-            synchronized (SwingMessageHandler.class) {
-                local = bundle;
-                if (local == null) {
-                    local = ResourceBundle.getBundle("com.threeamigos.common.util.implementations.messagehandler.SwingMessageHandler.SwingMessageHandler");
-                    bundle = local;
-                }
-            }
-        }
-        return local;
-    }
-
-    // End of static methods
+    private static final ResourceBundle BUNDLE = MessageHandlerResourceBundles.load(
+            "com.threeamigos.common.util.implementations.messagehandler.SwingMessageHandler.SwingMessageHandler",
+            SwingMessageHandler.class);
 
     private Component parentComponent;
 
@@ -55,30 +41,30 @@ public class SwingMessageHandler extends AbstractMessageHandler {
     }
 
     protected void handleInfoMessageImpl(final String message) {
-        showOptionPane(message, getBundle().getString("info"), JOptionPane.INFORMATION_MESSAGE);
+        showOptionPane(message, BUNDLE.getString("info"), JOptionPane.INFORMATION_MESSAGE);
     }
 
     protected void handleWarnMessageImpl(final String message) {
-        showOptionPane(message, getBundle().getString("warning"), JOptionPane.WARNING_MESSAGE);
+        showOptionPane(message, BUNDLE.getString("warning"), JOptionPane.WARNING_MESSAGE);
     }
 
     protected void handleErrorMessageImpl(final String message) {
-        showOptionPane(message, getBundle().getString("error"), JOptionPane.ERROR_MESSAGE);
+        showOptionPane(message, BUNDLE.getString("error"), JOptionPane.ERROR_MESSAGE);
     }
 
     protected void handleDebugMessageImpl(final String message) {
-        showOptionPane(message, getBundle().getString("debug"), JOptionPane.INFORMATION_MESSAGE);
+        showOptionPane(message, BUNDLE.getString("debug"), JOptionPane.INFORMATION_MESSAGE);
     }
 
     protected void handleTraceMessageImpl(final String message) {
-        showOptionPane(message, getBundle().getString("trace"), JOptionPane.INFORMATION_MESSAGE);
+        showOptionPane(message, BUNDLE.getString("trace"), JOptionPane.INFORMATION_MESSAGE);
     }
 
     protected void handleExceptionImpl(final Exception exception) {
-        showOptionPane(exception.getMessage(), getBundle().getString("exception"), JOptionPane.ERROR_MESSAGE);
+        showOptionPane(ExceptionMessageFormatter.detail(exception), BUNDLE.getString("exception"), JOptionPane.ERROR_MESSAGE);
     }
 
     protected void handleExceptionImpl(final String message, final Exception exception) {
-        showOptionPane(message + ": " +exception.getMessage(), getBundle().getString("exception"), JOptionPane.ERROR_MESSAGE);
+        showOptionPane(ExceptionMessageFormatter.withPrefix(message, exception), BUNDLE.getString("exception"), JOptionPane.ERROR_MESSAGE);
     }
 }

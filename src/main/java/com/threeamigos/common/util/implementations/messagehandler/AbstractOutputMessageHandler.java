@@ -5,9 +5,14 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Base class for message handlers that optionally dispatch output operations asynchronously.
+ * Base class for output-oriented handlers that optionally dispatch write operations asynchronously.
+ * <p>
+ * When async dispatch is enabled, calls to {@link #dispatch(Runnable)} enqueue tasks on a single-worker queue.
+ * On shutdown, the worker is interrupted and then any remaining queued tasks are drained in the worker's
+ * {@code finally} block before resources are closed.
  */
 public abstract class AbstractOutputMessageHandler extends AbstractMessageHandler implements AutoCloseable {
 
@@ -15,6 +20,7 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
     private BlockingQueue<Runnable> queue;
     private ExecutorService worker;
     private Thread shutdownHook;
+    private final AtomicBoolean closed = new AtomicBoolean(false);
 
     protected final void initializeOutputDispatch(final boolean async, final int queueCapacity,
                                                   final boolean registerShutdownHook,
@@ -83,8 +89,21 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
         // Default no-op. Subclasses can override to close underlying resources.
     }
 
+    private void drainQueueInCallerThread() {
+        if (queue == null) {
+            return;
+        }
+        Runnable task;
+        while ((task = queue.poll()) != null) {
+            task.run();
+        }
+    }
+
     @Override
     public void close() {
+        if (!closed.compareAndSet(false, true)) {
+            return;
+        }
         if (worker != null) {
             if (shutdownHook != null) {
                 try {
@@ -100,6 +119,7 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
                 Thread.currentThread().interrupt();
             }
         }
+        drainQueueInCallerThread();
         closeOutput();
     }
 }

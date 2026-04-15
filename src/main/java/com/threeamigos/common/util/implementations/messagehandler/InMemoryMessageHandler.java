@@ -30,6 +30,73 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     private final ReentrantLock lock = new ReentrantLock();
     private String lastMessage;
 
+    /**
+     * Immutable snapshot of all messages retained by an {@link InMemoryMessageHandler}.
+     */
+    public static final class Snapshot {
+        private final List<String> allMessages;
+        private final List<String> allInfoMessages;
+        private final List<String> allWarnMessages;
+        private final List<String> allErrorMessages;
+        private final List<String> allDebugMessages;
+        private final List<String> allTraceMessages;
+        private final List<String> allExceptionMessages;
+        private final List<Exception> allExceptions;
+        private final String lastMessage;
+
+        private Snapshot(final List<String> allMessages, final List<String> allInfoMessages,
+                         final List<String> allWarnMessages, final List<String> allErrorMessages,
+                         final List<String> allDebugMessages, final List<String> allTraceMessages,
+                         final List<String> allExceptionMessages, final List<Exception> allExceptions,
+                         final String lastMessage) {
+            this.allMessages = allMessages;
+            this.allInfoMessages = allInfoMessages;
+            this.allWarnMessages = allWarnMessages;
+            this.allErrorMessages = allErrorMessages;
+            this.allDebugMessages = allDebugMessages;
+            this.allTraceMessages = allTraceMessages;
+            this.allExceptionMessages = allExceptionMessages;
+            this.allExceptions = allExceptions;
+            this.lastMessage = lastMessage;
+        }
+
+        public List<String> getAllMessages() {
+            return allMessages;
+        }
+
+        public List<String> getAllInfoMessages() {
+            return allInfoMessages;
+        }
+
+        public List<String> getAllWarnMessages() {
+            return allWarnMessages;
+        }
+
+        public List<String> getAllErrorMessages() {
+            return allErrorMessages;
+        }
+
+        public List<String> getAllDebugMessages() {
+            return allDebugMessages;
+        }
+
+        public List<String> getAllTraceMessages() {
+            return allTraceMessages;
+        }
+
+        public List<String> getAllExceptionMessages() {
+            return allExceptionMessages;
+        }
+
+        public List<Exception> getAllExceptions() {
+            return allExceptions;
+        }
+
+        public String getLastMessage() {
+            return lastMessage;
+        }
+    }
+
     public InMemoryMessageHandler() {
         this(10_000);
     }
@@ -100,13 +167,10 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     protected void handleExceptionImpl(final Exception exception) {
         lock.lock();
         try {
-            String msg = exception.getMessage();
-            if (msg == null) {
-                msg = exception.toString();
-            }
-            addWithLimit(allExceptionMessages, msg);
+            String detail = ExceptionMessageFormatter.detail(exception);
+            addWithLimit(allExceptionMessages, detail);
             addWithLimit(allExceptions, exception);
-            handleImpl(msg);
+            handleImpl(detail);
         } finally {
             lock.unlock();
         }
@@ -116,13 +180,10 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     protected void handleExceptionImpl(final String message, final Exception exception) {
         lock.lock();
         try {
-            String msg = exception.getMessage();
-            if (msg == null) {
-                msg = exception.toString();
-            }
-            addWithLimit(allExceptionMessages, message + ": " + msg);
+            String detail = ExceptionMessageFormatter.detail(exception);
+            addWithLimit(allExceptionMessages, message + ": " + detail);
             addWithLimit(allExceptions, exception);
-            handleImpl(msg);
+            handleImpl(detail);
         } finally {
             lock.unlock();
         }
@@ -250,6 +311,32 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
         lock.lock();
         try {
             return lastMessage;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Returns a consistent snapshot of all retained collections and the last handled message.
+     * Unlike reading each accessor separately, this method guarantees that all returned data
+     * comes from the same locked state.
+     *
+     * @return immutable snapshot of current in-memory state
+     */
+    public Snapshot snapshot() {
+        lock.lock();
+        try {
+            return new Snapshot(
+                    Collections.unmodifiableList(new ArrayList<>(allMessages)),
+                    Collections.unmodifiableList(new ArrayList<>(allInfoMessages)),
+                    Collections.unmodifiableList(new ArrayList<>(allWarnMessages)),
+                    Collections.unmodifiableList(new ArrayList<>(allErrorMessages)),
+                    Collections.unmodifiableList(new ArrayList<>(allDebugMessages)),
+                    Collections.unmodifiableList(new ArrayList<>(allTraceMessages)),
+                    Collections.unmodifiableList(new ArrayList<>(allExceptionMessages)),
+                    Collections.unmodifiableList(new ArrayList<>(allExceptions)),
+                    lastMessage
+            );
         } finally {
             lock.unlock();
         }

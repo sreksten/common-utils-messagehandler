@@ -70,7 +70,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
 
     @Override
     protected void handleExceptionImpl(final Exception exception) {
-        writeLine(format("EXCEP", exception.getMessage()));
+        writeLine(format("EXCEP", ExceptionMessageFormatter.detail(exception)));
         dispatch(() -> {
             synchronized (writeLock) {
                 exception.printStackTrace(writer);
@@ -81,7 +81,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
 
     @Override
     protected void handleExceptionImpl(final String message, final Exception exception) {
-        writeLine(format("EXCEP", message + ": " + exception.getMessage()));
+        writeLine(format("EXCEP", ExceptionMessageFormatter.withPrefix(message, exception)));
         dispatch(() -> {
             synchronized (writeLock) {
                 exception.printStackTrace(writer);
