@@ -5,16 +5,45 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Bridge MessageHandler to java.util.logging.
+ * A {@link com.threeamigos.common.util.interfaces.messagehandler.MessageHandler} implementation that
+ * bridges to {@link java.util.logging} (JUL).
+ * <p>
+ * Message levels are mapped to JUL levels as follows:
+ * <ul>
+ *   <li>info → {@link java.util.logging.Level#INFO}</li>
+ *   <li>warn → {@link java.util.logging.Level#WARNING}</li>
+ *   <li>error → {@link java.util.logging.Level#SEVERE}</li>
+ *   <li>debug → {@link java.util.logging.Level#FINE}</li>
+ *   <li>trace → {@link java.util.logging.Level#FINER}</li>
+ *   <li>exception → {@link java.util.logging.Level#SEVERE} (with the exception attached as a {@link Throwable})</li>
+ * </ul>
+ *
+ * @author Stefano Reksten
  */
 public class JULMessageHandler extends AbstractMessageHandler {
 
     private final Logger logger;
 
+    /**
+     * Creates a {@code JULMessageHandler} that delegates to the given {@link Logger}.
+     *
+     * @param logger the JUL logger to delegate to; must not be {@code null}
+     * @throws NullPointerException if {@code logger} is {@code null}
+     */
     public JULMessageHandler(Logger logger) {
         this.logger = Objects.requireNonNull(logger, "Logger cannot be null");
     }
 
+    /**
+     * Creates a {@code JULMessageHandler} that delegates to a {@link Logger} looked up by name.
+     * <p>
+     * The logger is obtained via {@link Logger#getLogger(String)}, which reuses an existing
+     * instance when one with the given name has already been created.
+     *
+     * @param loggerName the name of the JUL logger to look up; must not be {@code null} or blank
+     * @throws NullPointerException     if {@code loggerName} is {@code null}
+     * @throws IllegalArgumentException if {@code loggerName} is blank
+     */
     public JULMessageHandler(String loggerName) {
         Objects.requireNonNull(loggerName, "Logger name cannot be null or empty");
         if (loggerName.trim().isEmpty()) {

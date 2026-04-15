@@ -24,15 +24,11 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
     private final List<MessageHandler> messageHandlers = new ArrayList<>();
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
-    /**
-     * Constructor.
-     */
     public CompositeMessageHandler() {
-        this(Collections.<MessageHandler>emptyList());
+        this(new ArrayList<>());
     }
 
     /**
-     * Constructor.
      * @param handlers a collection of non-null MessageHandlers
      */
     public CompositeMessageHandler(final @Nonnull Collection<MessageHandler> handlers) {
@@ -41,7 +37,6 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
     }
 
     /**
-     * Constructor.
      * @param handlers a collection of non-null MessageHandlers
      */
     public CompositeMessageHandler(final @Nonnull MessageHandler... handlers) {
@@ -61,7 +56,13 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
     }
 
     /**
-     * @param messageHandler a non-null MessageHandler to add
+     * Adds a single {@link MessageHandler} to this composite at runtime.
+     * <p>
+     * The operation acquires the write lock, so it is safe to call from any thread even while
+     * messages are being dispatched concurrently.
+     *
+     * @param messageHandler a non-null {@link MessageHandler} to add
+     * @throws NullPointerException if {@code messageHandler} is {@code null}
      */
     public void addMessageHandler(final @Nonnull MessageHandler messageHandler) {
         Objects.requireNonNull(messageHandler, BUNDLE.getString("nullMessageHandlerProvided"));
@@ -74,7 +75,14 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
     }
 
     /**
-     * @param messageHandler a non-null MessageHandler to remove
+     * Removes a previously registered {@link MessageHandler} from this composite.
+     * <p>
+     * If the handler is not currently registered, the call is silently ignored.
+     * The operation acquires the write lock, so it is safe to call from any thread even while
+     * messages are being dispatched concurrently.
+     *
+     * @param messageHandler a non-null {@link MessageHandler} to remove
+     * @throws NullPointerException if {@code messageHandler} is {@code null}
      */
     public void removeMessageHandler(final @Nonnull MessageHandler messageHandler) {
         Objects.requireNonNull(messageHandler, BUNDLE.getString("nullMessageHandlerProvided"));
@@ -87,7 +95,12 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
     }
 
     /**
-     * @return an unmodifiable collection of the registered MessageHandlers
+     * Returns a point-in-time snapshot of the registered handlers as an unmodifiable collection.
+     * <p>
+     * The returned collection reflects the state at the time of the call; subsequent
+     * {@link #addMessageHandler} or {@link #removeMessageHandler} calls do not affect it.
+     *
+     * @return an unmodifiable, ordered collection of the currently registered {@link MessageHandler}s
      */
     public Collection<MessageHandler> getMessageHandlers() {
         lock.readLock().lock();

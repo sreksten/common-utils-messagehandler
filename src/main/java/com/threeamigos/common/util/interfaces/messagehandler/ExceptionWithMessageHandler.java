@@ -4,6 +4,8 @@ import jakarta.annotation.Nonnull;
 
 /**
  * Contract for handling an exception together with a contextual message.
+ *
+ * @author Stefano Reksten
  */
 @FunctionalInterface
 public interface ExceptionWithMessageHandler {

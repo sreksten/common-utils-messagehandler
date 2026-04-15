@@ -17,6 +17,9 @@ public class ConsoleMessageHandler extends AbstractOutputMessageHandler {
 
     private static final Object PRINT_LOCK = new Object();
 
+    /**
+     * Creates a synchronous {@code ConsoleMessageHandler} that writes directly on the calling thread.
+     */
     public ConsoleMessageHandler() {
         this(false, 0, false);
     }

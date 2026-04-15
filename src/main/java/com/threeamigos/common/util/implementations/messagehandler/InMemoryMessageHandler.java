@@ -31,7 +31,14 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     private String lastMessage;
 
     /**
-     * Immutable snapshot of all messages retained by an {@link InMemoryMessageHandler}.
+     * Immutable, point-in-time snapshot of all messages retained by an {@link InMemoryMessageHandler}.
+     * <p>
+     * A snapshot is obtained via {@link InMemoryMessageHandler#snapshot()} under the handler's lock,
+     * guaranteeing that all lists and {@link #getLastMessage()} reflect the same instant. Unlike
+     * calling individual accessors in sequence, no messages can arrive between list reads.
+     * <p>
+     * All list accessors return unmodifiable views; attempting to mutate them throws
+     * {@link UnsupportedOperationException}.
      */
     public static final class Snapshot {
         private final List<String> allMessages;
@@ -60,47 +67,87 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
             this.lastMessage = lastMessage;
         }
 
+        /**
+         * @return unmodifiable list of all messages across every level, in arrival order
+         */
         public List<String> getAllMessages() {
             return allMessages;
         }
 
+        /**
+         * @return unmodifiable list of all info-level messages, in arrival order
+         */
         public List<String> getAllInfoMessages() {
             return allInfoMessages;
         }
 
+        /**
+         * @return unmodifiable list of all warning-level messages, in arrival order
+         */
         public List<String> getAllWarnMessages() {
             return allWarnMessages;
         }
 
+        /**
+         * @return unmodifiable list of all error-level messages, in arrival order
+         */
         public List<String> getAllErrorMessages() {
             return allErrorMessages;
         }
 
+        /**
+         * @return unmodifiable list of all debug-level messages, in arrival order
+         */
         public List<String> getAllDebugMessages() {
             return allDebugMessages;
         }
 
+        /**
+         * @return unmodifiable list of all trace-level messages, in arrival order
+         */
         public List<String> getAllTraceMessages() {
             return allTraceMessages;
         }
 
+        /**
+         * @return unmodifiable list of all exception detail strings, in arrival order
+         */
         public List<String> getAllExceptionMessages() {
             return allExceptionMessages;
         }
 
+        /**
+         * @return unmodifiable list of all handled exceptions, in arrival order
+         */
         public List<Exception> getAllExceptions() {
             return allExceptions;
         }
 
+        /**
+         * @return the text of the last message handled across all levels, or {@code null}
+         *         if no message has been handled yet
+         */
         public String getLastMessage() {
             return lastMessage;
         }
     }
 
+    /**
+     * Creates an {@code InMemoryMessageHandler} with a default maximum of 10&thinsp;000 entries per list.
+     */
     public InMemoryMessageHandler() {
         this(10_000);
     }
 
+    /**
+     * Creates an {@code InMemoryMessageHandler} that retains at most {@code maxEntries} messages
+     * per level list.
+     * <p>
+     * When a list is full, the oldest entry is evicted before the new one is added (FIFO eviction).
+     *
+     * @param maxEntries the maximum number of entries to retain in each per-level list; must be positive
+     * @throws IllegalArgumentException if {@code maxEntries} is {@code 0} or negative
+     */
     public InMemoryMessageHandler(int maxEntries) {
         if (maxEntries <= 0) {
             throw new IllegalArgumentException("maxEntries must be positive");
@@ -321,7 +368,7 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
      * Unlike reading each accessor separately, this method guarantees that all returned data
      * comes from the same locked state.
      *
-     * @return immutable snapshot of current in-memory state
+     * @return immutable snapshot of the current in-memory state
      */
     public Snapshot snapshot() {
         lock.lock();

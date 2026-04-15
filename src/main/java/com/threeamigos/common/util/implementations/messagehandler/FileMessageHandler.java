@@ -20,14 +20,49 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
     private final PrintWriter writer;
     private final Object writeLock = new Object();
 
+    /**
+     * Creates a synchronous {@code FileMessageHandler} that writes to the given file on the calling thread.
+     * <p>
+     * Parent directories are created automatically if they do not exist. Appends to the file if it
+     * already exists.
+     *
+     * @param filename path to the log file; must not be {@code null} or blank
+     * @throws IllegalArgumentException if the path is null, blank, points to a directory,
+     *                                  is not writable, or cannot be created
+     */
     public FileMessageHandler(final String filename) {
         this(filename, false, 0, false);
     }
 
+    /**
+     * Creates a {@code FileMessageHandler} with optional asynchronous dispatch.
+     * <p>
+     * Parent directories are created automatically if they do not exist. Appends to the file if it
+     * already exists.
+     *
+     * @param filename      path to the log file; must not be {@code null} or blank
+     * @param async         {@code true} to dispatch writes via a background worker thread
+     * @param queueCapacity maximum number of queued write tasks when async; {@code 0} or negative means unbounded
+     * @throws IllegalArgumentException if the path is invalid or the file cannot be opened for writing
+     */
     public FileMessageHandler(final String filename, final boolean async, final int queueCapacity) {
         this(filename, async, queueCapacity, false);
     }
 
+    /**
+     * Creates a {@code FileMessageHandler} with optional asynchronous dispatch and an optional
+     * JVM shutdown hook.
+     * <p>
+     * Parent directories are created automatically if they do not exist. Appends to the file if it
+     * already exists.
+     *
+     * @param filename             path to the log file; must not be {@code null} or blank
+     * @param async                {@code true} to dispatch writes via a background worker thread
+     * @param queueCapacity        maximum number of queued write tasks when async; {@code 0} or negative means unbounded
+     * @param registerShutdownHook {@code true} to register a JVM shutdown hook that flushes and
+     *                             closes the file when the JVM exits
+     * @throws IllegalArgumentException if the path is invalid or the file cannot be opened for writing
+     */
     public FileMessageHandler(final String filename, final boolean async, final int queueCapacity, final boolean registerShutdownHook) {
         this(prepareFilePath(filename), async, queueCapacity, registerShutdownHook);
     }
@@ -130,6 +165,16 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
         return filePath;
     }
 
+    /**
+     * Opens a buffered, append-mode {@link java.io.PrintWriter} for the given file path.
+     * <p>
+     * Exposed as a protected method so that tests can override it to inject a writer that
+     * does not touch the file system (e.g., a {@link java.io.StringWriter}-backed writer).
+     *
+     * @param filePath the validated, non-null path to the log file
+     * @return a non-null, buffered {@link java.io.PrintWriter} open for appending
+     * @throws IOException if the file cannot be opened
+     */
     protected PrintWriter openWriter(Path filePath) throws IOException {
         return new PrintWriter(new BufferedWriter(new FileWriter(filePath.toFile(), true)));
     }

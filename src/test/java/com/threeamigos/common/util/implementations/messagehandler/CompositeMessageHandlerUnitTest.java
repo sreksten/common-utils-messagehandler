@@ -23,6 +23,7 @@ import java.util.function.Supplier;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -140,6 +141,33 @@ class CompositeMessageHandlerUnitTest {
         Collection<MessageHandler> messageHandlers = sut.getMessageHandlers();
         // Then
         assertThat(messageHandlers, containsInAnyOrder(firstMessageHandler, thirdMessageHandler));
+    }
+
+    @Test
+    @DisplayName("No-arg constructor should allow adding and removing handlers later without errors")
+    void noArgConstructorShouldAllowLateAddAndRemove() {
+        CompositeMessageHandler sut = new CompositeMessageHandler();
+
+        assertDoesNotThrow(() -> {
+            sut.handleInfoMessage("before-add");
+            sut.addMessageHandler(firstMessageHandler);
+            sut.handleInfoMessage("after-first-add");
+            sut.addMessageHandler(secondMessageHandler);
+            sut.handleInfoMessage("after-second-add");
+            sut.removeMessageHandler(firstMessageHandler);
+            sut.handleInfoMessage("after-first-remove");
+            sut.removeMessageHandler(secondMessageHandler);
+            sut.handleInfoMessage("after-second-remove");
+            sut.addMessageHandler(firstMessageHandler);
+            sut.handleInfoMessage("after-readd");
+        });
+
+        verify(firstMessageHandler, times(1)).handleInfoMessage("after-first-add");
+        verify(firstMessageHandler, times(1)).handleInfoMessage("after-second-add");
+        verify(firstMessageHandler, times(1)).handleInfoMessage("after-readd");
+        verify(secondMessageHandler, times(1)).handleInfoMessage("after-second-add");
+        verify(secondMessageHandler, times(1)).handleInfoMessage("after-first-remove");
+        verifyNoMoreInteractions(firstMessageHandler, secondMessageHandler);
     }
 
     @ParameterizedTest

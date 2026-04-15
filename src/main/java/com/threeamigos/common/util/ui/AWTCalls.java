@@ -16,13 +16,38 @@ import java.util.function.BooleanSupplier;
  */
 public class AWTCalls {
 
+    /**
+     * Functional interface that wraps {@link javax.swing.SwingUtilities#invokeAndWait(Runnable)}.
+     * Declared package-private so tests can inject an alternative implementation that avoids
+     * touching the real Event Dispatch Thread.
+     */
     @FunctionalInterface
     interface InvokeAndWait {
+        /**
+         * Schedules {@code task} on the EDT and blocks until it completes.
+         *
+         * @param task the Runnable to run on the EDT
+         * @throws InterruptedException      if the calling thread is interrupted while waiting
+         * @throws InvocationTargetException if an exception is thrown by {@code task}
+         */
         void invoke(Runnable task) throws InterruptedException, InvocationTargetException;
     }
 
+    /**
+     * Functional interface that wraps {@link javax.swing.JOptionPane#showMessageDialog}.
+     * Declared package-private so tests can inject a no-op or capturing implementation instead
+     * of displaying a real dialog.
+     */
     @FunctionalInterface
     interface ShowMessageDialog {
+        /**
+         * Displays a message dialog.
+         *
+         * @param parentComponent the parent window; may be {@code null}
+         * @param message         the message text
+         * @param title           the dialog title
+         * @param icon            one of the {@link javax.swing.JOptionPane} icon constants
+         */
         void show(Component parentComponent, String message, String title, int icon);
     }
 
@@ -45,6 +70,20 @@ public class AWTCalls {
                 JOptionPane::showMessageDialog);
     }
 
+    /**
+     * Testable overload of {@link #showOptionPane(Component, String, String, int)} that accepts
+     * injectable collaborators so unit tests can exercise all code paths without a real display
+     * or Event Dispatch Thread.
+     *
+     * @param parentComponent      the parent window; may be {@code null}
+     * @param message              the message text to display
+     * @param title                the dialog title
+     * @param icon                 one of the {@link javax.swing.JOptionPane} icon constants
+     * @param isHeadless           supplier that returns {@code true} when running in a headless environment
+     * @param isEventDispatchThread supplier that returns {@code true} when called from the EDT
+     * @param invokeAndWait        strategy for scheduling a task on the EDT and waiting for completion
+     * @param showMessageDialog    strategy for actually rendering the dialog
+     */
     static void showOptionPane(final @Nullable Component parentComponent, final @Nonnull String message,
                                final @Nonnull String title, final int icon,
                                final BooleanSupplier isHeadless,
