@@ -9,19 +9,15 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.concurrent.*;
+import java.util.Objects;
 
 /**
  * MessageHandler implementation that writes log messages to a file.
  * Supports optional async dispatch with a background worker and shutdown hook.
  */
-public class FileMessageHandler extends AbstractMessageHandler implements AutoCloseable {
+public class FileMessageHandler extends AbstractOutputMessageHandler {
 
     private final PrintWriter writer;
-    private final boolean async;
-    private final BlockingQueue<Runnable> queue;
-    private final ExecutorService worker;
-    private final Thread shutdownHook;
     private final Object writeLock = new Object();
 
     public FileMessageHandler(final String filename) {
@@ -33,53 +29,18 @@ public class FileMessageHandler extends AbstractMessageHandler implements AutoCl
     }
 
     public FileMessageHandler(final String filename, final boolean async, final int queueCapacity, final boolean registerShutdownHook) {
-        if (filename == null || filename.trim().isEmpty()) {
-            throw new IllegalArgumentException("File path cannot be null or empty");
-        }
-        Path filePath = Paths.get(filename);
+        this(prepareFilePath(filename), async, queueCapacity, registerShutdownHook);
+    }
+
+    private FileMessageHandler(final Path filePath, final boolean async, final int queueCapacity,
+                               final boolean registerShutdownHook) {
         try {
-            Path parent = filePath.getParent();
-            if (parent != null) {
-                Files.createDirectories(parent);
-            }
-            if (Files.exists(filePath) && Files.isDirectory(filePath)) {
-                throw new IllegalArgumentException("Path points to a directory: " + filePath);
-            }
-            if (!Files.exists(filePath)) {
-                Files.createFile(filePath);
-            }
-            if (!Files.isWritable(filePath)) {
-                throw new IllegalArgumentException("File is not writable: " + filePath);
-            }
-        } catch (IOException e) {
-            throw new IllegalArgumentException("Unable to prepare log file: " + filePath, e);
-        }
-        try {
-            this.writer = new PrintWriter(new BufferedWriter(new FileWriter(filePath.toFile(), true)));
+            this.writer = openWriter(filePath);
         } catch (IOException e) {
             throw new IllegalArgumentException("Unable to open log file for writing: " + filePath, e);
         }
-
-        this.async = async;
-        if (async) {
-            this.queue = queueCapacity > 0 ? new LinkedBlockingQueue<>(queueCapacity) : new LinkedBlockingQueue<>();
-            this.worker = Executors.newSingleThreadExecutor(r -> {
-                Thread t = new Thread(r, "FileMessageHandler-async");
-                t.setDaemon(true);
-                return t;
-            });
-            this.worker.submit(this::drainLoop);
-            if (registerShutdownHook) {
-                this.shutdownHook = new Thread(this::close, "FileMessageHandler-shutdown");
-                Runtime.getRuntime().addShutdownHook(this.shutdownHook);
-            } else {
-                this.shutdownHook = null;
-            }
-        } else {
-            this.queue = null;
-            this.worker = null;
-            this.shutdownHook = null;
-        }
+        initializeOutputDispatch(async, queueCapacity, registerShutdownHook,
+                "FileMessageHandler-async", "FileMessageHandler-shutdown");
     }
 
     @Override
@@ -143,50 +104,38 @@ public class FileMessageHandler extends AbstractMessageHandler implements AutoCl
         });
     }
 
-    private void dispatch(Runnable task) {
-        if (!async) {
-            task.run();
-            return;
+    private static Path prepareFilePath(final String filename) {
+        Objects.requireNonNull(filename, "File path cannot be null or empty");
+        if (filename.trim().isEmpty()) {
+            throw new IllegalArgumentException("File path cannot be null or empty");
         }
-        if (!queue.offer(task)) {
-            // queue full: run synchronously to avoid losing messages
-            task.run();
+        Path filePath = Paths.get(filename);
+        try {
+            Path parent = filePath.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            if (Files.exists(filePath) && Files.isDirectory(filePath)) {
+                throw new IllegalArgumentException("Path points to a directory: " + filePath);
+            }
+            if (!Files.exists(filePath)) {
+                Files.createFile(filePath);
+            }
+            if (!Files.isWritable(filePath)) {
+                throw new IllegalArgumentException("File is not writable: " + filePath);
+            }
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Unable to prepare log file: " + filePath, e);
         }
+        return filePath;
     }
 
-    private void drainLoop() {
-        try {
-            while (!Thread.currentThread().isInterrupted()) {
-                Runnable task = queue.take();
-                task.run();
-            }
-        } catch (InterruptedException ignored) {
-            Thread.currentThread().interrupt();
-        } finally {
-            Runnable task;
-            while ((task = queue.poll()) != null) {
-                task.run();
-            }
-        }
+    protected PrintWriter openWriter(Path filePath) throws IOException {
+        return new PrintWriter(new BufferedWriter(new FileWriter(filePath.toFile(), true)));
     }
 
     @Override
-    public void close() {
-        if (worker != null) {
-            if (shutdownHook != null) {
-                try {
-                    Runtime.getRuntime().removeShutdownHook(shutdownHook);
-                } catch (IllegalStateException ignored) {
-                    // JVM is shutting down
-                }
-            }
-            worker.shutdownNow();
-            try {
-                worker.awaitTermination(5, TimeUnit.SECONDS);
-            } catch (InterruptedException ignored) {
-                Thread.currentThread().interrupt();
-            }
-        }
+    protected void closeOutput() {
         synchronized (writeLock) {
             writer.flush();
             writer.close();

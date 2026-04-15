@@ -1,4 +1,4 @@
-package com.threeamigos.common.utils.implementations.messagehandler;
+package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.implementations.messagehandler.JULMessageHandler;
 import org.junit.jupiter.api.DisplayName;
@@ -32,7 +32,7 @@ class JULMessageHandlerUnitTest {
     @Test
     @DisplayName("Should throw on null logger name")
     void shouldThrowOnNullLoggerName() {
-        assertThrows(IllegalArgumentException.class, () -> new JULMessageHandler((String) null));
+        assertThrows(NullPointerException.class, () -> new JULMessageHandler((String) null));
         assertThrows(IllegalArgumentException.class, () -> new JULMessageHandler(" "));
     }
 
@@ -105,5 +105,24 @@ class JULMessageHandlerUnitTest {
         handler.handleException(new RuntimeException("boom"));
 
         assertNull(capturingHandler.last, "No messages should be published when disabled");
+    }
+
+    @Test
+    @DisplayName("Should log exception with custom message")
+    void shouldLogExceptionWithCustomMessage() {
+        Logger logger = Logger.getLogger("test-jul-handler-custom-message");
+        logger.setUseParentHandlers(false);
+        CapturingHandler capturingHandler = new CapturingHandler();
+        logger.addHandler(capturingHandler);
+        logger.setLevel(Level.ALL);
+
+        JULMessageHandler handler = new JULMessageHandler(logger);
+        RuntimeException exception = new RuntimeException("boom");
+
+        handler.handleException("prefix", exception);
+
+        assertEquals(Level.SEVERE, capturingHandler.last.getLevel());
+        assertEquals("prefix: boom", capturingHandler.last.getMessage());
+        assertEquals(exception, capturingHandler.last.getThrown());
     }
 }

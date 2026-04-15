@@ -1,11 +1,17 @@
-package com.threeamigos.common.utils.implementations.messagehandler;
+package com.threeamigos.common.util.implementations.messagehandler;
 
+import com.threeamigos.common.util.implementations.messagehandler.AbstractMessageHandler;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @DisplayName("InMemoryMessageHandler unit test")
@@ -24,7 +30,7 @@ class InMemoryMessageHandlerUnitTest {
         // When
         String infoMessage = null;
         // Then
-        assertThrows(IllegalArgumentException.class, () -> sut.handleInfoMessage(infoMessage));
+        assertThrows(NullPointerException.class, () -> sut.handleInfoMessage(infoMessage));
     }
 
     @Test
@@ -55,7 +61,7 @@ class InMemoryMessageHandlerUnitTest {
         // When
         String warnMessage = null;
         // Then
-        assertThrows(IllegalArgumentException.class, () -> sut.handleWarnMessage(warnMessage));
+        assertThrows(NullPointerException.class, () -> sut.handleWarnMessage(warnMessage));
     }
 
     @Test
@@ -86,7 +92,7 @@ class InMemoryMessageHandlerUnitTest {
         // When
         String errorMessage = null;
         // Then
-        assertThrows(IllegalArgumentException.class, () -> sut.handleErrorMessage(errorMessage));
+        assertThrows(NullPointerException.class, () -> sut.handleErrorMessage(errorMessage));
     }
 
     @Test
@@ -117,7 +123,7 @@ class InMemoryMessageHandlerUnitTest {
         // When
         String debugMessage = null;
         // Then
-        assertThrows(IllegalArgumentException.class, () -> sut.handleDebugMessage(debugMessage));
+        assertThrows(NullPointerException.class, () -> sut.handleDebugMessage(debugMessage));
     }
 
     @Test
@@ -148,7 +154,7 @@ class InMemoryMessageHandlerUnitTest {
         // When
         String traceMessage = null;
         // Then
-        assertThrows(IllegalArgumentException.class, () -> sut.handleTraceMessage(traceMessage));
+        assertThrows(NullPointerException.class, () -> sut.handleTraceMessage(traceMessage));
     }
 
     @Test
@@ -179,7 +185,7 @@ class InMemoryMessageHandlerUnitTest {
         // When
         Exception exception = null;
         // Then
-        assertThrows(IllegalArgumentException.class, () -> sut.handleException(exception));
+        assertThrows(NullPointerException.class, () -> sut.handleException(exception));
     }
 
     @Test
@@ -282,5 +288,65 @@ class InMemoryMessageHandlerUnitTest {
         assertEquals(0, sut.getAllTraceMessages().size());
         assertEquals(0, sut.getAllExceptionMessages().size());
         assertEquals(0, sut.getAllExceptions().size());
+    }
+
+    @Test
+    @DisplayName("Should store exception with message")
+    void shouldStoreExceptionWithMessage() {
+        InMemoryMessageHandler sut = new InMemoryMessageHandler();
+        Exception exception = new RuntimeException("boom");
+
+        sut.handleException("prefix", exception);
+
+        assertEquals(1, sut.getAllExceptionMessages().size());
+        assertEquals("prefix: boom", sut.getAllExceptionMessages().get(0));
+        assertEquals(1, sut.getAllExceptions().size());
+        assertEquals(exception, sut.getAllExceptions().get(0));
+        assertEquals("boom", sut.getLastMessage());
+    }
+
+    @Test
+    @DisplayName("Should store exception with message when exception message is null")
+    void shouldStoreExceptionWithMessageWhenExceptionMessageIsNull() {
+        InMemoryMessageHandler sut = new InMemoryMessageHandler();
+        Exception exception = new RuntimeException((String) null);
+
+        sut.handleException("prefix", exception);
+
+        assertEquals(1, sut.getAllExceptionMessages().size());
+        assertEquals("prefix: " + exception.toString(), sut.getAllExceptionMessages().get(0));
+        assertEquals(exception.toString(), sut.getLastMessage());
+    }
+
+    @Test
+    @DisplayName("Abstract bundle initialization should exercise both double-check branches")
+    void abstractBundleInitializationShouldExerciseBothDoubleCheckBranches() throws Exception {
+        Field bundleField = AbstractMessageHandler.class.getDeclaredField("bundle");
+        bundleField.setAccessible(true);
+        bundleField.set(null, null);
+
+        CountDownLatch started = new CountDownLatch(2);
+        CountDownLatch finished = new CountDownLatch(2);
+
+        Runnable task = () -> {
+            started.countDown();
+            try {
+                InMemoryMessageHandler handler = new InMemoryMessageHandler();
+                assertThrows(NullPointerException.class, () -> handler.handleInfoMessage((String) null));
+            } finally {
+                finished.countDown();
+            }
+        };
+
+        synchronized (AbstractMessageHandler.class) {
+            Thread first = new Thread(task, "abstract-bundle-1");
+            Thread second = new Thread(task, "abstract-bundle-2");
+            first.start();
+            second.start();
+            assertTrue(started.await(1, TimeUnit.SECONDS));
+            Thread.sleep(100);
+        }
+
+        assertTrue(finished.await(2, TimeUnit.SECONDS));
     }
 }

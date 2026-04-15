@@ -5,7 +5,6 @@ import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import java.io.PrintStream;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.concurrent.*;
 
 /**
  * An implementation of the {@link MessageHandler} interface that uses the
@@ -14,13 +13,9 @@ import java.util.concurrent.*;
  *
  * @author Stefano Reksten
  */
-public class ConsoleMessageHandler extends AbstractMessageHandler implements AutoCloseable {
+public class ConsoleMessageHandler extends AbstractOutputMessageHandler {
 
     private static final Object PRINT_LOCK = new Object();
-    private final boolean async;
-    private final BlockingQueue<Runnable> queue;
-    private final ExecutorService worker;
-    private final Thread shutdownHook;
 
     public ConsoleMessageHandler() {
         this(false, 0, false);
@@ -40,26 +35,8 @@ public class ConsoleMessageHandler extends AbstractMessageHandler implements Aut
      * @param registerShutdownHook whether to register a JVM shutdown hook to close the handler
      */
     public ConsoleMessageHandler(boolean async, int queueCapacity, boolean registerShutdownHook) {
-        this.async = async;
-        if (async) {
-            this.queue = queueCapacity > 0 ? new LinkedBlockingQueue<>(queueCapacity) : new LinkedBlockingQueue<>();
-            this.worker = Executors.newSingleThreadExecutor(r -> {
-                Thread t = new Thread(r, "ConsoleMessageHandler-async");
-                t.setDaemon(true);
-                return t;
-            });
-            this.worker.submit(this::drainLoop);
-            if (registerShutdownHook) {
-                this.shutdownHook = new Thread(this::close, "ConsoleMessageHandler-shutdown");
-                Runtime.getRuntime().addShutdownHook(this.shutdownHook);
-            } else {
-                this.shutdownHook = null;
-            }
-        } else {
-            this.queue = null;
-            this.worker = null;
-            this.shutdownHook = null;
-        }
+        initializeOutputDispatch(async, queueCapacity, registerShutdownHook,
+                "ConsoleMessageHandler-async", "ConsoleMessageHandler-shutdown");
     }
 
     @Override
@@ -92,7 +69,7 @@ public class ConsoleMessageHandler extends AbstractMessageHandler implements Aut
         Runnable task = () -> {
             synchronized (PRINT_LOCK) {
                 System.err.println(format("EXCEP", exception.getMessage()));
-                exception.printStackTrace(System.err); //NOSONAR
+                exception.printStackTrace(System.err);
             }
         };
         dispatch(task);
@@ -104,7 +81,7 @@ public class ConsoleMessageHandler extends AbstractMessageHandler implements Aut
             synchronized (PRINT_LOCK) {
                 System.err.println(format("EXCEP", message));
                 System.err.println(format("EXCEP", exception.getMessage()));
-                exception.printStackTrace(System.err); //NOSONAR
+                exception.printStackTrace(System.err);
             }
         };
         dispatch(task);
@@ -122,50 +99,5 @@ public class ConsoleMessageHandler extends AbstractMessageHandler implements Aut
             }
         };
         dispatch(task);
-    }
-
-    private void dispatch(Runnable task) {
-        if (!async) {
-            task.run();
-            return;
-        }
-        if (!queue.offer(task)) {
-            // queue full: run synchronously to avoid losing messages
-            task.run();
-        }
-    }
-
-    private void drainLoop() {
-        try {
-            while (!Thread.currentThread().isInterrupted()) {
-                Runnable task = queue.take();
-                task.run();
-            }
-        } catch (InterruptedException ignored) {
-            Thread.currentThread().interrupt();
-        } finally {
-            Runnable task;
-            while ((task = queue.poll()) != null) {
-                task.run();
-            }
-        }
-    }
-
-    public void close() {
-        if (worker != null) {
-            if (shutdownHook != null) {
-                try {
-                    Runtime.getRuntime().removeShutdownHook(shutdownHook);
-                } catch (IllegalStateException ignored) {
-                    // JVM is shutting down
-                }
-            }
-            worker.shutdownNow();
-            try {
-                worker.awaitTermination(5, TimeUnit.SECONDS);
-            } catch (InterruptedException ignored) {
-                Thread.currentThread().interrupt();
-            }
-        }
     }
 }

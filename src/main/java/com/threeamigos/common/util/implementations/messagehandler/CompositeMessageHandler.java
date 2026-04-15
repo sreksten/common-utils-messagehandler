@@ -43,9 +43,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
      * @param handlers a collection of non-null MessageHandlers
      */
     public CompositeMessageHandler(final @Nonnull Collection<MessageHandler> handlers) {
-        if (handlers == null) {
-            throw new IllegalArgumentException(getBundle().getString("noMessageHandlersProvided"));
-        }
+        Objects.requireNonNull(handlers, getBundle().getString("noMessageHandlersProvided"));
         addMessageHandlers(handlers);
     }
 
@@ -54,9 +52,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
      * @param handlers a collection of non-null MessageHandlers
      */
     public CompositeMessageHandler(final @Nonnull MessageHandler... handlers) {
-        if (handlers == null) {
-            throw new IllegalArgumentException(getBundle().getString("noMessageHandlersProvided"));
-        }
+        Objects.requireNonNull(handlers, getBundle().getString("noMessageHandlersProvided"));
         addMessageHandlers(Arrays.asList(handlers));
     }
 
@@ -64,11 +60,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
         lock.writeLock().lock();
         try {
             for (MessageHandler handler : handlers) {
-                if (handler == null) {
-                    throw new IllegalArgumentException(getBundle().getString("nullMessageHandlerProvided"));
-                } else {
-                    messageHandlers.add(handler);
-                }
+                messageHandlers.add(Objects.requireNonNull(handler, getBundle().getString("nullMessageHandlerProvided")));
             }
         } finally {
             lock.writeLock().unlock();
@@ -79,9 +71,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
      * @param messageHandler a non-null MessageHandler to add
      */
     public void addMessageHandler(final @Nonnull MessageHandler messageHandler) {
-        if (messageHandler == null) {
-            throw new IllegalArgumentException(getBundle().getString("nullMessageHandlerProvided"));
-        }
+        Objects.requireNonNull(messageHandler, getBundle().getString("nullMessageHandlerProvided"));
         lock.writeLock().lock();
         try {
             messageHandlers.add(messageHandler);
@@ -94,9 +84,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
      * @param messageHandler a non-null MessageHandler to remove
      */
     public void removeMessageHandler(final @Nonnull MessageHandler messageHandler) {
-        if (messageHandler == null) {
-            throw new IllegalArgumentException(getBundle().getString("nullMessageHandlerProvided"));
-        }
+        Objects.requireNonNull(messageHandler, getBundle().getString("nullMessageHandlerProvided"));
         lock.writeLock().lock();
         try {
             messageHandlers.remove(messageHandler);

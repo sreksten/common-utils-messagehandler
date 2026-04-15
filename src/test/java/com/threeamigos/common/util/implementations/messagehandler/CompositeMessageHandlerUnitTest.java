@@ -1,4 +1,4 @@
-package com.threeamigos.common.utils.implementations.messagehandler;
+package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.implementations.messagehandler.CompositeMessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
@@ -9,13 +9,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
 
@@ -39,7 +43,7 @@ class CompositeMessageHandlerUnitTest {
     @Test
     @DisplayName("Collection constructor should throw exception if null collection provided")
     void collectionConstructorShouldThrowExceptionIfNullCollectionProvided() {
-        assertThrows(IllegalArgumentException.class, () -> new CompositeMessageHandler((Collection<MessageHandler>) null));
+        assertThrows(NullPointerException.class, () -> new CompositeMessageHandler((Collection<MessageHandler>) null));
     }
 
     @Test
@@ -59,13 +63,13 @@ class CompositeMessageHandlerUnitTest {
     @Test
     @DisplayName("Varargs constructor should throw exception if null array provided")
     void varargsConstructorShouldThrowExceptionIfNullArrayProvided() {
-        assertThrows(IllegalArgumentException.class, () -> new CompositeMessageHandler((MessageHandler[]) null));
+        assertThrows(NullPointerException.class, () -> new CompositeMessageHandler((MessageHandler[]) null));
     }
 
     @Test
     @DisplayName("Varargs constructor should throw exception if null MessageHandler provided")
     void varargsConstructorShouldThrowExceptionIfNullArgumentProvided() {
-        assertThrows(IllegalArgumentException.class, () -> new CompositeMessageHandler(new MessageHandler[]{null}));
+        assertThrows(NullPointerException.class, () -> new CompositeMessageHandler(new MessageHandler[]{null}));
     }
 
     @Test
@@ -74,7 +78,7 @@ class CompositeMessageHandlerUnitTest {
         Collection<MessageHandler> handlers = new ArrayList<>();
         handlers.add(firstMessageHandler);
         handlers.add(null);
-        assertThrows(IllegalArgumentException.class, () -> new CompositeMessageHandler(handlers));
+        assertThrows(NullPointerException.class, () -> new CompositeMessageHandler(handlers));
     }
 
     @Test
@@ -94,7 +98,7 @@ class CompositeMessageHandlerUnitTest {
         // Given
         CompositeMessageHandler sut = new CompositeMessageHandler();
         // Then
-        assertThrows(IllegalArgumentException.class, () -> sut.addMessageHandler(null));
+        assertThrows(NullPointerException.class, () -> sut.addMessageHandler(null));
     }
 
     @Test
@@ -116,7 +120,7 @@ class CompositeMessageHandlerUnitTest {
         // Given
         CompositeMessageHandler sut = new CompositeMessageHandler();
         // Then
-        assertThrows(IllegalArgumentException.class, () -> sut.removeMessageHandler(null));
+        assertThrows(NullPointerException.class, () -> sut.removeMessageHandler(null));
     }
 
     @Test
@@ -153,7 +157,7 @@ class CompositeMessageHandlerUnitTest {
         // When
         Supplier<String> infoMessageSupplier = null;
         // Then
-        assertThrows(IllegalArgumentException.class, () -> sut.handleInfoMessage(infoMessageSupplier));
+        assertThrows(NullPointerException.class, () -> sut.handleInfoMessage(infoMessageSupplier));
     }
 
     @Test
@@ -164,7 +168,7 @@ class CompositeMessageHandlerUnitTest {
         // When
         String infoMessage = null;
         // Then
-        assertThrows(IllegalArgumentException.class, () -> sut.handleInfoMessage(infoMessage));
+        assertThrows(NullPointerException.class, () -> sut.handleInfoMessage(infoMessage));
     }
 
     @Test
@@ -265,7 +269,7 @@ class CompositeMessageHandlerUnitTest {
         // When
         Supplier<String> warnMessageSupplier = null;
         // Then
-        assertThrows(IllegalArgumentException.class, () -> sut.handleWarnMessage(warnMessageSupplier));
+        assertThrows(NullPointerException.class, () -> sut.handleWarnMessage(warnMessageSupplier));
     }
 
     @Test
@@ -276,7 +280,7 @@ class CompositeMessageHandlerUnitTest {
         // When
         String warnMessage = null;
         // Then
-        assertThrows(IllegalArgumentException.class, () -> sut.handleWarnMessage(warnMessage));
+        assertThrows(NullPointerException.class, () -> sut.handleWarnMessage(warnMessage));
     }
 
     @Test
@@ -347,7 +351,7 @@ class CompositeMessageHandlerUnitTest {
         // When
         Supplier<String> errorMessageSupplier = null;
         // Then
-        assertThrows(IllegalArgumentException.class, () -> sut.handleErrorMessage(errorMessageSupplier));
+        assertThrows(NullPointerException.class, () -> sut.handleErrorMessage(errorMessageSupplier));
     }
 
     @Test
@@ -358,7 +362,7 @@ class CompositeMessageHandlerUnitTest {
         // When
         String errorMessage = null;
         // Then
-        assertThrows(IllegalArgumentException.class, () -> sut.handleErrorMessage(errorMessage));
+        assertThrows(NullPointerException.class, () -> sut.handleErrorMessage(errorMessage));
     }
     @Test
     @DisplayName("Should propagate supplied error messages to all handlers if error level is active")
@@ -428,7 +432,7 @@ class CompositeMessageHandlerUnitTest {
         // When
         Supplier<String> debugMessageSupplier = null;
         // Then
-        assertThrows(IllegalArgumentException.class, () -> sut.handleDebugMessage(debugMessageSupplier));
+        assertThrows(NullPointerException.class, () -> sut.handleDebugMessage(debugMessageSupplier));
     }
 
     @Test
@@ -439,7 +443,7 @@ class CompositeMessageHandlerUnitTest {
         // When
         String debugMessage = null;
         // Then
-        assertThrows(IllegalArgumentException.class, () -> sut.handleDebugMessage(debugMessage));
+        assertThrows(NullPointerException.class, () -> sut.handleDebugMessage(debugMessage));
     }
 
     @Test
@@ -510,7 +514,7 @@ class CompositeMessageHandlerUnitTest {
         // When
         Supplier<String> traceMessageSupplier = null;
         // Then
-        assertThrows(IllegalArgumentException.class, () -> sut.handleTraceMessage(traceMessageSupplier));
+        assertThrows(NullPointerException.class, () -> sut.handleTraceMessage(traceMessageSupplier));
     }
 
     @Test
@@ -521,7 +525,7 @@ class CompositeMessageHandlerUnitTest {
         // When
         String traceMessage = null;
         // Then
-        assertThrows(IllegalArgumentException.class, () -> sut.handleTraceMessage(traceMessage));
+        assertThrows(NullPointerException.class, () -> sut.handleTraceMessage(traceMessage));
     }
 
     @Test
@@ -592,7 +596,7 @@ class CompositeMessageHandlerUnitTest {
         // When
         Exception exception = null;
         // Then
-        assertThrows(IllegalArgumentException.class, () -> sut.handleException(exception));
+        assertThrows(NullPointerException.class, () -> sut.handleException(exception));
     }
 
     @Test
@@ -629,5 +633,49 @@ class CompositeMessageHandlerUnitTest {
             verify(messageHandler, times(0)).handleException(illegalArgumentException);
             verify(messageHandler, times(0)).handleException(classCastException);
         }
+    }
+
+    @Test
+    @DisplayName("Should propagate exception with message to all handlers if exception level is active")
+    void shouldPropagateExceptionWithMessageToAllHandlersIfActive() {
+        IllegalArgumentException exception = new IllegalArgumentException("My IllegalArgumentException");
+        CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
+
+        sut.handleException("prefix", exception);
+
+        for (MessageHandler messageHandler : sut.getMessageHandlers()) {
+            verify(messageHandler, times(1)).handleException("prefix", exception);
+        }
+    }
+
+    @Test
+    @DisplayName("Bundle initialization should exercise both double-check branches")
+    void bundleInitializationShouldExerciseBothDoubleCheckBranches() throws Exception {
+        Field bundleField = CompositeMessageHandler.class.getDeclaredField("bundle");
+        bundleField.setAccessible(true);
+        bundleField.set(null, null);
+
+        CountDownLatch started = new CountDownLatch(2);
+        CountDownLatch finished = new CountDownLatch(2);
+
+        Runnable task = () -> {
+            started.countDown();
+            try {
+                assertThrows(NullPointerException.class, () -> new CompositeMessageHandler((Collection<MessageHandler>) null));
+            } finally {
+                finished.countDown();
+            }
+        };
+
+        synchronized (CompositeMessageHandler.class) {
+            Thread first = new Thread(task, "composite-bundle-1");
+            Thread second = new Thread(task, "composite-bundle-2");
+            first.start();
+            second.start();
+            assertTrue(started.await(1, TimeUnit.SECONDS));
+            Thread.sleep(100);
+        }
+
+        assertTrue(finished.await(2, TimeUnit.SECONDS));
     }
 }

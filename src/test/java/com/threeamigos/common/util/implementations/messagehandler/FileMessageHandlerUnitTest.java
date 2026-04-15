@@ -1,14 +1,20 @@
-package com.threeamigos.common.utils.implementations.messagehandler;
+package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.*;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -17,10 +23,43 @@ import static org.junit.jupiter.api.Assertions.*;
 @Tag("messageHandler")
 class FileMessageHandlerUnitTest {
 
+    private static class FailingOpenWriterFileMessageHandler extends FileMessageHandler {
+        private FailingOpenWriterFileMessageHandler(String filename) {
+            super(filename);
+        }
+
+        @Override
+        protected PrintWriter openWriter(Path filePath) throws IOException {
+            throw new IOException("forced");
+        }
+    }
+
+    private static class ThrowingAwaitTerminationFileMessageHandler extends FileMessageHandler {
+        private ThrowingAwaitTerminationFileMessageHandler(String filename) {
+            super(filename, true, 1, false);
+        }
+
+        @Override
+        protected void awaitTermination() throws InterruptedException {
+            throw new InterruptedException("forced");
+        }
+    }
+
+    private static class ThrowingRemoveHookFileMessageHandler extends FileMessageHandler {
+        private ThrowingRemoveHookFileMessageHandler(String filename) {
+            super(filename, true, 1, true);
+        }
+
+        @Override
+        protected void removeShutdownHook(Thread hook) {
+            throw new IllegalStateException("forced");
+        }
+    }
+
     @Test
     @DisplayName("Should reject null or empty path")
     void shouldRejectNullOrEmptyPath() {
-        assertThrows(IllegalArgumentException.class, () -> new FileMessageHandler(null));
+        assertThrows(NullPointerException.class, () -> new FileMessageHandler(null));
         assertThrows(IllegalArgumentException.class, () -> new FileMessageHandler(" "));
     }
 
@@ -55,6 +94,7 @@ class FileMessageHandlerUnitTest {
             handler.handleDebugMessage("debug");
             handler.handleTraceMessage("trace");
             handler.handleException(new RuntimeException("boom"));
+            handler.handleException("prefix", new RuntimeException("kaboom"));
         }
         List<String> lines = Files.readAllLines(file);
         assertTrue(lines.stream().anyMatch(l -> l.contains("INFO ") && l.endsWith("info")));
@@ -63,6 +103,7 @@ class FileMessageHandlerUnitTest {
         assertTrue(lines.stream().anyMatch(l -> l.contains("DEBUG") && l.endsWith("debug")));
         assertTrue(lines.stream().anyMatch(l -> l.contains("TRACE") && l.endsWith("trace")));
         assertTrue(lines.stream().anyMatch(l -> l.contains("EXCEP") && l.contains("boom")));
+        assertTrue(lines.stream().anyMatch(l -> l.contains("EXCEP") && l.contains("prefix: kaboom")));
     }
 
     @Test
@@ -178,5 +219,108 @@ class FileMessageHandlerUnitTest {
         } finally {
             dir.toFile().setWritable(true);
         }
+    }
+
+    @Test
+    @DisplayName("Should throw if writer cannot be opened")
+    void shouldThrowIfWriterCannotBeOpened() throws Exception {
+        Path file = Files.createTempFile("fmh-open-fail", ".log");
+        assertThrows(IllegalArgumentException.class, () -> new FailingOpenWriterFileMessageHandler(file.toString()));
+    }
+
+    @Test
+    @DisplayName("Close should keep interrupt flag when awaitTermination is interrupted")
+    void closeShouldKeepInterruptFlagWhenAwaitTerminationIsInterrupted() throws Exception {
+        Path file = Files.createTempFile("fmh-await", ".log");
+        ThrowingAwaitTerminationFileMessageHandler handler = new ThrowingAwaitTerminationFileMessageHandler(file.toString());
+        assertFalse(Thread.currentThread().isInterrupted());
+        try {
+            handler.close();
+            assertTrue(Thread.currentThread().isInterrupted());
+        } finally {
+            Thread.interrupted();
+        }
+    }
+
+    @Test
+    @DisplayName("Close should ignore IllegalStateException when removing shutdown hook")
+    void closeShouldIgnoreIllegalStateExceptionWhenRemovingShutdownHook() throws Exception {
+        Path file = Files.createTempFile("fmh-hook", ".log");
+        ThrowingRemoveHookFileMessageHandler handler = new ThrowingRemoveHookFileMessageHandler(file.toString());
+        assertDoesNotThrow(handler::close);
+    }
+
+    @Test
+    @DisplayName("Close should drain pending queued messages")
+    void closeShouldDrainPendingQueuedMessages() throws Exception {
+        Path file = Files.createTempFile("fmh-drain", ".log");
+        Files.deleteIfExists(file);
+        int count = 500;
+        FileMessageHandler handler = new FileMessageHandler(file.toString(), true, 200);
+        for (int i = 0; i < count; i++) {
+            handler.handleInfoMessage("queued-" + i);
+        }
+        handler.close();
+
+        List<String> lines = Files.readAllLines(file);
+        assertTrue(lines.stream().anyMatch(l -> l.contains("queued-0")));
+        assertTrue(lines.stream().anyMatch(l -> l.contains("queued-" + (count - 1))));
+    }
+
+    @Test
+    @DisplayName("Should support relative filename without parent directory")
+    void shouldSupportRelativeFilenameWithoutParentDirectory() throws Exception {
+        String fileName = "fmh-relative-" + System.nanoTime() + ".log";
+        Path file = Paths.get(fileName);
+        Files.deleteIfExists(file);
+        try (FileMessageHandler handler = new FileMessageHandler(fileName)) {
+            handler.handleInfoMessage("relative");
+        } finally {
+            Files.deleteIfExists(file);
+        }
+    }
+
+    @Test
+    @Timeout(value = 90, unit = TimeUnit.SECONDS)
+    @DisplayName("Should keep all info messages under high concurrent load")
+    void shouldKeepAllInfoMessagesUnderHighConcurrentLoad() throws Exception {
+        final int threadCount = 16;
+        final int messagesPerThread = 1500;
+        final int expectedMessages = threadCount * messagesPerThread;
+
+        Path file = Files.createTempFile("fmh-stress", ".log");
+        Files.deleteIfExists(file);
+
+        try (FileMessageHandler handler = new FileMessageHandler(file.toString(), true, 2048, false)) {
+            ExecutorService producerPool = Executors.newFixedThreadPool(threadCount);
+            CountDownLatch start = new CountDownLatch(1);
+            List<Future<?>> futures = new ArrayList<>();
+
+            for (int t = 0; t < threadCount; t++) {
+                final int threadId = t;
+                futures.add(producerPool.submit(() -> {
+                    start.await();
+                    for (int i = 0; i < messagesPerThread; i++) {
+                        final int messageIndex = i;
+                        handler.handleInfoMessage(() -> "stress-file-" + threadId + "-" + messageIndex);
+                    }
+                    return null;
+                }));
+            }
+
+            start.countDown();
+            for (Future<?> future : futures) {
+                future.get(60, TimeUnit.SECONDS);
+            }
+            producerPool.shutdown();
+            assertTrue(producerPool.awaitTermination(10, TimeUnit.SECONDS));
+        }
+
+        long infoLines;
+        try (Stream<String> lines = Files.lines(file)) {
+            infoLines = lines.filter(line -> line.contains("[INFO ]")).count();
+        }
+
+        assertEquals(expectedMessages, infoLines, "Some file info messages were lost under stress");
     }
 }

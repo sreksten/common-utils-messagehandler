@@ -3,6 +3,7 @@ package com.threeamigos.common.util.implementations.messagehandler;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.annotation.Nonnull;
 
+import java.util.Objects;
 import java.util.ResourceBundle;
 import java.util.function.Supplier;
 
@@ -91,9 +92,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
     }
 
     public void handleInfoMessage(final @Nonnull Supplier<String> messageSupplier) {
-        if (messageSupplier == null) {
-            throw new IllegalArgumentException(getBundle().getString("nullMessageSupplierProvided"));
-        }
+        Objects.requireNonNull(messageSupplier, getBundle().getString("nullMessageSupplierProvided"));
         if (isInfoEnabled) {
             handleInfoMessage(messageSupplier.get());
         }
@@ -101,9 +100,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
 
     @Override
     public void handleInfoMessage(final @Nonnull String message) {
-        if (message == null) {
-            throw new IllegalArgumentException(getBundle().getString("nullMessageProvided"));
-        }
+        Objects.requireNonNull(message, getBundle().getString("nullMessageProvided"));
         if (isInfoEnabled) {
             handleInfoMessageImpl(message);
         }
@@ -112,9 +109,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
     protected abstract void handleInfoMessageImpl(final String message);
 
     public void handleWarnMessage(final @Nonnull Supplier<String> messageSupplier) {
-        if (messageSupplier == null) {
-            throw new IllegalArgumentException(getBundle().getString("nullMessageSupplierProvided"));
-        }
+        Objects.requireNonNull(messageSupplier, getBundle().getString("nullMessageSupplierProvided"));
         if (isWarnEnabled) {
             handleWarnMessage(messageSupplier.get());
         }
@@ -122,9 +117,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
 
     @Override
     public void handleWarnMessage(final @Nonnull String message) {
-        if (message == null) {
-            throw new IllegalArgumentException(getBundle().getString("nullMessageProvided"));
-        }
+        Objects.requireNonNull(message, getBundle().getString("nullMessageProvided"));
         if (isWarnEnabled) {
             handleWarnMessageImpl(message);
         }
@@ -133,9 +126,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
     protected abstract void handleWarnMessageImpl(final String message);
 
     public void handleErrorMessage(final @Nonnull Supplier<String> messageSupplier) {
-        if (messageSupplier == null) {
-            throw new IllegalArgumentException(getBundle().getString("nullMessageSupplierProvided"));
-        }
+        Objects.requireNonNull(messageSupplier, getBundle().getString("nullMessageSupplierProvided"));
         if (isErrorEnabled) {
             handleErrorMessage(messageSupplier.get());
         }
@@ -143,9 +134,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
 
     @Override
     public void handleErrorMessage(final @Nonnull String message) {
-        if (message == null) {
-            throw new IllegalArgumentException(getBundle().getString("nullMessageProvided"));
-        }
+        Objects.requireNonNull(message, getBundle().getString("nullMessageProvided"));
         if (isErrorEnabled) {
             handleErrorMessageImpl(message);
         }
@@ -154,9 +143,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
     protected abstract void handleErrorMessageImpl(final String message);
 
     public void handleDebugMessage(final @Nonnull Supplier<String> messageSupplier) {
-        if (messageSupplier == null) {
-            throw new IllegalArgumentException(getBundle().getString("nullMessageSupplierProvided"));
-        }
+        Objects.requireNonNull(messageSupplier, getBundle().getString("nullMessageSupplierProvided"));
         if (isDebugEnabled) {
             handleDebugMessage(messageSupplier.get());
         }
@@ -164,9 +151,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
 
     @Override
     public void handleDebugMessage(final @Nonnull String message) {
-        if (message == null) {
-            throw new IllegalArgumentException(getBundle().getString("nullMessageProvided"));
-        }
+        Objects.requireNonNull(message, getBundle().getString("nullMessageProvided"));
         if (isDebugEnabled) {
             handleDebugMessageImpl(message);
         }
@@ -176,18 +161,14 @@ public abstract class AbstractMessageHandler implements MessageHandler {
 
     @Override
     public void handleTraceMessage(final @Nonnull String message) {
-        if (message == null) {
-            throw new IllegalArgumentException(getBundle().getString("nullMessageProvided"));
-        }
+        Objects.requireNonNull(message, getBundle().getString("nullMessageProvided"));
         if (isTraceEnabled) {
             handleTraceMessageImpl(message);
         }
     }
 
     public void handleTraceMessage(final @Nonnull Supplier<String> messageSupplier) {
-        if (messageSupplier == null) {
-            throw new IllegalArgumentException(getBundle().getString("nullMessageSupplierProvided"));
-        }
+        Objects.requireNonNull(messageSupplier, getBundle().getString("nullMessageSupplierProvided"));
         if (isTraceEnabled) {
             handleTraceMessage(messageSupplier.get());
         }
@@ -197,9 +178,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
 
     @Override
     public void handleException(final @Nonnull Exception exception) {
-        if (exception == null) {
-            throw new IllegalArgumentException(getBundle().getString("nullExceptionProvided"));
-        }
+        Objects.requireNonNull(exception, getBundle().getString("nullExceptionProvided"));
         if (isExceptionEnabled) {
             handleExceptionImpl(exception);
         }
@@ -208,12 +187,8 @@ public abstract class AbstractMessageHandler implements MessageHandler {
     protected abstract void handleExceptionImpl(final Exception exception);
 
     public void handleException(final @Nonnull String message, final @Nonnull Exception exception) {
-        if (message == null) {
-            throw new IllegalArgumentException(getBundle().getString("nullMessageProvided"));
-        }
-        if (exception == null) {
-            throw new IllegalArgumentException(getBundle().getString("nullExceptionProvided"));
-        }
+        Objects.requireNonNull(message, getBundle().getString("nullMessageProvided"));
+        Objects.requireNonNull(exception, getBundle().getString("nullExceptionProvided"));
         if (isExceptionEnabled) {
             handleExceptionImpl(message, exception);
         }

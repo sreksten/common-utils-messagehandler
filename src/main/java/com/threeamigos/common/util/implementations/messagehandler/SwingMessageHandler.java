@@ -50,31 +50,35 @@ public class SwingMessageHandler extends AbstractMessageHandler {
         return parentComponent;
     }
 
+    protected void showOptionPane(final String message, final String title, final int icon) {
+        AWTCalls.showOptionPane(parentComponent, message, title, icon);
+    }
+
     protected void handleInfoMessageImpl(final String message) {
-        AWTCalls.showOptionPane(parentComponent, message, getBundle().getString("info"), JOptionPane.INFORMATION_MESSAGE);
+        showOptionPane(message, getBundle().getString("info"), JOptionPane.INFORMATION_MESSAGE);
     }
 
     protected void handleWarnMessageImpl(final String message) {
-        AWTCalls.showOptionPane(parentComponent, message, getBundle().getString("warning"), JOptionPane.WARNING_MESSAGE);
+        showOptionPane(message, getBundle().getString("warning"), JOptionPane.WARNING_MESSAGE);
     }
 
     protected void handleErrorMessageImpl(final String message) {
-        AWTCalls.showOptionPane(parentComponent, message, getBundle().getString("error"), JOptionPane.ERROR_MESSAGE);
+        showOptionPane(message, getBundle().getString("error"), JOptionPane.ERROR_MESSAGE);
     }
 
     protected void handleDebugMessageImpl(final String message) {
-        AWTCalls.showOptionPane(parentComponent, message, getBundle().getString("debug"), JOptionPane.INFORMATION_MESSAGE);
+        showOptionPane(message, getBundle().getString("debug"), JOptionPane.INFORMATION_MESSAGE);
     }
 
     protected void handleTraceMessageImpl(final String message) {
-        AWTCalls.showOptionPane(parentComponent, message, getBundle().getString("trace"), JOptionPane.INFORMATION_MESSAGE);
+        showOptionPane(message, getBundle().getString("trace"), JOptionPane.INFORMATION_MESSAGE);
     }
 
     protected void handleExceptionImpl(final Exception exception) {
-        AWTCalls.showOptionPane(parentComponent, exception.getMessage(), getBundle().getString("exception"), JOptionPane.ERROR_MESSAGE);
+        showOptionPane(exception.getMessage(), getBundle().getString("exception"), JOptionPane.ERROR_MESSAGE);
     }
 
     protected void handleExceptionImpl(final String message, final Exception exception) {
-        AWTCalls.showOptionPane(parentComponent, message + ": " +exception.getMessage(), getBundle().getString("exception"), JOptionPane.ERROR_MESSAGE);
+        showOptionPane(message + ": " +exception.getMessage(), getBundle().getString("exception"), JOptionPane.ERROR_MESSAGE);
     }
 }

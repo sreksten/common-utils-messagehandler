@@ -16,7 +16,8 @@ public class JULMessageHandler extends AbstractMessageHandler {
     }
 
     public JULMessageHandler(String loggerName) {
-        if (loggerName == null || loggerName.trim().isEmpty()) {
+        Objects.requireNonNull(loggerName, "Logger name cannot be null or empty");
+        if (loggerName.trim().isEmpty()) {
             throw new IllegalArgumentException("Logger name cannot be null or empty");
         }
         this.logger = Logger.getLogger(loggerName);
