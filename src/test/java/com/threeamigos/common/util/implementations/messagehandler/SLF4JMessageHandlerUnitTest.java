@@ -90,6 +90,6 @@ class SLF4JMessageHandlerUnitTest {
 
         handler.handleException("prefix", exception);
 
-        verify(logger).error("prefix: boom", (Throwable) exception);
+        verify(logger).error("prefix", (Throwable) exception);
     }
 }

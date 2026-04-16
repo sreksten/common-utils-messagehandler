@@ -20,6 +20,13 @@ package com.threeamigos.common.util.interfaces.messagehandler;
  * handler.handleDebugMessage(() -> "expensive: " + computeDetails());
  * }</pre>
  * <p>
+ * <p>
+ * {@code MessageHandler} extends {@link AutoCloseable}, so any handler can be used in a
+ * try-with-resources block. The default {@link #close()} implementation is a no-op; output-oriented
+ * handlers ({@link com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler},
+ * {@link com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler}) override it
+ * to flush and release their underlying resources.
+ * <p>
  * The default implementation base class is
  * {@link com.threeamigos.common.util.implementations.messagehandler.AbstractMessageHandler}.
  * Ready-to-use implementations include:
@@ -41,5 +48,22 @@ public interface MessageHandler extends InfoMessageHandler, SupplierInfoMessageH
         ErrorMessageHandler, SupplierErrorMessageHandler,
         DebugMessageHandler, SupplierDebugMessageHandler,
         TraceMessageHandler, SupplierTraceMessageHandler,
-        ExceptionHandler, ExceptionWithMessageHandler {
+        ExceptionHandler, ExceptionWithMessageHandler, AutoCloseable {
+
+    /**
+     * Releases any resources held by this handler.
+     * <p>
+     * The default implementation is a no-op. Output-oriented handlers
+     * ({@link com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler},
+     * {@link com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler})
+     * override this method to flush pending writes and close the underlying output resource.
+     * <p>
+     * This method does not declare {@code throws Exception}, narrowing the {@link AutoCloseable}
+     * contract so that callers do not need a catch clause for checked exceptions in
+     * try-with-resources blocks.
+     */
+    @Override
+    default void close() {
+        // No-op by default.
+    }
 }

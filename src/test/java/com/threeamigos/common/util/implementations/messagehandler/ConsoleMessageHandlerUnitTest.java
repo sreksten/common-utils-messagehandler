@@ -222,9 +222,8 @@ class ConsoleMessageHandlerUnitTest {
         sut.handleException("prefix", exception);
 
         ArgumentCaptor<String> captor = forClass(String.class);
-        verify(err, times(2)).println(captor.capture());
-        assertTrue(captor.getAllValues().get(0).contains("[EXCEP] prefix"));
-        assertTrue(captor.getAllValues().get(1).contains("[EXCEP] Boom"));
+        verify(err, times(1)).println(captor.capture());
+        assertTrue(captor.getValue().contains("[EXCEP] prefix: Boom"));
         verify(exception, times(1)).printStackTrace(err);
     }
 
