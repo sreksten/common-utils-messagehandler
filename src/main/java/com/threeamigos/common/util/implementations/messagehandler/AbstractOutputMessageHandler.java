@@ -191,6 +191,20 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
         // Default no-op. Subclasses can override to close underlying resources.
     }
 
+    /**
+     * Returns {@code true} if this handler dispatches writes asynchronously.
+     * <p>
+     * Subclasses that need to call {@link #close()} from within a dispatched task (e.g. on
+     * write error) must check this flag: in async mode, calling {@code close()} on the same
+     * thread that runs dispatch tasks causes a deadlock because {@code close()} calls
+     * {@code awaitTermination()}, which waits for the worker thread to finish.
+     *
+     * @return {@code true} if async mode is active
+     */
+    protected final boolean isAsync() {
+        return async;
+    }
+
     private void drainQueueInCallerThread() {
         if (queue == null) {
             return;

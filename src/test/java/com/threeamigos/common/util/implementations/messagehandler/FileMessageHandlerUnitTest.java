@@ -16,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.*;
@@ -74,6 +75,91 @@ class FileMessageHandlerUnitTest {
                     return true;
                 }
             };
+        }
+    }
+
+    /**
+     * Succeeds when the file exists (initial open at construction time),
+     * throws when the file is absent (simulates a re-open failure after external deletion).
+     */
+    private static class FailingReopenFileMessageHandler extends FileMessageHandler {
+        private FailingReopenFileMessageHandler(String filename) {
+            super(filename, false, 0, false, null, true);
+        }
+
+        @Override
+        protected PrintWriter openWriter(Path filePath) throws IOException {
+            if (Files.exists(filePath)) {
+                return super.openWriter(filePath);
+            }
+            throw new IOException("forced reopen failure");
+        }
+    }
+
+    private static class AsyncErrorFileMessageHandler extends FileMessageHandler {
+        private AsyncErrorFileMessageHandler(String filename) {
+            super(filename, true, 64);
+        }
+
+        @Override
+        protected PrintWriter openWriter(Path filePath) throws IOException {
+            return new PrintWriter(new java.io.StringWriter()) {
+                @Override
+                public boolean checkError() {
+                    return true;
+                }
+            };
+        }
+    }
+
+    /**
+     * First call (construction) returns an error writer; any subsequent call (recovery) throws IOException.
+     * Covers the {@code catch (IOException ignored)} block in {@code checkWriteError()}.
+     * <p>
+     * Uses a flag without an explicit initializer so that the parent constructor's call to
+     * {@code openWriter()} can set it before subclass field initializers run (Java field initializers
+     * execute after {@code super()} returns, so an explicit {@code = false} would reset the flag).
+     */
+    private static class FailingRecoveryFileMessageHandler extends FileMessageHandler {
+        // No explicit initializer — stays false (default) until the first openWriter() call sets it
+        private boolean constructionComplete;
+
+        private FailingRecoveryFileMessageHandler(String filename) {
+            super(filename);
+        }
+
+        @Override
+        protected PrintWriter openWriter(Path filePath) throws IOException {
+            if (!constructionComplete) {
+                constructionComplete = true;
+                return new PrintWriter(new java.io.StringWriter()) {
+                    @Override
+                    public boolean checkError() {
+                        return true;
+                    }
+                };
+            }
+            throw new IOException("forced recovery failure");
+        }
+    }
+
+    /**
+     * First call (construction) returns a real writer; the second call (post-rotation re-open) throws.
+     * Uses {@link Files#exists} as a discriminator: the file exists at construction time but is
+     * absent after {@code Files.move()} in {@code rotateIfNeeded()}.
+     * Covers the {@code catch (IOException e)} block in {@code rotateIfNeeded()}.
+     */
+    private static class FailingRotationFileMessageHandler extends FileMessageHandler {
+        private FailingRotationFileMessageHandler(String filename) {
+            super(filename, new SizeRotationPolicy(1));
+        }
+
+        @Override
+        protected PrintWriter openWriter(Path filePath) throws IOException {
+            if (Files.exists(filePath)) {
+                return super.openWriter(filePath);
+            }
+            throw new IOException("forced post-rotation re-open failure");
         }
     }
 
@@ -407,6 +493,219 @@ class FileMessageHandlerUnitTest {
         }
         List<String> lines = Files.readAllLines(file);
         assertTrue(lines.stream().anyMatch(l -> l.contains("before-flush")));
+    }
+
+    // -------------------------------------------------------------------------
+    // Rotation and re-open tests
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Size-based rotation should archive the current file and create a new one")
+    void sizeBasedRotationShouldArchiveAndCreateNewFile() throws Exception {
+        Path file = Files.createTempFile("fmh-size-rotate", ".log");
+        Files.deleteIfExists(file);
+        // Threshold low enough that a single formatted line exceeds it
+        SizeRotationPolicy policy = new SizeRotationPolicy(1);
+        try (FileMessageHandler handler = new FileMessageHandler(file.toString(), policy)) {
+            handler.handleInfoMessage("first");
+            handler.handleInfoMessage("second");
+        }
+        // The new (current) log file must exist
+        assertTrue(Files.exists(file), "Current log file should exist after rotation");
+        // At least one rotated file must exist in the same directory
+        Path dir = file.toAbsolutePath().getParent();
+        String baseName = file.getFileName().toString();
+        try (Stream<Path> candidates = Files.list(dir)) {
+            long rotatedCount = candidates
+                    .filter(p -> p.getFileName().toString().startsWith(baseName + "."))
+                    .count();
+            assertTrue(rotatedCount >= 1, "At least one rotated file should exist in the directory");
+        }
+    }
+
+    @Test
+    @DisplayName("Daily rotation should archive the current file using the open date")
+    void dailyRotationShouldArchiveCurrentFileUsingOpenDate() throws Exception {
+        Path file = Files.createTempFile("fmh-daily-rotate", ".log");
+        Files.deleteIfExists(file);
+        LocalDate yesterday = LocalDate.now().minusDays(1);
+        DailyRotationPolicy policy = new DailyRotationPolicy(yesterday);
+        try (FileMessageHandler handler = new FileMessageHandler(file.toString(), policy)) {
+            handler.handleInfoMessage("trigger rotation");
+        }
+        // After close the current log file is recreated (rotation happened on write)
+        // The archived file should be named with yesterday's date
+        Path dir = file.toAbsolutePath().getParent();
+        String baseName = file.getFileName().toString(); // e.g. fmh-daily-rotate12345678.log
+        int dotIndex = baseName.lastIndexOf('.');
+        String expectedArchiveName;
+        if (dotIndex > 0) {
+            expectedArchiveName = baseName.substring(0, dotIndex) + "." + yesterday + baseName.substring(dotIndex);
+        } else {
+            expectedArchiveName = baseName + "." + yesterday;
+        }
+        assertTrue(Files.exists(dir.resolve(expectedArchiveName)),
+                "Archived file should exist at: " + expectedArchiveName);
+    }
+
+    @Test
+    @DisplayName("Re-open on external rotation should recreate the file and continue writing")
+    void reopenOnExternalRotationShouldRecreateFileAndContinueWriting() throws Exception {
+        Path file = Files.createTempFile("fmh-reopen", ".log");
+        Files.deleteIfExists(file);
+        try (FileMessageHandler handler = new FileMessageHandler(
+                file.toString(), false, 0, false, null, true)) {
+            handler.handleInfoMessage("before-delete");
+            // Simulate external rotation: delete the file
+            Files.deleteIfExists(file);
+            handler.handleInfoMessage("after-delete");
+        }
+        assertTrue(Files.exists(file), "Log file should have been re-created after deletion");
+        List<String> lines = Files.readAllLines(file);
+        assertTrue(lines.stream().anyMatch(l -> l.contains("after-delete")),
+                "Message written after re-open should appear in the file");
+    }
+
+    @Test
+    @DisplayName("Re-open failure should print to System.err and not throw")
+    void reopenFailureShouldPrintToSystemErrAndNotThrow() throws Exception {
+        Path file = Files.createTempFile("fmh-reopen-fail", ".log");
+        PrintStream originalErr = System.err;
+        ByteArrayOutputStream errContent = new ByteArrayOutputStream();
+        System.setErr(new PrintStream(errContent, true, StandardCharsets.UTF_8.name()));
+        try (FileMessageHandler handler = new FailingReopenFileMessageHandler(file.toString())) {
+            handler.handleInfoMessage("before-delete");
+            Files.deleteIfExists(file);
+            handler.handleInfoMessage("after-delete-with-failing-reopen");
+        } finally {
+            System.setErr(originalErr);
+        }
+        String errOutput = errContent.toString(StandardCharsets.UTF_8.name());
+        assertFalse(errOutput.isEmpty(), "System.err should contain a re-open error notification");
+    }
+
+    @Test
+    @DisplayName("Without re-open flag, deleted file is not recreated by handler")
+    void withoutReopenFlagDeletedFileIsNotRecreatedByHandler() throws Exception {
+        Path file = Files.createTempFile("fmh-no-reopen", ".log");
+        Files.deleteIfExists(file);
+        try (FileMessageHandler handler = new FileMessageHandler(file.toString())) {
+            handler.handleInfoMessage("before-delete");
+            Files.deleteIfExists(file);
+            // This write goes to the old (now-deleted) file descriptor — no re-open
+            handler.handleInfoMessage("after-delete");
+        }
+        // File should NOT exist because no re-open occurred and close() flushes to the old fd
+        assertFalse(Files.exists(file), "File should not have been re-created without the re-open flag");
+    }
+
+    @Test
+    @DisplayName("Rotation constructors: sync with RotationPolicy")
+    void rotationConstructorSyncWithPolicy() throws Exception {
+        Path file = Files.createTempFile("fmh-ctor-sync-policy", ".log");
+        Files.deleteIfExists(file);
+        try (FileMessageHandler handler = new FileMessageHandler(
+                file.toString(), new SizeRotationPolicy(Long.MAX_VALUE))) {
+            handler.handleInfoMessage("ok");
+        }
+        assertTrue(Files.readAllLines(file).stream().anyMatch(l -> l.contains("ok")));
+    }
+
+    @Test
+    @DisplayName("Rotation constructors: async with RotationPolicy")
+    void rotationConstructorAsyncWithPolicy() throws Exception {
+        Path file = Files.createTempFile("fmh-ctor-async-policy", ".log");
+        Files.deleteIfExists(file);
+        try (FileMessageHandler handler = new FileMessageHandler(
+                file.toString(), true, 64, new SizeRotationPolicy(Long.MAX_VALUE))) {
+            handler.handleInfoMessage("ok");
+        }
+        assertTrue(Files.readAllLines(file).stream().anyMatch(l -> l.contains("ok")));
+    }
+
+    // -------------------------------------------------------------------------
+    // Error consumer and closeOnWriteError tests
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("setErrorConsumer should accept a valid consumer")
+    void setErrorConsumerAcceptsValidConsumer() throws Exception {
+        Path file = Files.createTempFile("fmh-set-consumer", ".log");
+        List<String> errors = new ArrayList<>();
+        try (FileMessageHandler handler = new FileMessageHandler(file.toString())) {
+            handler.setErrorConsumer(errors::add);
+            handler.handleInfoMessage("ok");
+        }
+        assertTrue(errors.isEmpty(), "No error should have been reported for a successful write");
+    }
+
+    @Test
+    @DisplayName("setErrorConsumer should throw NullPointerException for null argument")
+    void setErrorConsumerNullThrowsNpe() throws Exception {
+        Path file = Files.createTempFile("fmh-null-consumer", ".log");
+        try (FileMessageHandler handler = new FileMessageHandler(file.toString())) {
+            assertThrows(NullPointerException.class, () -> handler.setErrorConsumer(null));
+        }
+    }
+
+    @Test
+    @DisplayName("checkWriteError: IOException during recovery should still notify errorConsumer")
+    void checkWriteErrorRecoveryFailsNotifiesConsumer() throws Exception {
+        Path file = Files.createTempFile("fmh-recovery-fail", ".log");
+        List<String> errors = new ArrayList<>();
+        try (FileMessageHandler handler = new FailingRecoveryFileMessageHandler(file.toString())) {
+            handler.setErrorConsumer(errors::add);
+            handler.handleInfoMessage("trigger");
+        }
+        assertFalse(errors.isEmpty(), "errorConsumer should be notified when write-error recovery fails");
+    }
+
+    @Test
+    @DisplayName("checkWriteError: closeOnWriteError=true in sync mode should close the handler")
+    void checkWriteErrorCloseOnWriteErrorSyncClosesHandler() throws Exception {
+        Path file = Files.createTempFile("fmh-close-on-error-sync", ".log");
+        List<String> errors = new ArrayList<>();
+        FileMessageHandler handler = new ErrorCheckWriterFileMessageHandler(file.toString());
+        handler.setErrorConsumer(errors::add);
+        handler.setCloseOnWriteError(true);
+        handler.handleInfoMessage("trigger");
+        assertFalse(errors.isEmpty(), "errorConsumer should be notified on write error");
+        assertThrows(IllegalStateException.class, () -> handler.handleInfoMessage("after-close"),
+                "Handler should be closed after write error with closeOnWriteError=true in sync mode");
+    }
+
+    @Test
+    @Timeout(value = 10, unit = TimeUnit.SECONDS)
+    @DisplayName("checkWriteError: closeOnWriteError=true in async mode should close the handler on a new thread")
+    void checkWriteErrorCloseOnWriteErrorAsyncClosesHandler() throws Exception {
+        Path file = Files.createTempFile("fmh-close-on-error-async", ".log");
+        List<String> errors = new ArrayList<>();
+        FileMessageHandler handler = new AsyncErrorFileMessageHandler(file.toString());
+        handler.setErrorConsumer(errors::add);
+        handler.setCloseOnWriteError(true);
+        handler.handleInfoMessage("trigger");
+        // Poll until the worker thread has processed the write and the close thread has run
+        long deadline = System.currentTimeMillis() + 5000;
+        while (errors.isEmpty() && System.currentTimeMillis() < deadline) {
+            Thread.sleep(50);
+        }
+        assertFalse(errors.isEmpty(), "errorConsumer should be notified on write error in async mode");
+        // Give the close thread time to finish
+        Thread.sleep(500);
+        assertThrows(IllegalStateException.class, () -> handler.handleInfoMessage("after-close"),
+                "Handler should be closed after write error with closeOnWriteError=true in async mode");
+    }
+
+    @Test
+    @DisplayName("rotateIfNeeded: IOException when re-opening after rotation should notify errorConsumer")
+    void rotateIfNeededFailureNotifiesErrorConsumer() throws Exception {
+        Path file = Files.createTempFile("fmh-rotate-reopen-fail", ".log");
+        List<String> errors = new ArrayList<>();
+        try (FailingRotationFileMessageHandler handler = new FailingRotationFileMessageHandler(file.toString())) {
+            handler.setErrorConsumer(errors::add);
+            handler.handleInfoMessage("trigger");
+        }
+        assertFalse(errors.isEmpty(), "errorConsumer should receive rotation-failure notification");
     }
 
     @Test
