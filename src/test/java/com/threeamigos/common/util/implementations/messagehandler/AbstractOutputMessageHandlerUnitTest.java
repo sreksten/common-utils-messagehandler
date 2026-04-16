@@ -161,6 +161,18 @@ class AbstractOutputMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("dispatch() should throw IllegalStateException after close() in both sync and async modes")
+    void dispatchShouldThrowIllegalStateExceptionAfterClose() {
+        ProbeOutputMessageHandler syncHandler = new ProbeOutputMessageHandler(false, 0);
+        syncHandler.close();
+        assertThrows(IllegalStateException.class, () -> syncHandler.submit(() -> {}));
+
+        ProbeOutputMessageHandler asyncHandler = new ProbeOutputMessageHandler(true, 100);
+        asyncHandler.close();
+        assertThrows(IllegalStateException.class, () -> asyncHandler.submit(() -> {}));
+    }
+
+    @Test
     @DisplayName("Should request shutdown again when awaitTermination times out")
     void shouldRequestShutdownAgainWhenAwaitTerminationTimesOut() throws Exception {
         ProbeOutputMessageHandler handler = new ProbeOutputMessageHandler(false, 0);

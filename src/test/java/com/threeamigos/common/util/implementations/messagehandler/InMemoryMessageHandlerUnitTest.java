@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.Timeout;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -381,6 +383,13 @@ class InMemoryMessageHandlerUnitTest {
         assertEquals(1, sut.getAllMessages().size());
         assertEquals(1, sut.getAllInfoMessages().size());
         assertEquals("after", sut.getLastMessage());
+    }
+
+    @Test
+    @DisplayName("MessageHandler.close() default no-op should do nothing on a non-output handler")
+    void messageHandlerCloseDefaultNoOpShouldDoNothing() {
+        MessageHandler handler = new InMemoryMessageHandler();
+        assertDoesNotThrow(handler::close);
     }
 
     @Test

@@ -10,6 +10,8 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -25,6 +27,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
@@ -712,6 +715,25 @@ class CompositeMessageHandlerUnitTest {
 
         for (MessageHandler messageHandler : sut.getMessageHandlers()) {
             verify(messageHandler, times(1)).handleException("prefix", exception);
+        }
+    }
+
+    @Test
+    @DisplayName("forEachHandler should catch Throwable from a child handler and continue to subsequent handlers")
+    void forEachHandlerShouldCatchThrowableAndContinueToSubsequentHandlers() {
+        PrintStream originalErr = System.err;
+        ByteArrayOutputStream errContent = new ByteArrayOutputStream();
+        System.setErr(new PrintStream(errContent, true));
+        try {
+            doThrow(new Error("forced error")).when(firstMessageHandler).handleInfoMessage("msg");
+            CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
+
+            sut.handleInfoMessage("msg");
+
+            verify(secondMessageHandler, times(1)).handleInfoMessage("msg");
+            assertFalse(errContent.toString().isEmpty(), "System.err should have received error output");
+        } finally {
+            System.setErr(originalErr);
         }
     }
 

@@ -6,10 +6,13 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.io.BufferedWriter;
 import java.io.FileWriter;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -55,6 +58,22 @@ class FileMessageHandlerUnitTest {
         @Override
         protected void removeShutdownHook(Thread hook) {
             throw new IllegalStateException("forced");
+        }
+    }
+
+    private static class ErrorCheckWriterFileMessageHandler extends FileMessageHandler {
+        private ErrorCheckWriterFileMessageHandler(String filename) {
+            super(filename);
+        }
+
+        @Override
+        protected PrintWriter openWriter(Path filePath) throws IOException {
+            return new PrintWriter(new java.io.StringWriter()) {
+                @Override
+                public boolean checkError() {
+                    return true;
+                }
+            };
         }
     }
 
@@ -302,6 +321,22 @@ class FileMessageHandlerUnitTest {
         } finally {
             Files.deleteIfExists(file);
         }
+    }
+
+    @Test
+    @DisplayName("Should print to System.err when writer reports a write error")
+    void shouldPrintToSystemErrWhenWriterReportsError() throws Exception {
+        Path file = Files.createTempFile("fmh-check-error", ".log");
+        PrintStream originalErr = System.err;
+        ByteArrayOutputStream errContent = new ByteArrayOutputStream();
+        System.setErr(new PrintStream(errContent, true, StandardCharsets.UTF_8.name()));
+        try (FileMessageHandler handler = new ErrorCheckWriterFileMessageHandler(file.toString())) {
+            handler.handleInfoMessage("trigger-error-check");
+        } finally {
+            System.setErr(originalErr);
+        }
+        String errOutput = errContent.toString(StandardCharsets.UTF_8.name());
+        assertFalse(errOutput.isEmpty(), "System.err should contain a write-error notification");
     }
 
     @Test
