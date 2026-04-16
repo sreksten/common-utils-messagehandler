@@ -4,7 +4,6 @@ import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.annotation.Nonnull;
 
 import java.util.Objects;
-import java.util.ResourceBundle;
 import java.util.function.Supplier;
 
 /**
@@ -17,10 +16,6 @@ import java.util.function.Supplier;
  * @author Stefano Reksten
  */
 public abstract class AbstractMessageHandler implements MessageHandler {
-
-    private static final ResourceBundle BUNDLE = MessageHandlerResourceBundles.load(
-            "com.threeamigos.common.util.implementations.messagehandler.AbstractMessageHandler.AbstractMessageHandler",
-            AbstractMessageHandler.class);
 
     private volatile boolean isInfoEnabled = true;
     private volatile boolean isWarnEnabled = true;
@@ -159,7 +154,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * @throws NullPointerException if {@code messageSupplier} is {@code null}
      */
     public void handleInfoMessage(final @Nonnull Supplier<String> messageSupplier) {
-        Objects.requireNonNull(messageSupplier, BUNDLE.getString("nullMessageSupplierProvided"));
+        Objects.requireNonNull(messageSupplier, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageSupplierProvided"));
         if (isInfoEnabled) {
             handleInfoMessage(messageSupplier.get());
         }
@@ -174,7 +169,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      */
     @Override
     public void handleInfoMessage(final @Nonnull String message) {
-        Objects.requireNonNull(message, BUNDLE.getString("nullMessageProvided"));
+        Objects.requireNonNull(message, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageProvided"));
         if (isInfoEnabled) {
             handleInfoMessageImpl(message);
         }
@@ -200,7 +195,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * @throws NullPointerException if {@code messageSupplier} is {@code null}
      */
     public void handleWarnMessage(final @Nonnull Supplier<String> messageSupplier) {
-        Objects.requireNonNull(messageSupplier, BUNDLE.getString("nullMessageSupplierProvided"));
+        Objects.requireNonNull(messageSupplier, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageSupplierProvided"));
         if (isWarnEnabled) {
             handleWarnMessage(messageSupplier.get());
         }
@@ -215,7 +210,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      */
     @Override
     public void handleWarnMessage(final @Nonnull String message) {
-        Objects.requireNonNull(message, BUNDLE.getString("nullMessageProvided"));
+        Objects.requireNonNull(message, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageProvided"));
         if (isWarnEnabled) {
             handleWarnMessageImpl(message);
         }
@@ -241,7 +236,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * @throws NullPointerException if {@code messageSupplier} is {@code null}
      */
     public void handleErrorMessage(final @Nonnull Supplier<String> messageSupplier) {
-        Objects.requireNonNull(messageSupplier, BUNDLE.getString("nullMessageSupplierProvided"));
+        Objects.requireNonNull(messageSupplier, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageSupplierProvided"));
         if (isErrorEnabled) {
             handleErrorMessage(messageSupplier.get());
         }
@@ -256,7 +251,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      */
     @Override
     public void handleErrorMessage(final @Nonnull String message) {
-        Objects.requireNonNull(message, BUNDLE.getString("nullMessageProvided"));
+        Objects.requireNonNull(message, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageProvided"));
         if (isErrorEnabled) {
             handleErrorMessageImpl(message);
         }
@@ -282,7 +277,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * @throws NullPointerException if {@code messageSupplier} is {@code null}
      */
     public void handleDebugMessage(final @Nonnull Supplier<String> messageSupplier) {
-        Objects.requireNonNull(messageSupplier, BUNDLE.getString("nullMessageSupplierProvided"));
+        Objects.requireNonNull(messageSupplier, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageSupplierProvided"));
         if (isDebugEnabled) {
             handleDebugMessage(messageSupplier.get());
         }
@@ -297,7 +292,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      */
     @Override
     public void handleDebugMessage(final @Nonnull String message) {
-        Objects.requireNonNull(message, BUNDLE.getString("nullMessageProvided"));
+        Objects.requireNonNull(message, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageProvided"));
         if (isDebugEnabled) {
             handleDebugMessageImpl(message);
         }
@@ -322,7 +317,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      */
     @Override
     public void handleTraceMessage(final @Nonnull String message) {
-        Objects.requireNonNull(message, BUNDLE.getString("nullMessageProvided"));
+        Objects.requireNonNull(message, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageProvided"));
         if (isTraceEnabled) {
             handleTraceMessageImpl(message);
         }
@@ -338,7 +333,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * @throws NullPointerException if {@code messageSupplier} is {@code null}
      */
     public void handleTraceMessage(final @Nonnull Supplier<String> messageSupplier) {
-        Objects.requireNonNull(messageSupplier, BUNDLE.getString("nullMessageSupplierProvided"));
+        Objects.requireNonNull(messageSupplier, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageSupplierProvided"));
         if (isTraceEnabled) {
             handleTraceMessage(messageSupplier.get());
         }
@@ -363,7 +358,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      */
     @Override
     public void handleException(final @Nonnull Exception exception) {
-        Objects.requireNonNull(exception, BUNDLE.getString("nullExceptionProvided"));
+        Objects.requireNonNull(exception, MessageHandlerResourceBundle.BUNDLE.getString("nullExceptionProvided"));
         if (isExceptionEnabled) {
             handleExceptionImpl(exception);
         }
@@ -387,8 +382,8 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * @throws NullPointerException if either {@code message} or {@code exception} is {@code null}
      */
     public void handleException(final @Nonnull String message, final @Nonnull Exception exception) {
-        Objects.requireNonNull(message, BUNDLE.getString("nullMessageProvided"));
-        Objects.requireNonNull(exception, BUNDLE.getString("nullExceptionProvided"));
+        Objects.requireNonNull(message, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageProvided"));
+        Objects.requireNonNull(exception, MessageHandlerResourceBundle.BUNDLE.getString("nullExceptionProvided"));
         if (isExceptionEnabled) {
             handleExceptionImpl(message, exception);
         }

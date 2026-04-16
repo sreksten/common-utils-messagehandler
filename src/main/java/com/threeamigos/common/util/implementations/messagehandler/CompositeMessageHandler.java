@@ -17,10 +17,6 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  */
 public class CompositeMessageHandler extends AbstractMessageHandler {
 
-    private static final ResourceBundle BUNDLE = MessageHandlerResourceBundles.load(
-            "com.threeamigos.common.util.implementations.messagehandler.CompositeMessageHandler.CompositeMessageHandler",
-            CompositeMessageHandler.class);
-
     private final List<MessageHandler> messageHandlers = new ArrayList<>();
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
@@ -32,7 +28,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
      * @param handlers a collection of non-null MessageHandlers
      */
     public CompositeMessageHandler(final @Nonnull Collection<MessageHandler> handlers) {
-        Objects.requireNonNull(handlers, BUNDLE.getString("noMessageHandlersProvided"));
+        Objects.requireNonNull(handlers, MessageHandlerResourceBundle.BUNDLE.getString("noMessageHandlersProvided"));
         addMessageHandlers(handlers);
     }
 
@@ -40,7 +36,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
      * @param handlers a collection of non-null MessageHandlers
      */
     public CompositeMessageHandler(final @Nonnull MessageHandler... handlers) {
-        Objects.requireNonNull(handlers, BUNDLE.getString("noMessageHandlersProvided"));
+        Objects.requireNonNull(handlers, MessageHandlerResourceBundle.BUNDLE.getString("noMessageHandlersProvided"));
         addMessageHandlers(Arrays.asList(handlers));
     }
 
@@ -48,7 +44,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
         lock.writeLock().lock();
         try {
             for (MessageHandler handler : handlers) {
-                messageHandlers.add(Objects.requireNonNull(handler, BUNDLE.getString("nullMessageHandlerProvided")));
+                messageHandlers.add(Objects.requireNonNull(handler, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageHandlerProvided")));
             }
         } finally {
             lock.writeLock().unlock();
@@ -65,7 +61,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
      * @throws NullPointerException if {@code messageHandler} is {@code null}
      */
     public void addMessageHandler(final @Nonnull MessageHandler messageHandler) {
-        Objects.requireNonNull(messageHandler, BUNDLE.getString("nullMessageHandlerProvided"));
+        Objects.requireNonNull(messageHandler, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageHandlerProvided"));
         lock.writeLock().lock();
         try {
             messageHandlers.add(messageHandler);
@@ -85,7 +81,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
      * @throws NullPointerException if {@code messageHandler} is {@code null}
      */
     public void removeMessageHandler(final @Nonnull MessageHandler messageHandler) {
-        Objects.requireNonNull(messageHandler, BUNDLE.getString("nullMessageHandlerProvided"));
+        Objects.requireNonNull(messageHandler, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageHandlerProvided"));
         lock.writeLock().lock();
         try {
             messageHandlers.remove(messageHandler);

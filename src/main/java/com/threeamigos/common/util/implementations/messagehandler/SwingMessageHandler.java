@@ -5,7 +5,6 @@ import com.threeamigos.common.util.ui.AWTCalls;
 
 import javax.swing.*;
 import java.awt.*;
-import java.util.ResourceBundle;
 
 /**
  * An implementation of the {@link MessageHandler} interface that uses an
@@ -14,10 +13,6 @@ import java.util.ResourceBundle;
  * @author Stefano Reksten
  */
 public class SwingMessageHandler extends AbstractMessageHandler {
-
-    private static final ResourceBundle BUNDLE = MessageHandlerResourceBundles.load(
-            "com.threeamigos.common.util.implementations.messagehandler.SwingMessageHandler.SwingMessageHandler",
-            SwingMessageHandler.class);
 
     private Component parentComponent;
 
@@ -34,7 +29,7 @@ public class SwingMessageHandler extends AbstractMessageHandler {
     /**
      * Creates a {@code SwingMessageHandler} with no parent window.
      * <p>
-     * All dialogs will be centred on screen. The parent can be set later via
+     * All dialogs will be centred on the screen. The parent can be set later via
      * {@link #setParentComponent(Component)}.
      */
     public SwingMessageHandler() {
@@ -43,7 +38,7 @@ public class SwingMessageHandler extends AbstractMessageHandler {
     /**
      * Sets the parent window used to position {@link javax.swing.JOptionPane} dialogs.
      *
-     * @param parentComponent the parent window; may be {@code null} to centre on screen
+     * @param parentComponent the parent window; may be {@code null} to center on screen
      */
     public void setParentComponent(final Component parentComponent) {
         this.parentComponent = parentComponent;
@@ -76,34 +71,34 @@ public class SwingMessageHandler extends AbstractMessageHandler {
     }
 
     /**
-     * Displays the message in an information dialog with a localised title.
+     * Displays the message in an information dialog with a localized title.
      *
      * @param message the info-level text to display
      */
     protected void handleInfoMessageImpl(final String message) {
-        showOptionPane(message, BUNDLE.getString("info"), JOptionPane.INFORMATION_MESSAGE);
+        showOptionPane(message, MessageHandlerResourceBundle.BUNDLE.getString("info"), JOptionPane.INFORMATION_MESSAGE);
     }
 
     /**
-     * Displays the message in a warning dialog with a localised title.
+     * Displays the message in a warning dialog with a localized title.
      *
      * @param message the warn-level text to display
      */
     protected void handleWarnMessageImpl(final String message) {
-        showOptionPane(message, BUNDLE.getString("warning"), JOptionPane.WARNING_MESSAGE);
+        showOptionPane(message, MessageHandlerResourceBundle.BUNDLE.getString("warning"), JOptionPane.WARNING_MESSAGE);
     }
 
     /**
-     * Displays the message in an error dialog with a localised title.
+     * Displays the message in an error dialog with a localized title.
      *
      * @param message the error-level text to display
      */
     protected void handleErrorMessageImpl(final String message) {
-        showOptionPane(message, BUNDLE.getString("error"), JOptionPane.ERROR_MESSAGE);
+        showOptionPane(message, MessageHandlerResourceBundle.BUNDLE.getString("error"), JOptionPane.ERROR_MESSAGE);
     }
 
     /**
-     * Displays the message in an information dialog with a localised title.
+     * Displays the message in an information dialog with a localized title.
      * <p>
      * Debug output uses {@link JOptionPane#INFORMATION_MESSAGE} rather than a dedicated
      * icon because Swing provides no built-in debug icon type.
@@ -111,11 +106,11 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      * @param message the debug-level text to display
      */
     protected void handleDebugMessageImpl(final String message) {
-        showOptionPane(message, BUNDLE.getString("debug"), JOptionPane.INFORMATION_MESSAGE);
+        showOptionPane(message, MessageHandlerResourceBundle.BUNDLE.getString("debug"), JOptionPane.INFORMATION_MESSAGE);
     }
 
     /**
-     * Displays the message in an information dialog with a localised title.
+     * Displays the message in an information dialog with a localized title.
      * <p>
      * Trace output uses {@link JOptionPane#INFORMATION_MESSAGE} rather than a dedicated
      * icon because Swing provides no built-in trace icon type.
@@ -123,11 +118,11 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      * @param message the trace-level text to display
      */
     protected void handleTraceMessageImpl(final String message) {
-        showOptionPane(message, BUNDLE.getString("trace"), JOptionPane.INFORMATION_MESSAGE);
+        showOptionPane(message, MessageHandlerResourceBundle.BUNDLE.getString("trace"), JOptionPane.INFORMATION_MESSAGE);
     }
 
     /**
-     * Displays the exception detail in an error dialog with a localised title.
+     * Displays the exception detail in an error dialog with a localized title.
      * <p>
      * The displayed text is produced by {@link ExceptionMessageFormatter#detail(Exception)}:
      * {@link Exception#getMessage()} when non-null, otherwise {@link Exception#toString()}.
@@ -135,11 +130,11 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      * @param exception the exception to display
      */
     protected void handleExceptionImpl(final Exception exception) {
-        showOptionPane(ExceptionMessageFormatter.detail(exception), BUNDLE.getString("exception"), JOptionPane.ERROR_MESSAGE);
+        showOptionPane(ExceptionMessageFormatter.detail(exception), MessageHandlerResourceBundle.BUNDLE.getString("exception"), JOptionPane.ERROR_MESSAGE);
     }
 
     /**
-     * Displays the contextual message and exception detail in an error dialog with a localised title.
+     * Displays the contextual message and exception detail in an error dialog with a localized title.
      * <p>
      * The displayed text is produced by {@link ExceptionMessageFormatter#withPrefix(String, Exception)},
      * yielding {@code "<message>: <detail>"}.
@@ -148,6 +143,6 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      * @param exception the exception to display
      */
     protected void handleExceptionImpl(final String message, final Exception exception) {
-        showOptionPane(ExceptionMessageFormatter.withPrefix(message, exception), BUNDLE.getString("exception"), JOptionPane.ERROR_MESSAGE);
+        showOptionPane(ExceptionMessageFormatter.withPrefix(message, exception), MessageHandlerResourceBundle.BUNDLE.getString("exception"), JOptionPane.ERROR_MESSAGE);
     }
 }

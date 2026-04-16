@@ -13,14 +13,14 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @DisplayName("MessageHandlerResourceBundles unit tests")
 @Tag("unit")
 @Tag("messageHandler")
-class MessageHandlerResourceBundlesUnitTest {
+class MessageHandlerResourceBundleUnitTest {
 
     @Test
     @DisplayName("Should load existing bundle using explicit class loader")
     void shouldLoadExistingBundleUsingExplicitClassLoader() {
-        ResourceBundle bundle = MessageHandlerResourceBundles.load(
-                "com.threeamigos.common.util.implementations.messagehandler.AbstractMessageHandler.AbstractMessageHandler",
-                AbstractMessageHandler.class);
+        ResourceBundle bundle = MessageHandlerResourceBundle.load(
+                "com.threeamigos.common.util.implementations.messagehandler.MessageHandler.MessageHandler",
+                MessageHandlerResourceBundle.class);
 
         assertEquals("Null message provided.", bundle.getString("nullMessageProvided"));
     }
@@ -29,6 +29,6 @@ class MessageHandlerResourceBundlesUnitTest {
     @DisplayName("Should throw when bundle is missing")
     void shouldThrowWhenBundleIsMissing() {
         assertThrows(MissingResourceException.class,
-                () -> MessageHandlerResourceBundles.load("com.threeamigos.missing.bundle", AbstractMessageHandler.class));
+                () -> MessageHandlerResourceBundle.load("com.threeamigos.missing.bundle", AbstractMessageHandler.class));
     }
 }

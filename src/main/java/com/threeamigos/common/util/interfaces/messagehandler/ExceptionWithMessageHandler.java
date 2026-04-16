@@ -24,7 +24,7 @@ public interface ExceptionWithMessageHandler {
      * Handles an exception together with a caller-supplied contextual message.
      *
      * @param message   a non-null string describing the context in which the exception occurred
-     *                  (e.g. the operation attempted or the resource involved)
+     *                  (e.g., the operation attempted or the resource involved)
      * @param exception the non-null exception to handle
      */
     void handleException(final @Nonnull String message, final @Nonnull Exception exception);

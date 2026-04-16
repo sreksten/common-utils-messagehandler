@@ -36,7 +36,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <h3>Graceful shutdown and drain-in-finally</h3>
  * <p>
  * {@link #close()} is idempotent. On the first call it interrupts the worker thread and waits for
- * it to finish. The worker's {@code finally} block drains any tasks that were already queued before
+ * it to finish. The worker's {@code finally} block drains any tasks already queued before
  * the interrupt was processed, so no enqueued messages are lost during shutdown. After the worker
  * exits, the caller thread performs one additional drain pass to capture tasks enqueued in the
  * window between the interrupt and the worker's own drain, then calls {@link #closeOutput()} to

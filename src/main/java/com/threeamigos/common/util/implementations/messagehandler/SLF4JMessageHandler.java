@@ -36,7 +36,7 @@ public class SLF4JMessageHandler extends AbstractMessageHandler {
      * @throws NullPointerException if {@code logger} is {@code null}
      */
     public SLF4JMessageHandler(final Logger logger) {
-        this.logger = Objects.requireNonNull(logger, "Logger cannot be null");
+        this.logger = Objects.requireNonNull(logger, MessageHandlerResourceBundle.BUNDLE.getString("loggerCannotBeNull"));
     }
 
     /**
@@ -50,9 +50,9 @@ public class SLF4JMessageHandler extends AbstractMessageHandler {
      * @throws IllegalArgumentException if {@code loggerName} is blank
      */
     public SLF4JMessageHandler(final String loggerName) {
-        Objects.requireNonNull(loggerName, "Logger name cannot be null");
+        Objects.requireNonNull(loggerName, MessageHandlerResourceBundle.BUNDLE.getString("loggerNameCannotBeNull"));
         if (loggerName.trim().isEmpty()) {
-            throw new IllegalArgumentException("Logger name cannot be empty");
+            throw new IllegalArgumentException(MessageHandlerResourceBundle.BUNDLE.getString("loggerNameCannotBeEmpty"));
         }
         this.logger = LoggerFactory.getLogger(loggerName);
     }

@@ -13,11 +13,25 @@ import java.util.ResourceBundle;
  * correct resolution in modular and OSGi environments where the context classloader may
  * not have visibility of the handler's resources.
  * <p>
+ * The shared {@link #BUNDLE} constant provides a single point of access to all localized
+ * strings used across the handler package, loaded once at class-initialization time.
+ * <p>
  * This class is package-private and not part of the public API.
  */
-final class MessageHandlerResourceBundles {
+final class MessageHandlerResourceBundle {
 
-    private MessageHandlerResourceBundles() {
+    /**
+     * The single shared {@link ResourceBundle} for all message-handler implementations.
+     * <p>
+     * Loaded once from
+     * {@code com/threeamigos/common/util/implementations/messagehandler/MessageHandler/MessageHandler.properties}
+     * (and its locale variants) using this class's own {@link ClassLoader}.
+     */
+    static final ResourceBundle BUNDLE = load(
+            "com.threeamigos.common.util.implementations.messagehandler.MessageHandler.MessageHandler",
+            MessageHandlerResourceBundle.class);
+
+    private MessageHandlerResourceBundle() {
     }
 
     /**
