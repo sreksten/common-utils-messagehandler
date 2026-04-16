@@ -3,8 +3,11 @@ package com.threeamigos.common.util.implementations.messagehandler;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.annotation.Nonnull;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.*;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Consumer;
 
 /**
  * An implementation of the {@link MessageHandler} interface that forwards
@@ -19,6 +22,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
 
     private final List<MessageHandler> messageHandlers = new ArrayList<>();
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+    private volatile Consumer<String> errorConsumer = System.err::println;
 
     public CompositeMessageHandler() {
         this(new ArrayList<>());
@@ -125,6 +129,21 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
         }
     }
 
+    /**
+     * Sets the consumer that receives dispatch-error notifications.
+     * <p>
+     * The consumer is invoked with a single string containing the formatted error message and the
+     * full stack trace of the {@link Throwable} thrown by the child handler, separated by a
+     * line separator. Defaults to {@code System.err::println}.
+     *
+     * @param errorConsumer the non-null error notification consumer
+     * @throws NullPointerException if {@code errorConsumer} is {@code null}
+     */
+    public void setErrorConsumer(@Nonnull final Consumer<String> errorConsumer) {
+        Objects.requireNonNull(errorConsumer, MessageHandlerResourceBundle.BUNDLE.getString("nullErrorConsumerProvided"));
+        this.errorConsumer = errorConsumer;
+    }
+
     @Override
     protected void handleInfoMessageImpl(final String message) {
         forEachHandler(mh -> mh.handleInfoMessage(message));
@@ -172,9 +191,11 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
             try {
                 consumer.accept(handler);
             } catch (Throwable t) {
-                String msg = String.format(MessageHandlerResourceBundle.BUNDLE.getString("exceptionDuringDispatch"), handler);
-                System.err.println(msg);
-                t.printStackTrace(System.err);
+                String msg = String.format(
+                        MessageHandlerResourceBundle.BUNDLE.getString("exceptionDuringDispatch"), handler);
+                StringWriter sw = new StringWriter();
+                t.printStackTrace(new PrintWriter(sw, true));
+                errorConsumer.accept(msg + System.lineSeparator() + sw);
             }
         }
     }

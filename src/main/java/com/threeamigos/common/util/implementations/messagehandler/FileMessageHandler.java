@@ -41,7 +41,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
     private volatile boolean closeOnWriteError = false;
 
     // -------------------------------------------------------------------------
-    // Constructors — existing API (unchanged behaviour)
+    // Constructors — existing API (unchanged behavior)
     // -------------------------------------------------------------------------
 
     /**
@@ -165,7 +165,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
     /**
      * Sets the consumer that receives write-error notifications.
      * <p>
-     * The consumer is invoked with a localised error message string whenever a write error
+     * The consumer is invoked with a localized error message string whenever a write error
      * ({@link PrintWriter#checkError()}), a re-open failure, or a rotation failure occurs.
      * Defaults to {@code System.err::println}. Useful in tests or environments without a console.
      *
@@ -195,32 +195,32 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
 
     @Override
     protected void handleInfoMessageImpl(final String message) {
-        writeLine(format("INFO ", message));
+        writeMessage(format("INFO ", message));
     }
 
     @Override
     protected void handleWarnMessageImpl(final String message) {
-        writeLine(format("WARN ", message));
+        writeMessage(format("WARN ", message));
     }
 
     @Override
     protected void handleErrorMessageImpl(final String message) {
-        writeLine(format("ERROR", message));
+        writeMessage(format("ERROR", message));
     }
 
     @Override
     protected void handleDebugMessageImpl(final String message) {
-        writeLine(format("DEBUG", message));
+        writeMessage(format("DEBUG", message));
     }
 
     @Override
     protected void handleTraceMessageImpl(final String message) {
-        writeLine(format("TRACE", message));
+        writeMessage(format("TRACE", message));
     }
 
     @Override
     protected void handleExceptionImpl(final Exception exception) {
-        writeLine(format("EXCEP", ExceptionMessageFormatter.detail(exception)));
+        writeMessage(format("EXCEP", ExceptionMessageFormatter.detail(exception)));
         dispatch(() -> {
             synchronized (writeLock) {
                 reopenIfNeeded();
@@ -233,7 +233,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
 
     @Override
     protected void handleExceptionImpl(final String message, final Exception exception) {
-        writeLine(format("EXCEP", ExceptionMessageFormatter.withPrefix(message, exception)));
+        writeMessage(format("EXCEP", ExceptionMessageFormatter.withPrefix(message, exception)));
         dispatch(() -> {
             synchronized (writeLock) {
                 reopenIfNeeded();
@@ -253,12 +253,12 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
         return String.format("[%s] [%s] %s", date, level, message);
     }
 
-    private void writeLine(String line) {
+    private void writeMessage(String message) {
         dispatch(() -> {
             synchronized (writeLock) {
                 reopenIfNeeded();
-                writer.println(line);
-                bytesWritten += line.getBytes(StandardCharsets.UTF_8).length
+                writer.println(message);
+                bytesWritten += message.getBytes(StandardCharsets.UTF_8).length
                         + System.lineSeparator().length();
                 checkWriteError();
                 rotateIfNeeded();

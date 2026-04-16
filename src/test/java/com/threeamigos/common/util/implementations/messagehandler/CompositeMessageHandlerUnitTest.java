@@ -10,8 +10,6 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -721,20 +719,23 @@ class CompositeMessageHandlerUnitTest {
     @Test
     @DisplayName("forEachHandler should catch Throwable from a child handler and continue to subsequent handlers")
     void forEachHandlerShouldCatchThrowableAndContinueToSubsequentHandlers() {
-        PrintStream originalErr = System.err;
-        ByteArrayOutputStream errContent = new ByteArrayOutputStream();
-        System.setErr(new PrintStream(errContent, true));
-        try {
-            doThrow(new Error("forced error")).when(firstMessageHandler).handleInfoMessage("msg");
-            CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
+        List<String> errors = new ArrayList<>();
+        doThrow(new Error("forced error")).when(firstMessageHandler).handleInfoMessage("msg");
+        CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
+        sut.setErrorConsumer(errors::add);
 
-            sut.handleInfoMessage("msg");
+        sut.handleInfoMessage("msg");
 
-            verify(secondMessageHandler, times(1)).handleInfoMessage("msg");
-            assertFalse(errContent.toString().isEmpty(), "System.err should have received error output");
-        } finally {
-            System.setErr(originalErr);
-        }
+        verify(secondMessageHandler, times(1)).handleInfoMessage("msg");
+        assertFalse(errors.isEmpty(), "errorConsumer should have received the dispatch error");
+        assertTrue(errors.get(0).contains("forced error"), "Error notification should include the throwable message");
+    }
+
+    @Test
+    @DisplayName("setErrorConsumer should throw NullPointerException for null argument")
+    void setErrorConsumerNullThrowsNpe() {
+        CompositeMessageHandler sut = new CompositeMessageHandler();
+        assertThrows(NullPointerException.class, () -> sut.setErrorConsumer(null));
     }
 
     @Test
