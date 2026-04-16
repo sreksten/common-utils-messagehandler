@@ -53,6 +53,40 @@ class CompositeMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("getHandlerCount should return 0 for empty composite")
+    void getHandlerCountShouldReturnZeroForEmptyComposite() {
+        CompositeMessageHandler sut = new CompositeMessageHandler();
+        assertEquals(0, sut.getHandlerCount());
+    }
+
+    @Test
+    @DisplayName("getHandlerCount should reflect handlers added via constructor")
+    void getHandlerCountShouldReflectConstructorHandlers() {
+        CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
+        assertEquals(2, sut.getHandlerCount());
+    }
+
+    @Test
+    @DisplayName("getHandlerCount should increment after addMessageHandler")
+    void getHandlerCountShouldIncrementAfterAdd() {
+        CompositeMessageHandler sut = new CompositeMessageHandler();
+        sut.addMessageHandler(firstMessageHandler);
+        assertEquals(1, sut.getHandlerCount());
+        sut.addMessageHandler(secondMessageHandler);
+        assertEquals(2, sut.getHandlerCount());
+    }
+
+    @Test
+    @DisplayName("getHandlerCount should decrement after removeMessageHandler")
+    void getHandlerCountShouldDecrementAfterRemove() {
+        CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
+        sut.removeMessageHandler(firstMessageHandler);
+        assertEquals(1, sut.getHandlerCount());
+        sut.removeMessageHandler(secondMessageHandler);
+        assertEquals(0, sut.getHandlerCount());
+    }
+
+    @Test
     @DisplayName("Collection constructor should keep track of arguments")
     void collectionConstructorShouldKeepTrackOfArguments() {
         // Given

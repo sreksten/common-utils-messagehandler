@@ -95,6 +95,24 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
     }
 
     /**
+     * Returns the number of {@link MessageHandler}s currently registered in this composite.
+     * <p>
+     * The count is read under the read lock and is consistent with a point-in-time snapshot;
+     * concurrent {@link #addMessageHandler} or {@link #removeMessageHandler} calls may change
+     * it immediately after this method returns.
+     *
+     * @return the current number of registered handlers; {@code 0} if none are registered
+     */
+    public int getHandlerCount() {
+        lock.readLock().lock();
+        try {
+            return messageHandlers.size();
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    /**
      * Returns a point-in-time snapshot of the registered handlers as an unmodifiable collection.
      * <p>
      * The returned collection reflects the state at the time of the call; subsequent

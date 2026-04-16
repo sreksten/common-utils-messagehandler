@@ -179,6 +179,21 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
         return new PrintWriter(new BufferedWriter(new FileWriter(filePath.toFile(), true)));
     }
 
+    /**
+     * Flushes any buffered output to the underlying file.
+     * <p>
+     * The flush is submitted via {@link #dispatch(Runnable)}, so in asynchronous mode it is
+     * enqueued behind any previously dispatched write tasks and executes when the worker thread
+     * reaches it. In synchronous mode it executes immediately on the calling thread.
+     */
+    public void flush() {
+        dispatch(() -> {
+            synchronized (writeLock) {
+                writer.flush();
+            }
+        });
+    }
+
     @Override
     protected void closeOutput() {
         synchronized (writeLock) {

@@ -10,9 +10,37 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Base class for output-oriented handlers that optionally dispatch write operations asynchronously.
  * <p>
- * When async dispatch is enabled, calls to {@link #dispatch(Runnable)} enqueue tasks on a single-worker queue.
- * On shutdown, the worker is interrupted and then any remaining queued tasks are drained in the worker's
- * {@code finally} block before resources are closed.
+ * Subclasses call {@link #initializeOutputDispatch} once from their constructor to configure the
+ * dispatch mode. Two modes are supported:
+ * <ul>
+ *   <li><strong>Synchronous</strong> ({@code async=false}): every {@link #dispatch(Runnable)} call
+ *       runs the task immediately on the calling thread.</li>
+ *   <li><strong>Asynchronous</strong> ({@code async=true}): tasks are enqueued on a bounded or
+ *       unbounded {@link java.util.concurrent.LinkedBlockingQueue} and executed sequentially by a
+ *       single background worker thread.</li>
+ * </ul>
+ *
+ * <h3>Daemon worker thread</h3>
+ * <p>
+ * The background worker thread is created as a <em>daemon</em> thread. It will not prevent the JVM
+ * from exiting when all non-daemon threads have finished. If graceful flushing of pending tasks on
+ * JVM exit is required, pass {@code registerShutdownHook=true} to
+ * {@link #initializeOutputDispatch}, which registers a shutdown hook that calls {@link #close()}.
+ *
+ * <h3>Backpressure</h3>
+ * <p>
+ * When the worker queue is full (bounded capacity only), {@link #dispatch(Runnable)} falls back to
+ * executing the task synchronously on the calling thread rather than dropping it. This provides
+ * backpressure without silent message loss.
+ *
+ * <h3>Graceful shutdown and drain-in-finally</h3>
+ * <p>
+ * {@link #close()} is idempotent. On the first call it interrupts the worker thread and waits for
+ * it to finish. The worker's {@code finally} block drains any tasks that were already queued before
+ * the interrupt was processed, so no enqueued messages are lost during shutdown. After the worker
+ * exits, the caller thread performs one additional drain pass to capture tasks enqueued in the
+ * window between the interrupt and the worker's own drain, then calls {@link #closeOutput()} to
+ * release the underlying output resource.
  */
 public abstract class AbstractOutputMessageHandler extends AbstractMessageHandler implements AutoCloseable {
 

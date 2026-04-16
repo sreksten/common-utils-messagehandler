@@ -227,10 +227,10 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     protected void handleExceptionImpl(final String message, final Exception exception) {
         lock.lock();
         try {
-            String detail = ExceptionMessageFormatter.detail(exception);
-            addWithLimit(allExceptionMessages, message + ": " + detail);
+            String formatted = ExceptionMessageFormatter.withPrefix(message, exception);
+            addWithLimit(allExceptionMessages, formatted);
             addWithLimit(allExceptions, exception);
-            handleImpl(detail);
+            handleImpl(formatted);
         } finally {
             lock.unlock();
         }
@@ -358,6 +358,30 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
         lock.lock();
         try {
             return lastMessage;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Removes all retained messages and exceptions from every per-level list, the combined
+     * {@code allMessages} list, and resets {@link #getLastMessage()} to {@code null}.
+     * <p>
+     * The operation is performed atomically under the handler's lock, so no messages
+     * can arrive between individual list clears.
+     */
+    public void clear() {
+        lock.lock();
+        try {
+            allMessages.clear();
+            allInfoMessages.clear();
+            allWarnMessages.clear();
+            allErrorMessages.clear();
+            allDebugMessages.clear();
+            allTraceMessages.clear();
+            allExceptionMessages.clear();
+            allExceptions.clear();
+            lastMessage = null;
         } finally {
             lock.unlock();
         }

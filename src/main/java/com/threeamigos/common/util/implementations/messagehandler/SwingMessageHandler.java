@@ -75,30 +75,78 @@ public class SwingMessageHandler extends AbstractMessageHandler {
         AWTCalls.showOptionPane(parentComponent, message, title, icon);
     }
 
+    /**
+     * Displays the message in an information dialog with a localised title.
+     *
+     * @param message the info-level text to display
+     */
     protected void handleInfoMessageImpl(final String message) {
         showOptionPane(message, BUNDLE.getString("info"), JOptionPane.INFORMATION_MESSAGE);
     }
 
+    /**
+     * Displays the message in a warning dialog with a localised title.
+     *
+     * @param message the warn-level text to display
+     */
     protected void handleWarnMessageImpl(final String message) {
         showOptionPane(message, BUNDLE.getString("warning"), JOptionPane.WARNING_MESSAGE);
     }
 
+    /**
+     * Displays the message in an error dialog with a localised title.
+     *
+     * @param message the error-level text to display
+     */
     protected void handleErrorMessageImpl(final String message) {
         showOptionPane(message, BUNDLE.getString("error"), JOptionPane.ERROR_MESSAGE);
     }
 
+    /**
+     * Displays the message in an information dialog with a localised title.
+     * <p>
+     * Debug output uses {@link JOptionPane#INFORMATION_MESSAGE} rather than a dedicated
+     * icon because Swing provides no built-in debug icon type.
+     *
+     * @param message the debug-level text to display
+     */
     protected void handleDebugMessageImpl(final String message) {
         showOptionPane(message, BUNDLE.getString("debug"), JOptionPane.INFORMATION_MESSAGE);
     }
 
+    /**
+     * Displays the message in an information dialog with a localised title.
+     * <p>
+     * Trace output uses {@link JOptionPane#INFORMATION_MESSAGE} rather than a dedicated
+     * icon because Swing provides no built-in trace icon type.
+     *
+     * @param message the trace-level text to display
+     */
     protected void handleTraceMessageImpl(final String message) {
         showOptionPane(message, BUNDLE.getString("trace"), JOptionPane.INFORMATION_MESSAGE);
     }
 
+    /**
+     * Displays the exception detail in an error dialog with a localised title.
+     * <p>
+     * The displayed text is produced by {@link ExceptionMessageFormatter#detail(Exception)}:
+     * {@link Exception#getMessage()} when non-null, otherwise {@link Exception#toString()}.
+     *
+     * @param exception the exception to display
+     */
     protected void handleExceptionImpl(final Exception exception) {
         showOptionPane(ExceptionMessageFormatter.detail(exception), BUNDLE.getString("exception"), JOptionPane.ERROR_MESSAGE);
     }
 
+    /**
+     * Displays the contextual message and exception detail in an error dialog with a localised title.
+     * <p>
+     * The displayed text is produced by {@link ExceptionMessageFormatter#withPrefix(String, Exception)},
+     * yielding {@code "<message>: <detail>"}.
+     *
+     * @param message   a contextual prefix describing where or why the exception occurred
+     * @param exception the exception to display
+     */
     protected void handleExceptionImpl(final String message, final Exception exception) {
         showOptionPane(ExceptionMessageFormatter.withPrefix(message, exception), BUNDLE.getString("exception"), JOptionPane.ERROR_MESSAGE);
     }

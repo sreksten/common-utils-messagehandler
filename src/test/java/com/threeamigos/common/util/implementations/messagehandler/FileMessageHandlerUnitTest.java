@@ -349,6 +349,32 @@ class FileMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("Flush should not throw in sync mode and content should be readable after close")
+    void flushShouldNotThrowInSyncMode() throws Exception {
+        Path file = Files.createTempFile("fmh-flush-sync", ".log");
+        Files.deleteIfExists(file);
+        try (FileMessageHandler handler = new FileMessageHandler(file.toString())) {
+            handler.handleInfoMessage("before-flush");
+            handler.flush();
+        }
+        List<String> lines = Files.readAllLines(file);
+        assertTrue(lines.stream().anyMatch(l -> l.contains("before-flush")));
+    }
+
+    @Test
+    @DisplayName("Flush should not throw in async mode and content should be readable after close")
+    void flushShouldNotThrowInAsyncMode() throws Exception {
+        Path file = Files.createTempFile("fmh-flush-async", ".log");
+        Files.deleteIfExists(file);
+        try (FileMessageHandler handler = new FileMessageHandler(file.toString(), true, 64)) {
+            handler.handleInfoMessage("before-flush");
+            handler.flush();
+        }
+        List<String> lines = Files.readAllLines(file);
+        assertTrue(lines.stream().anyMatch(l -> l.contains("before-flush")));
+    }
+
+    @Test
     @DisplayName("Should drain queued writes when worker is interrupted mid-write")
     void shouldDrainQueuedWritesWhenWorkerIsInterruptedMidWrite() throws Exception {
         Path file = Files.createTempFile("fmh-interrupt-mid-write", ".log");

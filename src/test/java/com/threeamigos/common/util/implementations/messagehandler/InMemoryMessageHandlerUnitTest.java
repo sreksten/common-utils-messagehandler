@@ -300,7 +300,7 @@ class InMemoryMessageHandlerUnitTest {
         assertEquals("prefix: boom", sut.getAllExceptionMessages().get(0));
         assertEquals(1, sut.getAllExceptions().size());
         assertEquals(exception, sut.getAllExceptions().get(0));
-        assertEquals("boom", sut.getLastMessage());
+        assertEquals("prefix: boom", sut.getLastMessage());
     }
 
     @Test
@@ -313,7 +313,7 @@ class InMemoryMessageHandlerUnitTest {
 
         assertEquals(1, sut.getAllExceptionMessages().size());
         assertEquals("prefix: " + exception.toString(), sut.getAllExceptionMessages().get(0));
-        assertEquals(exception.toString(), sut.getLastMessage());
+        assertEquals("prefix: " + exception.toString(), sut.getLastMessage());
     }
 
     @Test
@@ -338,10 +338,49 @@ class InMemoryMessageHandlerUnitTest {
         assertEquals(1, snapshot.getAllTraceMessages().size());
         assertEquals(1, snapshot.getAllExceptionMessages().size());
         assertEquals(1, snapshot.getAllExceptions().size());
-        assertEquals("boom", snapshot.getLastMessage());
+        assertEquals("prefix: boom", snapshot.getLastMessage());
 
         assertThrows(UnsupportedOperationException.class, () -> snapshot.getAllMessages().add("new"));
         assertThrows(UnsupportedOperationException.class, () -> snapshot.getAllExceptions().add(new RuntimeException("x")));
+    }
+
+    @Test
+    @DisplayName("Clear should reset all lists and lastMessage to null")
+    void clearShouldResetAllListsAndLastMessage() {
+        InMemoryMessageHandler sut = new InMemoryMessageHandler();
+        sut.handleInfoMessage("info");
+        sut.handleWarnMessage("warn");
+        sut.handleErrorMessage("error");
+        sut.handleDebugMessage("debug");
+        sut.handleTraceMessage("trace");
+        sut.handleException(new RuntimeException("ex"));
+        sut.handleException("prefix", new RuntimeException("ex2"));
+
+        sut.clear();
+
+        assertEquals(0, sut.getAllMessages().size());
+        assertEquals(0, sut.getAllInfoMessages().size());
+        assertEquals(0, sut.getAllWarnMessages().size());
+        assertEquals(0, sut.getAllErrorMessages().size());
+        assertEquals(0, sut.getAllDebugMessages().size());
+        assertEquals(0, sut.getAllTraceMessages().size());
+        assertEquals(0, sut.getAllExceptionMessages().size());
+        assertEquals(0, sut.getAllExceptions().size());
+        assertEquals(null, sut.getLastMessage());
+    }
+
+    @Test
+    @DisplayName("Clear should allow new messages to be added after reset")
+    void clearShouldAllowNewMessagesAfterReset() {
+        InMemoryMessageHandler sut = new InMemoryMessageHandler();
+        sut.handleInfoMessage("before");
+        sut.clear();
+
+        sut.handleInfoMessage("after");
+
+        assertEquals(1, sut.getAllMessages().size());
+        assertEquals(1, sut.getAllInfoMessages().size());
+        assertEquals("after", sut.getLastMessage());
     }
 
     @Test
