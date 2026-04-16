@@ -169,7 +169,13 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
             lock.readLock().unlock();
         }
         for (MessageHandler handler : snapshot) {
-            consumer.accept(handler);
+            try {
+                consumer.accept(handler);
+            } catch (Throwable t) {
+                String msg = String.format(MessageHandlerResourceBundle.BUNDLE.getString("exceptionDuringDispatch"), handler);
+                System.err.println(msg);
+                t.printStackTrace(System.err);
+            }
         }
     }
 }

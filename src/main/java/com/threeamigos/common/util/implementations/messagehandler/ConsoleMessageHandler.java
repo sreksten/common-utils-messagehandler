@@ -69,25 +69,24 @@ public class ConsoleMessageHandler extends AbstractOutputMessageHandler {
 
     @Override
     protected void handleExceptionImpl(final Exception exception) {
-        Runnable task = () -> {
+        String formatted = format("EXCEP", ExceptionMessageFormatter.detail(exception));
+        dispatch(() -> {
             synchronized (PRINT_LOCK) {
-                System.err.println(format("EXCEP", ExceptionMessageFormatter.detail(exception)));
+                System.err.println(formatted);
                 exception.printStackTrace(System.err);
             }
-        };
-        dispatch(task);
+        });
     }
 
     @Override
     protected void handleExceptionImpl(final String message, final Exception exception) {
-        Runnable task = () -> {
+        String formatted = format("EXCEP", ExceptionMessageFormatter.withPrefix(message, exception));
+        dispatch(() -> {
             synchronized (PRINT_LOCK) {
-                System.err.println(format("EXCEP", message));
-                System.err.println(format("EXCEP", ExceptionMessageFormatter.detail(exception)));
+                System.err.println(formatted);
                 exception.printStackTrace(System.err);
             }
-        };
-        dispatch(task);
+        });
     }
 
     private String format(String level, String message) {

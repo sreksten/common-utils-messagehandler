@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import jakarta.annotation.Nullable;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -127,7 +128,7 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
          * @return the text of the last message handled across all levels, or {@code null}
          *         if no message has been handled yet
          */
-        public String getLastMessage() {
+        public @Nullable String getLastMessage() {
             return lastMessage;
         }
     }
@@ -352,9 +353,9 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     }
 
     /**
-     * @return the last message handled by this instance.
+     * @return the last message handled by this instance, or {@code null} if no message has been handled yet
      */
-    public String getLastMessage() {
+    public @Nullable String getLastMessage() {
         lock.lock();
         try {
             return lastMessage;

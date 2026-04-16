@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import com.threeamigos.common.util.ui.AWTCalls;
+import jakarta.annotation.Nullable;
 
 import javax.swing.*;
 import java.awt.*;
@@ -50,7 +51,7 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      *
      * @return the parent {@link Component}, or {@code null}
      */
-    public Component getParentComponent() {
+    public @Nullable Component getParentComponent() {
         return parentComponent;
     }
 

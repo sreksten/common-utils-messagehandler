@@ -21,7 +21,3 @@ You can replace the handler with a custom one while keeping the rest of your cod
 difficult to e.g., implement a handler that sends messages to a Slack channel or to a Log4J appender.
 
 Handlers accept messages or Suppliers of messages, which can be useful for lazy evaluation of messages.
-
-## How to test
-
-Run your tests with the AWT_TESTS environment variable set to true if you want to check the popup dialogs.

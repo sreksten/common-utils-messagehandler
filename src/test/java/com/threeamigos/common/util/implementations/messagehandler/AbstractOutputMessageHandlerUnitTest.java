@@ -12,6 +12,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -116,6 +117,47 @@ class AbstractOutputMessageHandlerUnitTest {
             // Avoid leaking interrupt state to other tests.
             Thread.interrupted();
         }
+    }
+
+    @Test
+    @DisplayName("Task offered to queue before close() acquires dispatchLock must not be silently dropped")
+    void taskOfferedBeforeCloseAcquiresDispatchLockMustNotBeSilentlyDropped() throws Exception {
+        ProbeOutputMessageHandler handler = new ProbeOutputMessageHandler(true, 100);
+
+        Field dispatchLockField = AbstractOutputMessageHandler.class.getDeclaredField("dispatchLock");
+        dispatchLockField.setAccessible(true);
+        Object dispatchLock = dispatchLockField.get(handler);
+
+        Field queueField = AbstractOutputMessageHandler.class.getDeclaredField("queue");
+        queueField.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        BlockingQueue<Runnable> queue = (BlockingQueue<Runnable>) queueField.get(handler);
+
+        AtomicBoolean taskExecuted = new AtomicBoolean(false);
+        CountDownLatch closeStarted = new CountDownLatch(1);
+
+        synchronized (dispatchLock) {
+            // Simulate a dispatch() call that has already passed the closed check and is
+            // about to offer its task. close() must not complete its drain before we offer.
+            Thread closeThread = new Thread(() -> {
+                closeStarted.countDown();
+                handler.close();
+            });
+            closeThread.start();
+            assertTrue(closeStarted.await(1, TimeUnit.SECONDS), "close() thread should start");
+            // Give close() time to reach the synchronized (dispatchLock) barrier.
+            Thread.sleep(50);
+
+            // Offer the task while holding the lock (simulates dispatch() completing its offer).
+            queue.offer(() -> taskExecuted.set(true));
+            // Releasing the lock allows close() to proceed through its barrier and drain.
+        }
+
+        // Allow close() to finish draining and closing.
+        Thread.sleep(200);
+
+        assertTrue(taskExecuted.get(),
+                "Task offered before close() passed its dispatchLock barrier must be executed during drain");
     }
 
     @Test

@@ -31,7 +31,7 @@ public class JULMessageHandler extends AbstractMessageHandler {
      * @throws NullPointerException if {@code logger} is {@code null}
      */
     public JULMessageHandler(Logger logger) {
-        this.logger = Objects.requireNonNull(logger, "Logger cannot be null");
+        this.logger = Objects.requireNonNull(logger, MessageHandlerResourceBundle.BUNDLE.getString("loggerCannotBeNull"));
     }
 
     /**
@@ -45,9 +45,9 @@ public class JULMessageHandler extends AbstractMessageHandler {
      * @throws IllegalArgumentException if {@code loggerName} is blank
      */
     public JULMessageHandler(String loggerName) {
-        Objects.requireNonNull(loggerName, "Logger name cannot be null or empty");
+        Objects.requireNonNull(loggerName, MessageHandlerResourceBundle.BUNDLE.getString("loggerNameCannotBeNull"));
         if (loggerName.trim().isEmpty()) {
-            throw new IllegalArgumentException("Logger name cannot be null or empty");
+            throw new IllegalArgumentException(MessageHandlerResourceBundle.BUNDLE.getString("loggerNameCannotBeEmpty"));
         }
         this.logger = Logger.getLogger(loggerName);
     }

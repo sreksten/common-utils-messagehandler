@@ -44,11 +44,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public abstract class AbstractOutputMessageHandler extends AbstractMessageHandler implements AutoCloseable {
 
-    private boolean async;
+    private volatile boolean async;
     private BlockingQueue<Runnable> queue;
     private ExecutorService worker;
     private Thread shutdownHook;
     private final AtomicBoolean closed = new AtomicBoolean(false);
+    private final Object dispatchLock = new Object();
 
     /**
      * Initializes the optional async dispatch infrastructure.
@@ -102,22 +103,36 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
     /**
      * Submits a write task for execution.
      * <p>
-     * When async mode is active, the task is offered to the worker queue. If the queue is full,
-     * the task is executed synchronously on the calling thread so that no messages are silently
-     * dropped.
+     * When async mode is active, the closed-flag check and the queue offer are performed together
+     * under {@code dispatchLock}, which is also acquired by {@link #close()} before it drains the
+     * queue. This ensures that no task can slip into the queue after the final drain has run:
+     * either the task is offered before {@code close()} reaches the barrier (and will be drained),
+     * or it sees {@code closed=true} and throws.
+     * <p>
+     * If the queue is full, the task is executed synchronously on the calling thread so that no
+     * messages are silently dropped.
      * <p>
      * When async mode is inactive, the task runs synchronously on the calling thread.
      *
      * @param task the write operation to execute; must not be {@code null}
+     * @throws IllegalStateException if the handler has been closed
      */
     protected final void dispatch(final Runnable task) {
         if (!async) {
+            if (closed.get()) {
+                throw new IllegalStateException(MessageHandlerResourceBundle.BUNDLE.getString("handlerIsClosed"));
+            }
             task.run();
             return;
         }
-        if (!queue.offer(task)) {
-            // queue full: run synchronously to avoid losing messages
-            task.run();
+        synchronized (dispatchLock) {
+            if (closed.get()) {
+                throw new IllegalStateException(MessageHandlerResourceBundle.BUNDLE.getString("handlerIsClosed"));
+            }
+            if (!queue.offer(task)) {
+                // queue full: run synchronously to avoid losing messages
+                task.run();
+            }
         }
     }
 
@@ -207,6 +222,9 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
             return;
         }
         if (worker != null) {
+            // Wait for any in-flight dispatch() to finish its closed-check + offer before
+            // we drain the queue and close the output, so no task can slip in unprocessed.
+            synchronized (dispatchLock) { /* barrier */ }
             if (shutdownHook != null) {
                 try {
                     removeShutdownHook(shutdownHook);

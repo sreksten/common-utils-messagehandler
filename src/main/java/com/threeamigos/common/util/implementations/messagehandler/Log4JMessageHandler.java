@@ -89,6 +89,6 @@ public class Log4JMessageHandler extends AbstractMessageHandler {
 
     @Override
     protected void handleExceptionImpl(final String message, final Exception exception) {
-        logger.error(ExceptionMessageFormatter.withPrefix(message, exception), exception);
+        logger.error(message, exception);
     }
 }

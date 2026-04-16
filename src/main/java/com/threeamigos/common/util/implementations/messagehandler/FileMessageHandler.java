@@ -1,12 +1,12 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
-import java.io.BufferedWriter;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Objects;
@@ -109,7 +109,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
         dispatch(() -> {
             synchronized (writeLock) {
                 exception.printStackTrace(writer);
-                writer.flush();
+                checkWriteError();
             }
         });
     }
@@ -120,7 +120,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
         dispatch(() -> {
             synchronized (writeLock) {
                 exception.printStackTrace(writer);
-                writer.flush();
+                checkWriteError();
             }
         });
     }
@@ -134,9 +134,15 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
         dispatch(() -> {
             synchronized (writeLock) {
                 writer.println(line);
-                writer.flush();
+                checkWriteError();
             }
         });
+    }
+
+    private void checkWriteError() {
+        if (writer.checkError()) {
+            System.err.println(MessageHandlerResourceBundle.BUNDLE.getString("fileWriteError"));
+        }
     }
 
     private static Path prepareFilePath(final String filename) {
@@ -166,17 +172,19 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
     }
 
     /**
-     * Opens a buffered, append-mode {@link java.io.PrintWriter} for the given file path.
+     * Opens a buffered, append-mode {@link java.io.PrintWriter} for the given file path,
+     * always using UTF-8 encoding regardless of the platform default charset.
      * <p>
      * Exposed as a protected method so that tests can override it to inject a writer that
      * does not touch the file system (e.g., a {@link java.io.StringWriter}-backed writer).
      *
      * @param filePath the validated, non-null path to the log file
-     * @return a non-null, buffered {@link java.io.PrintWriter} open for appending
+     * @return a non-null, buffered {@link java.io.PrintWriter} open for appending in UTF-8
      * @throws IOException if the file cannot be opened
      */
     protected PrintWriter openWriter(Path filePath) throws IOException {
-        return new PrintWriter(new BufferedWriter(new FileWriter(filePath.toFile(), true)));
+        return new PrintWriter(Files.newBufferedWriter(filePath, StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE, StandardOpenOption.APPEND));
     }
 
     /**
