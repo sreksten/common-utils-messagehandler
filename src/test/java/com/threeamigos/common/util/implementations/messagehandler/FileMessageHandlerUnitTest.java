@@ -1,6 +1,5 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
-import com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -217,18 +216,20 @@ class FileMessageHandlerUnitTest {
         Path file = Files.createTempFile("fmh", ".log");
         Files.deleteIfExists(file);
         try (FileMessageHandler handler = new FileMessageHandler(file.toString())) {
-            handler.handleInfoMessage("info");
-            handler.handleWarnMessage("warn");
-            handler.handleErrorMessage("error");
-            handler.handleDebugMessage("debug");
-            handler.handleTraceMessage("trace");
-            handler.handleException(new RuntimeException("boom"));
-            handler.handleException("prefix", new RuntimeException("kaboom"));
+            handler.info("info");
+            handler.warn("warn");
+            handler.error("error");
+            handler.fatal("fatal");
+            handler.debug("debug");
+            handler.trace("trace");
+            handler.exception(new RuntimeException("boom"));
+            handler.exception("prefix", new RuntimeException("kaboom"));
         }
         List<String> lines = Files.readAllLines(file);
         assertTrue(lines.stream().anyMatch(l -> l.contains("INFO ") && l.endsWith("info")));
         assertTrue(lines.stream().anyMatch(l -> l.contains("WARN ") && l.endsWith("warn")));
         assertTrue(lines.stream().anyMatch(l -> l.contains("ERROR") && l.endsWith("error")));
+        assertTrue(lines.stream().anyMatch(l -> l.contains("FATAL") && l.endsWith("fatal")));
         assertTrue(lines.stream().anyMatch(l -> l.contains("DEBUG") && l.endsWith("debug")));
         assertTrue(lines.stream().anyMatch(l -> l.contains("TRACE") && l.endsWith("trace")));
         assertTrue(lines.stream().anyMatch(l -> l.contains("EXCEP") && l.contains("boom")));
@@ -242,7 +243,7 @@ class FileMessageHandlerUnitTest {
         Files.deleteIfExists(file);
         FileMessageHandler handler = new FileMessageHandler(file.toString(), true, 10, true);
         try {
-            handler.handleInfoMessage("hello");
+            handler.info("hello");
         } finally {
             handler.close();
         }
@@ -254,14 +255,14 @@ class FileMessageHandlerUnitTest {
         Path file = Files.createTempFile("fmh", ".log");
         Files.deleteIfExists(file);
         try (FileMessageHandler handler = new FileMessageHandler(file.toString(), true, 1)) {
-            handler.handleInfoMessage(() -> {
+            handler.info(() -> {
                 try {
                     Thread.sleep(200);
                 } catch (InterruptedException ignored) {
                 }
                 return "background";
             });
-            handler.handleInfoMessage("sync");
+            handler.info("sync");
             Thread.sleep(300); // allow background to finish
         }
         List<String> lines = Files.readAllLines(file);
@@ -275,8 +276,8 @@ class FileMessageHandlerUnitTest {
         Path file = Files.createTempFile("fmh", ".log");
         Files.deleteIfExists(file);
         try (FileMessageHandler handler = new FileMessageHandler(file.toString(), true, 0)) {
-            handler.handleInfoMessage("msg1");
-            handler.handleInfoMessage("msg2");
+            handler.info("msg1");
+            handler.info("msg2");
             Thread.sleep(100);
         }
         List<String> lines = Files.readAllLines(file);
@@ -291,7 +292,7 @@ class FileMessageHandlerUnitTest {
         Files.deleteIfExists(file);
         try (FileMessageHandler handler = new FileMessageHandler(file.toString(), true, 1)) {
             // Fill the queue with a blocking task
-            handler.handleInfoMessage(() -> {
+            handler.info(() -> {
                 try {
                     Thread.sleep(200);
                 } catch (InterruptedException ignored) {
@@ -299,7 +300,7 @@ class FileMessageHandlerUnitTest {
                 return "blocking";
             });
             // This should run synchronously due to full queue
-            handler.handleInfoMessage("sync-fallback");
+            handler.info("sync-fallback");
             Thread.sleep(250);
         }
         List<String> lines = Files.readAllLines(file);
@@ -316,7 +317,7 @@ class FileMessageHandlerUnitTest {
         try (FileMessageHandler handler = new FileMessageHandler(file.toString(), true, 50)) {
             for (int i = 0; i < count; i++) {
                 int idx = i;
-                handler.handleInfoMessage(() -> "msg-" + idx);
+                handler.info(() -> "msg-" + idx);
             }
             Thread.sleep(500);
         }
@@ -330,7 +331,7 @@ class FileMessageHandlerUnitTest {
         Path file = Files.createTempFile("fmh", ".log");
         Files.deleteIfExists(file);
         FileMessageHandler handler = new FileMessageHandler(file.toString());
-        handler.handleInfoMessage("once");
+        handler.info("once");
         handler.close();
         handler.close(); // should not throw
         List<String> lines = Files.readAllLines(file);
@@ -387,7 +388,7 @@ class FileMessageHandlerUnitTest {
         int count = 500;
         FileMessageHandler handler = new FileMessageHandler(file.toString(), true, 200);
         for (int i = 0; i < count; i++) {
-            handler.handleInfoMessage("queued-" + i);
+            handler.info("queued-" + i);
         }
         handler.close();
 
@@ -403,7 +404,7 @@ class FileMessageHandlerUnitTest {
         Path file = Paths.get(fileName);
         Files.deleteIfExists(file);
         try (FileMessageHandler handler = new FileMessageHandler(fileName)) {
-            handler.handleInfoMessage("relative");
+            handler.info("relative");
         } finally {
             Files.deleteIfExists(file);
         }
@@ -417,7 +418,7 @@ class FileMessageHandlerUnitTest {
         ByteArrayOutputStream errContent = new ByteArrayOutputStream();
         System.setErr(new PrintStream(errContent, true, StandardCharsets.UTF_8.name()));
         try (FileMessageHandler handler = new ErrorCheckWriterFileMessageHandler(file.toString())) {
-            handler.handleInfoMessage("trigger-error-check");
+            handler.info("trigger-error-check");
         } finally {
             System.setErr(originalErr);
         }
@@ -447,7 +448,7 @@ class FileMessageHandlerUnitTest {
                     start.await();
                     for (int i = 0; i < messagesPerThread; i++) {
                         final int messageIndex = i;
-                        handler.handleInfoMessage(() -> "stress-file-" + threadId + "-" + messageIndex);
+                        handler.info(() -> "stress-file-" + threadId + "-" + messageIndex);
                     }
                     return null;
                 }));
@@ -475,7 +476,7 @@ class FileMessageHandlerUnitTest {
         Path file = Files.createTempFile("fmh-flush-sync", ".log");
         Files.deleteIfExists(file);
         try (FileMessageHandler handler = new FileMessageHandler(file.toString())) {
-            handler.handleInfoMessage("before-flush");
+            handler.info("before-flush");
             handler.flush();
         }
         List<String> lines = Files.readAllLines(file);
@@ -488,7 +489,7 @@ class FileMessageHandlerUnitTest {
         Path file = Files.createTempFile("fmh-flush-async", ".log");
         Files.deleteIfExists(file);
         try (FileMessageHandler handler = new FileMessageHandler(file.toString(), true, 64)) {
-            handler.handleInfoMessage("before-flush");
+            handler.info("before-flush");
             handler.flush();
         }
         List<String> lines = Files.readAllLines(file);
@@ -507,8 +508,8 @@ class FileMessageHandlerUnitTest {
         // Threshold low enough that a single formatted line exceeds it
         SizeRotationPolicy policy = new SizeRotationPolicy(1);
         try (FileMessageHandler handler = new FileMessageHandler(file.toString(), policy)) {
-            handler.handleInfoMessage("first");
-            handler.handleInfoMessage("second");
+            handler.info("first");
+            handler.info("second");
         }
         // The new (current) log file must exist
         assertTrue(Files.exists(file), "Current log file should exist after rotation");
@@ -531,7 +532,7 @@ class FileMessageHandlerUnitTest {
         LocalDate yesterday = LocalDate.now().minusDays(1);
         DailyRotationPolicy policy = new DailyRotationPolicy(yesterday);
         try (FileMessageHandler handler = new FileMessageHandler(file.toString(), policy)) {
-            handler.handleInfoMessage("trigger rotation");
+            handler.info("trigger rotation");
         }
         // After close the current log file is recreated (rotation happened on write)
         // The archived file should be named with yesterday's date
@@ -555,10 +556,10 @@ class FileMessageHandlerUnitTest {
         Files.deleteIfExists(file);
         try (FileMessageHandler handler = new FileMessageHandler(
                 file.toString(), false, 0, false, null, true)) {
-            handler.handleInfoMessage("before-delete");
+            handler.info("before-delete");
             // Simulate external rotation: delete the file
             Files.deleteIfExists(file);
-            handler.handleInfoMessage("after-delete");
+            handler.info("after-delete");
         }
         assertTrue(Files.exists(file), "Log file should have been re-created after deletion");
         List<String> lines = Files.readAllLines(file);
@@ -574,9 +575,9 @@ class FileMessageHandlerUnitTest {
         ByteArrayOutputStream errContent = new ByteArrayOutputStream();
         System.setErr(new PrintStream(errContent, true, StandardCharsets.UTF_8.name()));
         try (FileMessageHandler handler = new FailingReopenFileMessageHandler(file.toString())) {
-            handler.handleInfoMessage("before-delete");
+            handler.info("before-delete");
             Files.deleteIfExists(file);
-            handler.handleInfoMessage("after-delete-with-failing-reopen");
+            handler.info("after-delete-with-failing-reopen");
         } finally {
             System.setErr(originalErr);
         }
@@ -590,10 +591,10 @@ class FileMessageHandlerUnitTest {
         Path file = Files.createTempFile("fmh-no-reopen", ".log");
         Files.deleteIfExists(file);
         try (FileMessageHandler handler = new FileMessageHandler(file.toString())) {
-            handler.handleInfoMessage("before-delete");
+            handler.info("before-delete");
             Files.deleteIfExists(file);
             // This write goes to the old (now-deleted) file descriptor — no re-open
-            handler.handleInfoMessage("after-delete");
+            handler.info("after-delete");
         }
         // File should NOT exist because no re-open occurred and close() flushes to the old fd
         assertFalse(Files.exists(file), "File should not have been re-created without the re-open flag");
@@ -606,7 +607,7 @@ class FileMessageHandlerUnitTest {
         Files.deleteIfExists(file);
         try (FileMessageHandler handler = new FileMessageHandler(
                 file.toString(), new SizeRotationPolicy(Long.MAX_VALUE))) {
-            handler.handleInfoMessage("ok");
+            handler.info("ok");
         }
         assertTrue(Files.readAllLines(file).stream().anyMatch(l -> l.contains("ok")));
     }
@@ -618,7 +619,7 @@ class FileMessageHandlerUnitTest {
         Files.deleteIfExists(file);
         try (FileMessageHandler handler = new FileMessageHandler(
                 file.toString(), true, 64, new SizeRotationPolicy(Long.MAX_VALUE))) {
-            handler.handleInfoMessage("ok");
+            handler.info("ok");
         }
         assertTrue(Files.readAllLines(file).stream().anyMatch(l -> l.contains("ok")));
     }
@@ -634,7 +635,7 @@ class FileMessageHandlerUnitTest {
         List<String> errors = new ArrayList<>();
         try (FileMessageHandler handler = new FileMessageHandler(file.toString())) {
             handler.setErrorConsumer(errors::add);
-            handler.handleInfoMessage("ok");
+            handler.info("ok");
         }
         assertTrue(errors.isEmpty(), "No error should have been reported for a successful write");
     }
@@ -655,7 +656,7 @@ class FileMessageHandlerUnitTest {
         List<String> errors = new ArrayList<>();
         try (FileMessageHandler handler = new FailingRecoveryFileMessageHandler(file.toString())) {
             handler.setErrorConsumer(errors::add);
-            handler.handleInfoMessage("trigger");
+            handler.info("trigger");
         }
         assertFalse(errors.isEmpty(), "errorConsumer should be notified when write-error recovery fails");
     }
@@ -668,9 +669,9 @@ class FileMessageHandlerUnitTest {
         FileMessageHandler handler = new ErrorCheckWriterFileMessageHandler(file.toString());
         handler.setErrorConsumer(errors::add);
         handler.setCloseOnWriteError(true);
-        handler.handleInfoMessage("trigger");
+        handler.info("trigger");
         assertFalse(errors.isEmpty(), "errorConsumer should be notified on write error");
-        assertThrows(IllegalStateException.class, () -> handler.handleInfoMessage("after-close"),
+        assertThrows(IllegalStateException.class, () -> handler.info("after-close"),
                 "Handler should be closed after write error with closeOnWriteError=true in sync mode");
     }
 
@@ -683,7 +684,7 @@ class FileMessageHandlerUnitTest {
         FileMessageHandler handler = new AsyncErrorFileMessageHandler(file.toString());
         handler.setErrorConsumer(errors::add);
         handler.setCloseOnWriteError(true);
-        handler.handleInfoMessage("trigger");
+        handler.info("trigger");
         // Poll until the worker thread has processed the write and the close thread has run
         long deadline = System.currentTimeMillis() + 5000;
         while (errors.isEmpty() && System.currentTimeMillis() < deadline) {
@@ -692,7 +693,7 @@ class FileMessageHandlerUnitTest {
         assertFalse(errors.isEmpty(), "errorConsumer should be notified on write error in async mode");
         // Give the close thread time to finish
         Thread.sleep(500);
-        assertThrows(IllegalStateException.class, () -> handler.handleInfoMessage("after-close"),
+        assertThrows(IllegalStateException.class, () -> handler.info("after-close"),
                 "Handler should be closed after write error with closeOnWriteError=true in async mode");
     }
 
@@ -703,9 +704,25 @@ class FileMessageHandlerUnitTest {
         List<String> errors = new ArrayList<>();
         try (FailingRotationFileMessageHandler handler = new FailingRotationFileMessageHandler(file.toString())) {
             handler.setErrorConsumer(errors::add);
-            handler.handleInfoMessage("trigger");
+            handler.info("trigger");
         }
         assertFalse(errors.isEmpty(), "errorConsumer should receive rotation-failure notification");
+    }
+
+    @Test
+    @DisplayName("JsonLogFormatter should produce NDJSON output in the log file")
+    void jsonFormatterShouldProduceNdjsonOutput() throws Exception {
+        Path file = Files.createTempFile("fmh-json", ".log");
+        Files.deleteIfExists(file);
+        try (FileMessageHandler handler = new FileMessageHandler(file.toString())) {
+            handler.setFormatter(new JsonLogFormatter());
+            handler.info("structured message");
+        }
+        List<String> lines = Files.readAllLines(file);
+        assertTrue(lines.stream().anyMatch(l -> l.startsWith("{") && l.contains("\"level\":\"INFO\"")),
+                "Log file should contain a JSON line with level INFO");
+        assertTrue(lines.stream().anyMatch(l -> l.contains("\"message\":\"structured message\"")),
+                "Log file should contain the message in JSON format");
     }
 
     @Test
@@ -717,7 +734,7 @@ class FileMessageHandlerUnitTest {
 
         try (FileMessageHandler handler = new InterruptingWriteFileMessageHandler(file.toString())) {
             for (int i = 0; i < messages; i++) {
-                handler.handleInfoMessage("mid-write-" + i);
+                handler.info("mid-write-" + i);
             }
         }
 

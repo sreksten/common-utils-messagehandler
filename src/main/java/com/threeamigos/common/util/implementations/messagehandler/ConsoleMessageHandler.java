@@ -1,10 +1,10 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
+import com.threeamigos.common.util.interfaces.messagehandler.ContextInfo;
+import com.threeamigos.common.util.interfaces.messagehandler.LogLevelEnum;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 
 import java.io.PrintStream;
-import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
 
 /**
  * An implementation of the {@link MessageHandler} interface that uses the
@@ -43,55 +43,53 @@ public class ConsoleMessageHandler extends AbstractOutputMessageHandler {
     }
 
     @Override
-    protected void handleInfoMessageImpl(final String message) {
-        print(System.out, format("INFO ", message));
+    protected void handleInfoMessageImpl(final String message, final ContextInfo contextInfo) {
+        print(System.out, getFormatter().format(LogLevelEnum.INFO, message, contextInfo));
     }
 
     @Override
-    protected void handleWarnMessageImpl(final String message) {
-        print(System.out, format("WARN ", message));
+    protected void handleWarnMessageImpl(final String message, final ContextInfo contextInfo) {
+        print(System.out, getFormatter().format(LogLevelEnum.WARN, message, contextInfo));
     }
 
     @Override
-    protected void handleErrorMessageImpl(final String message) {
-        print(System.err, format("ERROR", message));
+    protected void handleErrorMessageImpl(final String message, final ContextInfo contextInfo) {
+        print(System.err, getFormatter().format(LogLevelEnum.ERROR, message, contextInfo));
     }
 
     @Override
-    protected void handleDebugMessageImpl(final String message) {
-        print(System.out, format("DEBUG", message));
+    protected void handleFatalMessageImpl(final String message, final ContextInfo contextInfo) {
+        print(System.err, getFormatter().format(LogLevelEnum.FATAL, message, contextInfo));
     }
 
     @Override
-    protected void handleTraceMessageImpl(final String message) {
-        print(System.out, format("TRACE", message));
+    protected void handleDebugMessageImpl(final String message, final ContextInfo contextInfo) {
+        print(System.out, getFormatter().format(LogLevelEnum.DEBUG, message, contextInfo));
     }
 
     @Override
-    protected void handleExceptionImpl(final Exception exception) {
-        String formatted = format("EXCEP", ExceptionMessageFormatter.detail(exception));
+    protected void handleTraceMessageImpl(final String message, final ContextInfo contextInfo) {
+        print(System.out, getFormatter().format(LogLevelEnum.TRACE, message, contextInfo));
+    }
+
+    @Override
+    protected void handleExceptionImpl(final Exception exception, final ContextInfo contextInfo) {
+        String formatted = getFormatter().formatException(exception, contextInfo);
         dispatch(() -> {
             synchronized (PRINT_LOCK) {
                 System.err.println(formatted);
-                exception.printStackTrace(System.err);
             }
         });
     }
 
     @Override
-    protected void handleExceptionImpl(final String message, final Exception exception) {
-        String formatted = format("EXCEP", ExceptionMessageFormatter.withPrefix(message, exception));
+    protected void handleExceptionImpl(final String message, final Exception exception, final ContextInfo contextInfo) {
+        String formatted = getFormatter().formatException(message, exception, contextInfo);
         dispatch(() -> {
             synchronized (PRINT_LOCK) {
                 System.err.println(formatted);
-                exception.printStackTrace(System.err);
             }
         });
-    }
-
-    private String format(String level, String message) {
-        String date = ZonedDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
-        return String.format("[%s] [%s] %s", date, level, message);
     }
 
     private void print(PrintStream stream, String formatted) {

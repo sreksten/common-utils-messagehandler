@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
+import com.threeamigos.common.util.interfaces.messagehandler.ContextInfo;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,7 +15,7 @@ import java.util.Objects;
  * <ul>
  *   <li>info  → {@link Logger#info(String)}</li>
  *   <li>warn  → {@link Logger#warn(String)}</li>
- *   <li>error → {@link Logger#error(String)}</li>
+ *   <li>error, fatal → {@link Logger#error(String)}</li>
  *   <li>debug → {@link Logger#debug(String)}</li>
  *   <li>trace → {@link Logger#trace(String)}</li>
  *   <li>exception → {@link Logger#error(String, Throwable)} (exception attached as a {@link Throwable})</li>
@@ -58,37 +59,42 @@ public class SLF4JMessageHandler extends AbstractMessageHandler {
     }
 
     @Override
-    protected void handleInfoMessageImpl(final String message) {
+    protected void handleInfoMessageImpl(final String message, final ContextInfo contextInfo) {
         logger.info(message);
     }
 
     @Override
-    protected void handleWarnMessageImpl(final String message) {
+    protected void handleWarnMessageImpl(final String message, final ContextInfo contextInfo) {
         logger.warn(message);
     }
 
     @Override
-    protected void handleErrorMessageImpl(final String message) {
+    protected void handleErrorMessageImpl(final String message, final ContextInfo contextInfo) {
         logger.error(message);
     }
 
     @Override
-    protected void handleDebugMessageImpl(final String message) {
+    protected void handleFatalMessageImpl(final String message, final ContextInfo contextInfo) {
+        logger.error(message);
+    }
+
+    @Override
+    protected void handleDebugMessageImpl(final String message, final ContextInfo contextInfo) {
         logger.debug(message);
     }
 
     @Override
-    protected void handleTraceMessageImpl(final String message) {
+    protected void handleTraceMessageImpl(final String message, final ContextInfo contextInfo) {
         logger.trace(message);
     }
 
     @Override
-    protected void handleExceptionImpl(final Exception exception) {
+    protected void handleExceptionImpl(final Exception exception, final ContextInfo contextInfo) {
         logger.error(ExceptionMessageFormatter.detail(exception), exception);
     }
 
     @Override
-    protected void handleExceptionImpl(final String message, final Exception exception) {
+    protected void handleExceptionImpl(final String message, final Exception exception, final ContextInfo contextInfo) {
         logger.error(message, exception);
     }
 }

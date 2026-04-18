@@ -5,18 +5,19 @@ import jakarta.annotation.Nonnull;
 /**
  * An interface used to handle error messages.<br/>
  * If the message construction may be expensive, consider using a supplier instead
- * (see {@link SupplierErrorMessageHandler}).
+ * (see {@link ErrorSupplierHandler}).
  *
  * @author Stefano Reksten
  */
 @FunctionalInterface
-public interface ErrorMessageHandler {
+public interface ErrorHandler {
 
     /**
      * Handles a single error message.
      *
-     * @param errorMessage an error message to show to the user
+     * @param message a non-null error message to show to the user
+     * @throws NullPointerException if {@code message} is {@code null}
      */
-    void handleErrorMessage(final @Nonnull String errorMessage);
+    void error(final @Nonnull String message);
 
 }

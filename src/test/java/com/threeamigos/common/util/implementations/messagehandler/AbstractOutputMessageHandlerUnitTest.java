@@ -1,6 +1,9 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
-import com.threeamigos.common.util.implementations.messagehandler.AbstractOutputMessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.ContextInfo;
+import com.threeamigos.common.util.interfaces.messagehandler.LogFormatter;
+import com.threeamigos.common.util.interfaces.messagehandler.LogLevelEnum;
+import jakarta.annotation.Nonnull;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -33,31 +36,35 @@ class AbstractOutputMessageHandlerUnitTest {
         }
 
         @Override
-        protected void handleInfoMessageImpl(String message) {
+        protected void handleInfoMessageImpl(String message, ContextInfo context) {
         }
 
         @Override
-        protected void handleWarnMessageImpl(String message) {
+        protected void handleWarnMessageImpl(String message, ContextInfo context) {
         }
 
         @Override
-        protected void handleErrorMessageImpl(String message) {
+        protected void handleErrorMessageImpl(String message, ContextInfo context) {
         }
 
         @Override
-        protected void handleDebugMessageImpl(String message) {
+        protected void handleFatalMessageImpl(String message, ContextInfo context) {
         }
 
         @Override
-        protected void handleTraceMessageImpl(String message) {
+        protected void handleDebugMessageImpl(String message, ContextInfo context) {
         }
 
         @Override
-        protected void handleExceptionImpl(Exception exception) {
+        protected void handleTraceMessageImpl(String message, ContextInfo context) {
         }
 
         @Override
-        protected void handleExceptionImpl(String message, Exception exception) {
+        protected void handleExceptionImpl(Exception exception, ContextInfo context) {
+        }
+
+        @Override
+        protected void handleExceptionImpl(String message, Exception exception, ContextInfo context) {
         }
     }
 
@@ -170,6 +177,39 @@ class AbstractOutputMessageHandlerUnitTest {
         ProbeOutputMessageHandler asyncHandler = new ProbeOutputMessageHandler(true, 100);
         asyncHandler.close();
         assertThrows(IllegalStateException.class, () -> asyncHandler.submit(() -> {}));
+    }
+
+    @Test
+    @DisplayName("setFormatter(null) should throw NullPointerException")
+    void setFormatterNullThrowsNpe() {
+        ProbeOutputMessageHandler handler = new ProbeOutputMessageHandler(false, 0);
+        assertThrows(NullPointerException.class, () -> handler.setFormatter(null));
+    }
+
+    @Test
+    @DisplayName("setFormatter with a custom formatter should route output through it")
+    void setFormatterCustomFormatterIsUsed() {
+        ProbeOutputMessageHandler handler = new ProbeOutputMessageHandler(false, 0);
+        LogFormatter custom = new LogFormatter() {
+            @Nonnull
+            @Override
+            public String format(@Nonnull LogLevelEnum level, @Nonnull String message, @Nonnull ContextInfo context) {
+                return "CUSTOM:" + level + ":" + message;
+            }
+            @Nonnull
+            @Override
+            public String formatException(@Nonnull Exception exception, @Nonnull ContextInfo contextInfo) {
+                return "CUSTOM:EXCEP:" + exception.getMessage();
+            }
+            @Nonnull
+            @Override
+            public String formatException(@Nonnull String prefix, @Nonnull Exception exception, @Nonnull ContextInfo contextInfo) {
+                return "CUSTOM:EXCEP:" + prefix + ":" + exception.getMessage();
+            }
+        };
+        handler.setFormatter(custom);
+        // Verify getFormatter() returns the custom one
+        assertEquals("CUSTOM:INFO:test", handler.getFormatter().format(LogLevelEnum.INFO, "test", new ContextInfoImpl()));
     }
 
     @Test

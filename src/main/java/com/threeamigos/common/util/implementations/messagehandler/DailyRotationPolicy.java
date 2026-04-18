@@ -19,7 +19,7 @@ import java.time.format.DateTimeFormatter;
  *   <li>{@code messages} (no extension) → {@code messages.2025-04-15}</li>
  * </ul>
  * <p>
- * The {@link #onRotated()} callback advances the internal baseline date to today so that
+ * The {@link #onRotated()} callback advances the internal baseline date to today's date so that
  * subsequent writes on the new day do not trigger an immediate second rotation.
  * <p>
  * This class is thread-safe: the {@code openDate} field is {@code volatile} and is only mutated
@@ -87,7 +87,7 @@ public class DailyRotationPolicy implements RotationPolicy {
     /**
      * {@inheritDoc}
      * <p>
-     * Advances the internal open-date baseline to today so that subsequent writes on the new
+     * Advances the internal open-date baseline to today's date so that subsequent writes on the new
      * calendar day do not trigger an immediate second rotation.
      */
     @Override

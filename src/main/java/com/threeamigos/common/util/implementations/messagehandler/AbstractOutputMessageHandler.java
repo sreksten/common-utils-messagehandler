@@ -1,5 +1,9 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
+import com.threeamigos.common.util.interfaces.messagehandler.LogFormatter;
+import jakarta.annotation.Nonnull;
+
+import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -50,6 +54,7 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
     private Thread shutdownHook;
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final Object dispatchLock = new Object();
+    private volatile LogFormatter formatter = new PlainTextLogFormatter();
 
     /**
      * Initializes the optional async dispatch infrastructure.
@@ -192,9 +197,33 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
     }
 
     /**
+     * Replaces the log formatter used to render each output line.
+     * <p>
+     * The formatter is applied to every message before it is handed to the underlying output
+     * (file, console, etc.). Defaults to {@link PlainTextLogFormatter}.
+     *
+     * @param formatter the non-null formatter to use
+     * @throws NullPointerException if {@code formatter} is {@code null}
+     */
+    public final void setFormatter(@Nonnull final LogFormatter formatter) {
+        Objects.requireNonNull(formatter,
+                MessageHandlerResourceBundle.BUNDLE.getString("nullFormatterProvided"));
+        this.formatter = formatter;
+    }
+
+    /**
+     * Returns the currently active {@link LogFormatter}.
+     *
+     * @return the non-null formatter
+     */
+    protected final LogFormatter getFormatter() {
+        return formatter;
+    }
+
+    /**
      * Returns {@code true} if this handler dispatches writes asynchronously.
      * <p>
-     * Subclasses that need to call {@link #close()} from within a dispatched task (e.g. on
+     * Subclasses that need to call {@link #close()} from within a dispatched task (e.g., on
      * write error) must check this flag: in async mode, calling {@code close()} on the same
      * thread that runs dispatch tasks causes a deadlock because {@code close()} calls
      * {@code awaitTermination()}, which waits for the worker thread to finish.
@@ -236,9 +265,6 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
             return;
         }
         if (worker != null) {
-            // Wait for any in-flight dispatch() to finish its closed-check + offer before
-            // we drain the queue and close the output, so no task can slip in unprocessed.
-            synchronized (dispatchLock) { /* barrier */ }
             if (shutdownHook != null) {
                 try {
                     removeShutdownHook(shutdownHook);
@@ -246,7 +272,12 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
                     // JVM is shutting down
                 }
             }
-            worker.shutdownNow();
+            synchronized (dispatchLock) {
+                // Barrier: any in-flight dispatch() that already passed the closed check must
+                // have completed its queue.offer() before we reach here. Interrupting the worker
+                // inside the lock guarantees no task can be offered to the queue after this point.
+                worker.shutdownNow();
+            }
             try {
                 awaitTermination();
             } catch (InterruptedException ignored) {

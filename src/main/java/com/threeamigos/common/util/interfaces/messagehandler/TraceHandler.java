@@ -6,18 +6,19 @@ import jakarta.annotation.Nonnull;
 /**
  * An interface used to handle trace messages.<br/>
  * If the message construction may be expensive, consider using a supplier instead
- * (see {@link SupplierTraceMessageHandler}).
+ * (see {@link TraceSupplierHandler}).
  *
  * @author Stefano Reksten
  */
 @FunctionalInterface
-public interface TraceMessageHandler {
+public interface TraceHandler {
 
     /**
      * Handles a single trace message.
      *
-     * @param traceMessage a trace message to show to the programmer
+     * @param message a non-null trace message to show to the programmer
+     * @throws NullPointerException if {@code message} is {@code null}
      */
-    void handleTraceMessage(final @Nonnull String traceMessage);
+    void trace(final @Nonnull String message);
 
 }

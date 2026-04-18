@@ -1,6 +1,5 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
-import com.threeamigos.common.util.implementations.messagehandler.SwingMessageHandler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -63,56 +62,63 @@ class SwingMessageHandlerUnitTest {
     @DisplayName("Should throw an exception if a null info message is provided")
     void shouldThrowAnExceptionIfANullInfoMessageIsProvided() {
         SwingMessageHandler sut = new SwingMessageHandler();
-        assertThrows(NullPointerException.class, () -> sut.handleInfoMessage((String) null));
+        assertThrows(NullPointerException.class, () -> sut.info((String) null));
     }
 
     @Test
     @DisplayName("Should throw an exception if a null warn message is provided")
     void shouldThrowAnExceptionIfANullWarnMessageIsProvided() {
         SwingMessageHandler sut = new SwingMessageHandler();
-        assertThrows(NullPointerException.class, () -> sut.handleWarnMessage((String) null));
+        assertThrows(NullPointerException.class, () -> sut.warn((String) null));
+    }
+
+    @Test
+    @DisplayName("Should throw an exception if a null fatal message is provided")
+    void shouldThrowAnExceptionIfANullFatalMessageIsProvided() {
+        SwingMessageHandler sut = new SwingMessageHandler();
+        assertThrows(NullPointerException.class, () -> sut.fatal((String) null));
     }
 
     @Test
     @DisplayName("Should throw an exception if a null error message is provided")
     void shouldThrowAnExceptionIfANullErrorMessageIsProvided() {
         SwingMessageHandler sut = new SwingMessageHandler();
-        assertThrows(NullPointerException.class, () -> sut.handleErrorMessage((String) null));
+        assertThrows(NullPointerException.class, () -> sut.error((String) null));
     }
 
     @Test
     @DisplayName("Should throw an exception if a null debug message is provided")
     void shouldThrowAnExceptionIfANullDebugMessageIsProvided() {
         SwingMessageHandler sut = new SwingMessageHandler();
-        assertThrows(NullPointerException.class, () -> sut.handleDebugMessage((String) null));
+        assertThrows(NullPointerException.class, () -> sut.debug((String) null));
     }
 
     @Test
     @DisplayName("Should throw an exception if a null trace message is provided")
     void shouldThrowAnExceptionIfANullTraceMessageIsProvided() {
         SwingMessageHandler sut = new SwingMessageHandler();
-        assertThrows(NullPointerException.class, () -> sut.handleTraceMessage((String) null));
+        assertThrows(NullPointerException.class, () -> sut.trace((String) null));
     }
 
     @Test
     @DisplayName("Should throw an exception if a null exception is provided")
     void shouldThrowAnExceptionIfANullExceptionIsProvided() {
         SwingMessageHandler sut = new SwingMessageHandler();
-        assertThrows(NullPointerException.class, () -> sut.handleException((Exception) null));
+        assertThrows(NullPointerException.class, () -> sut.exception((Exception) null));
     }
 
     @Test
     @DisplayName("Should throw an exception if a null exception message is provided")
     void shouldThrowAnExceptionIfANullExceptionMessageIsProvided() {
         SwingMessageHandler sut = new SwingMessageHandler();
-        assertThrows(NullPointerException.class, () -> sut.handleException(null, new RuntimeException("boom")));
+        assertThrows(NullPointerException.class, () -> sut.exception(null, new RuntimeException("boom")));
     }
 
     @Test
     @DisplayName("Should throw an exception if a null exception is provided with message")
     void shouldThrowAnExceptionIfANullExceptionIsProvidedWithMessage() {
         SwingMessageHandler sut = new SwingMessageHandler();
-        assertThrows(NullPointerException.class, () -> sut.handleException("message", null));
+        assertThrows(NullPointerException.class, () -> sut.exception("message", null));
     }
 
     @Test
@@ -120,32 +126,38 @@ class SwingMessageHandlerUnitTest {
     void shouldDisplayStandardMessages() {
         CapturingSwingMessageHandler sut = new CapturingSwingMessageHandler();
 
-        sut.handleInfoMessage("info-message");
+        sut.info("info-message");
         assertEquals(1, sut.calls);
         assertEquals("info-message", sut.lastMessage);
         assertEquals("Info", sut.lastTitle);
         assertEquals(JOptionPane.INFORMATION_MESSAGE, sut.lastIcon);
 
-        sut.handleWarnMessage("warn-message");
+        sut.warn("warn-message");
         assertEquals(2, sut.calls);
         assertEquals("warn-message", sut.lastMessage);
         assertEquals("Warning", sut.lastTitle);
         assertEquals(JOptionPane.WARNING_MESSAGE, sut.lastIcon);
 
-        sut.handleErrorMessage("error-message");
+        sut.error("error-message");
         assertEquals(3, sut.calls);
         assertEquals("error-message", sut.lastMessage);
         assertEquals("Error", sut.lastTitle);
         assertEquals(JOptionPane.ERROR_MESSAGE, sut.lastIcon);
 
-        sut.handleDebugMessage("debug-message");
+        sut.fatal("fatal-message");
         assertEquals(4, sut.calls);
+        assertEquals("fatal-message", sut.lastMessage);
+        assertEquals("Error", sut.lastTitle);
+        assertEquals(JOptionPane.ERROR_MESSAGE, sut.lastIcon);
+
+        sut.debug("debug-message");
+        assertEquals(5, sut.calls);
         assertEquals("debug-message", sut.lastMessage);
         assertEquals("Debug", sut.lastTitle);
         assertEquals(JOptionPane.INFORMATION_MESSAGE, sut.lastIcon);
 
-        sut.handleTraceMessage("trace-message");
-        assertEquals(5, sut.calls);
+        sut.trace("trace-message");
+        assertEquals(6, sut.calls);
         assertEquals("trace-message", sut.lastMessage);
         assertEquals("Trace", sut.lastTitle);
         assertEquals(JOptionPane.INFORMATION_MESSAGE, sut.lastIcon);
@@ -156,13 +168,13 @@ class SwingMessageHandlerUnitTest {
     void shouldDisplayExceptions() {
         CapturingSwingMessageHandler sut = new CapturingSwingMessageHandler();
 
-        sut.handleException(new RuntimeException("boom"));
+        sut.exception(new RuntimeException("boom"));
         assertEquals(1, sut.calls);
         assertEquals("boom", sut.lastMessage);
         assertEquals("Exception", sut.lastTitle);
         assertEquals(JOptionPane.ERROR_MESSAGE, sut.lastIcon);
 
-        sut.handleException("prefix", new RuntimeException("kaboom"));
+        sut.exception("prefix", new RuntimeException("kaboom"));
         assertEquals(2, sut.calls);
         assertEquals("prefix: kaboom", sut.lastMessage);
         assertEquals("Exception", sut.lastTitle);
@@ -176,7 +188,7 @@ class SwingMessageHandlerUnitTest {
         AtomicBoolean supplierCalled = new AtomicBoolean(false);
 
         sut.setInfoEnabled(false);
-        sut.handleInfoMessage(() -> {
+        sut.info(() -> {
             supplierCalled.set(true);
             return "ignored";
         });
@@ -184,7 +196,7 @@ class SwingMessageHandlerUnitTest {
         assertTrue(!supplierCalled.get());
 
         sut.setInfoEnabled(true);
-        sut.handleInfoMessage(() -> {
+        sut.info(() -> {
             supplierCalled.set(true);
             return "evaluated";
         });
@@ -200,17 +212,19 @@ class SwingMessageHandlerUnitTest {
         sut.setInfoEnabled(false);
         sut.setWarnEnabled(false);
         sut.setErrorEnabled(false);
+        sut.setFatalEnabled(false);
         sut.setDebugEnabled(false);
         sut.setTraceEnabled(false);
         sut.setExceptionEnabled(false);
 
-        sut.handleInfoMessage("info");
-        sut.handleWarnMessage("warn");
-        sut.handleErrorMessage("error");
-        sut.handleDebugMessage("debug");
-        sut.handleTraceMessage("trace");
-        sut.handleException(new RuntimeException("boom"));
-        sut.handleException("prefix", new RuntimeException("kaboom"));
+        sut.info("info");
+        sut.warn("warn");
+        sut.error("error");
+        sut.fatal("fatal");
+        sut.debug("debug");
+        sut.trace("trace");
+        sut.exception(new RuntimeException("boom"));
+        sut.exception("prefix", new RuntimeException("kaboom"));
 
         assertEquals(0, sut.calls);
     }
@@ -222,7 +236,7 @@ class SwingMessageHandlerUnitTest {
         System.setProperty("java.awt.headless", "true");
         try {
             SwingMessageHandler sut = new SwingMessageHandler();
-            assertDoesNotThrow(() -> sut.handleInfoMessage("headless-safe"));
+            assertDoesNotThrow(() -> sut.info("headless-safe"));
         } finally {
             if (original == null) {
                 System.clearProperty("java.awt.headless");

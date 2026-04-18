@@ -18,7 +18,8 @@ public interface ExceptionHandler {
      * Handles a single exception.
      *
      * @param exception the non-null exception to handle
+     * @throws NullPointerException if {@code exception} is {@code null}
      */
-    void handleException(final @Nonnull Exception exception);
+    void exception(final @Nonnull Exception exception);
 
 }

@@ -1,6 +1,5 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
-import com.threeamigos.common.util.implementations.messagehandler.JULMessageHandler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -59,23 +58,26 @@ class JULMessageHandlerUnitTest {
         logger.setLevel(Level.FINER);
 
         JULMessageHandler handler = new JULMessageHandler(logger);
-        handler.handleInfoMessage("info");
+        handler.info("info");
         assertEquals(Level.INFO, capturingHandler.last.getLevel());
         assertEquals("info", capturingHandler.last.getMessage());
 
-        handler.handleWarnMessage("warn");
+        handler.warn("warn");
         assertEquals(Level.WARNING, capturingHandler.last.getLevel());
 
-        handler.handleErrorMessage("error");
+        handler.error("error");
         assertEquals(Level.SEVERE, capturingHandler.last.getLevel());
 
-        handler.handleDebugMessage("debug");
+        handler.fatal("fatal");
+        assertEquals(Level.SEVERE, capturingHandler.last.getLevel());
+
+        handler.debug("debug");
         assertEquals(Level.FINE, capturingHandler.last.getLevel());
 
-        handler.handleTraceMessage("trace");
+        handler.trace("trace");
         assertEquals(Level.FINER, capturingHandler.last.getLevel());
 
-        handler.handleException(new RuntimeException("boom"));
+        handler.exception(new RuntimeException("boom"));
         assertEquals(Level.SEVERE, capturingHandler.last.getLevel());
         assertNotNull(capturingHandler.last.getThrown());
     }
@@ -93,16 +95,18 @@ class JULMessageHandlerUnitTest {
         handler.setInfoEnabled(false);
         handler.setWarnEnabled(false);
         handler.setErrorEnabled(false);
+        handler.setFatalEnabled(false);
         handler.setDebugEnabled(false);
         handler.setTraceEnabled(false);
         handler.setExceptionEnabled(false);
 
-        handler.handleInfoMessage("info");
-        handler.handleWarnMessage("warn");
-        handler.handleErrorMessage("error");
-        handler.handleDebugMessage("debug");
-        handler.handleTraceMessage("trace");
-        handler.handleException(new RuntimeException("boom"));
+        handler.info("info");
+        handler.warn("warn");
+        handler.error("error");
+        handler.fatal("fatal");
+        handler.debug("debug");
+        handler.trace("trace");
+        handler.exception(new RuntimeException("boom"));
 
         assertNull(capturingHandler.last, "No messages should be published when disabled");
     }
@@ -119,7 +123,7 @@ class JULMessageHandlerUnitTest {
         JULMessageHandler handler = new JULMessageHandler(logger);
         RuntimeException exception = new RuntimeException("boom");
 
-        handler.handleException("prefix", exception);
+        handler.exception("prefix", exception);
 
         assertEquals(Level.SEVERE, capturingHandler.last.getLevel());
         assertEquals("prefix: boom", capturingHandler.last.getMessage());

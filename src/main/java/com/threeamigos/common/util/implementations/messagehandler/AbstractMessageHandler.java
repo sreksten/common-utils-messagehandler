@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
+import com.threeamigos.common.util.interfaces.messagehandler.ContextInfo;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.annotation.Nonnull;
 
@@ -17,9 +18,12 @@ import java.util.function.Supplier;
  */
 public abstract class AbstractMessageHandler implements MessageHandler {
 
+    static final ContextInfo EMPTY_CONTEXT_INFO = new ContextInfoImpl();
+
     private volatile boolean isInfoEnabled = true;
     private volatile boolean isWarnEnabled = true;
     private volatile boolean isErrorEnabled = true;
+    private volatile boolean isFatalEnabled = true;
     private volatile boolean isDebugEnabled = true;
     private volatile boolean isTraceEnabled = true;
     private volatile boolean isExceptionEnabled = true;
@@ -34,11 +38,8 @@ public abstract class AbstractMessageHandler implements MessageHandler {
     /**
      * Enables or disables info-level message handling.
      * <p>
-     * When set to {@code false}, calls to {@link #handleInfoMessage(String)} and
-     * {@link #handleInfoMessage(java.util.function.Supplier)} are silently dropped before
+     * When set to {@code false}, calls to {@code info(...)} variants are silently dropped before
      * reaching the concrete implementation.
-     *
-     * @param infoEnabled {@code true} to enable, {@code false} to disable
      */
     public void setInfoEnabled(boolean infoEnabled) {
         isInfoEnabled = infoEnabled;
@@ -54,11 +55,8 @@ public abstract class AbstractMessageHandler implements MessageHandler {
     /**
      * Enables or disables warning-level message handling.
      * <p>
-     * When set to {@code false}, calls to {@link #handleWarnMessage(String)} and
-     * {@link #handleWarnMessage(java.util.function.Supplier)} are silently dropped before
+     * When set to {@code false}, calls to {@code warn(...)} variants are silently dropped before
      * reaching the concrete implementation.
-     *
-     * @param warnEnabled {@code true} to enable, {@code false} to disable
      */
     public void setWarnEnabled(boolean warnEnabled) {
         isWarnEnabled = warnEnabled;
@@ -74,14 +72,28 @@ public abstract class AbstractMessageHandler implements MessageHandler {
     /**
      * Enables or disables error-level message handling.
      * <p>
-     * When set to {@code false}, calls to {@link #handleErrorMessage(String)} and
-     * {@link #handleErrorMessage(java.util.function.Supplier)} are silently dropped before
+     * When set to {@code false}, calls to {@code error(...)} variants are silently dropped before
      * reaching the concrete implementation.
-     *
-     * @param errorEnabled {@code true} to enable, {@code false} to disable
      */
     public void setErrorEnabled(boolean errorEnabled) {
         isErrorEnabled = errorEnabled;
+    }
+
+    /**
+     * @return {@code true} if fatal-level message handling is currently enabled.
+     */
+    public boolean isFatalEnabled() {
+        return isFatalEnabled;
+    }
+
+    /**
+     * Enables or disables fatal-level message handling.
+     * <p>
+     * When set to {@code false}, calls to {@code fatal(...)} variants are silently dropped before
+     * reaching the concrete implementation.
+     */
+    public void setFatalEnabled(boolean fatalEnabled) {
+        isFatalEnabled = fatalEnabled;
     }
 
     /**
@@ -94,11 +106,8 @@ public abstract class AbstractMessageHandler implements MessageHandler {
     /**
      * Enables or disables debug-level message handling.
      * <p>
-     * When set to {@code false}, calls to {@link #handleDebugMessage(String)} and
-     * {@link #handleDebugMessage(java.util.function.Supplier)} are silently dropped before
+     * When set to {@code false}, calls to {@code #debug(...)} variants are silently dropped before
      * reaching the concrete implementation.
-     *
-     * @param debugEnabled {@code true} to enable, {@code false} to disable
      */
     public void setDebugEnabled(boolean debugEnabled) {
         isDebugEnabled = debugEnabled;
@@ -114,18 +123,15 @@ public abstract class AbstractMessageHandler implements MessageHandler {
     /**
      * Enables or disables trace-level message handling.
      * <p>
-     * When set to {@code false}, calls to {@link #handleTraceMessage(String)} and
-     * {@link #handleTraceMessage(java.util.function.Supplier)} are silently dropped before
+     * When set to {@code false}, calls to {@code trace(...)} variants are silently dropped before
      * reaching the concrete implementation.
-     *
-     * @param traceEnabled {@code true} to enable, {@code false} to disable
      */
     public void setTraceEnabled(boolean traceEnabled) {
         isTraceEnabled = traceEnabled;
     }
 
     /**
-     * @return {@code true}if exception handling is currently enabled.
+     * @return {@code true} if exception handling is currently enabled.
      */
     public boolean isExceptionEnabled() {
         return isExceptionEnabled;
@@ -134,30 +140,11 @@ public abstract class AbstractMessageHandler implements MessageHandler {
     /**
      * Enables or disables exception handling.
      * <p>
-     * When set to {@code false}, calls to {@link #handleException(Exception)} and
-     * {@link #handleException(String, Exception)} are silently dropped before reaching
+     * When set to {@code false}, calls to {@code #exception(...)} variants are silently dropped before reaching
      * the concrete implementation.
-     *
-     * @param exceptionEnabled {@code true} to enable, {@code false} to disable
      */
     public void setExceptionEnabled(boolean exceptionEnabled) {
         isExceptionEnabled = exceptionEnabled;
-    }
-
-    /**
-     * Forwards an info-level message to the concrete implementation if info messages are enabled.
-     * <p>
-     * The supplier is evaluated only when info is enabled, avoiding unnecessary string construction
-     * for disabled levels.
-     *
-     * @param messageSupplier a non-null supplier that produces the message string
-     * @throws NullPointerException if {@code messageSupplier} is {@code null}
-     */
-    public void handleInfoMessage(final @Nonnull Supplier<String> messageSupplier) {
-        Objects.requireNonNull(messageSupplier, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageSupplierProvided"));
-        if (isInfoEnabled) {
-            handleInfoMessage(messageSupplier.get());
-        }
     }
 
     /**
@@ -168,38 +155,66 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * @throws NullPointerException if {@code message} is {@code null}
      */
     @Override
-    public void handleInfoMessage(final @Nonnull String message) {
-        Objects.requireNonNull(message, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageProvided"));
+    public void info(final @Nonnull String message) {
         if (isInfoEnabled) {
-            handleInfoMessageImpl(message);
+            Objects.requireNonNull(message, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageProvided"));
+            handleInfoMessageImpl(message, EMPTY_CONTEXT_INFO);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Silently ignores the call when info-level handling is disabled.
+     *
+     * @throws NullPointerException if either {@code message} or {@code contextInfo} is {@code null}
+     */
+    @Override
+    public void info(final @Nonnull String message, final @Nonnull ContextInfo contextInfo) {
+        if (isInfoEnabled) {
+            Objects.requireNonNull(message, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageProvided"));
+            Objects.requireNonNull(contextInfo, MessageHandlerResourceBundle.BUNDLE.getString("nullContextInfoProvided"));
+            handleInfoMessageImpl(message, contextInfo);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Silently ignores the call when info-level handling is disabled.
+     *
+     * @throws NullPointerException if either {@code messageSupplier} or its production is {@code null}
+     */
+    public void info(final @Nonnull Supplier<String> messageSupplier) {
+        if (isInfoEnabled) {
+            Objects.requireNonNull(messageSupplier, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageSupplierProvided"));
+            info(messageSupplier.get());
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Silently ignores the call when info-level handling is disabled.
+     *
+     * @throws NullPointerException if either {@code messageSupplier}, its production, or {@code contextInfo} is {@code null}
+     */
+    public void info(final @Nonnull Supplier<String> messageSupplier, final @Nonnull ContextInfo contextInfo) {
+        if (isInfoEnabled) {
+            Objects.requireNonNull(messageSupplier, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageSupplierProvided"));
+            info(messageSupplier.get(), contextInfo);
         }
     }
 
     /**
      * Performs the actual info-level message dispatch.
      * <p>
-     * Called by {@link #handleInfoMessage(String)} only when info handling is enabled
+     * Called by {@link #info(String)} only when info handling is enabled
      * and the message has been validated as non-null.
      *
      * @param message the validated, non-null info message to handle
      */
-    protected abstract void handleInfoMessageImpl(final String message);
-
-    /**
-     * Forwards a warning-level message to the concrete implementation if warn messages are enabled.
-     * <p>
-     * The supplier is evaluated only when warn is enabled, avoiding unnecessary string construction
-     * for disabled levels.
-     *
-     * @param messageSupplier a non-null supplier that produces the message string
-     * @throws NullPointerException if {@code messageSupplier} is {@code null}
-     */
-    public void handleWarnMessage(final @Nonnull Supplier<String> messageSupplier) {
-        Objects.requireNonNull(messageSupplier, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageSupplierProvided"));
-        if (isWarnEnabled) {
-            handleWarnMessage(messageSupplier.get());
-        }
-    }
+    protected abstract void handleInfoMessageImpl(final String message, final ContextInfo contextInfo);
 
     /**
      * {@inheritDoc}
@@ -209,38 +224,66 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * @throws NullPointerException if {@code message} is {@code null}
      */
     @Override
-    public void handleWarnMessage(final @Nonnull String message) {
-        Objects.requireNonNull(message, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageProvided"));
+    public void warn(final @Nonnull String message) {
         if (isWarnEnabled) {
-            handleWarnMessageImpl(message);
+            Objects.requireNonNull(message, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageProvided"));
+            handleWarnMessageImpl(message, EMPTY_CONTEXT_INFO);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Silently ignores the call when warning-level handling is disabled.
+     *
+     * @throws NullPointerException if either {@code message} or {@code contextInfo} is {@code null}
+     */
+    @Override
+    public void warn(final @Nonnull String message, final @Nonnull ContextInfo contextInfo) {
+        if (isWarnEnabled) {
+            Objects.requireNonNull(message, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageProvided"));
+            Objects.requireNonNull(contextInfo, MessageHandlerResourceBundle.BUNDLE.getString("nullContextInfoProvided"));
+            handleWarnMessageImpl(message, contextInfo);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Silently ignores the call when warn-level handling is disabled.
+     *
+     * @throws NullPointerException if either {@code messageSupplier} or its production is {@code null}
+     */
+    public void warn(final @Nonnull Supplier<String> messageSupplier) {
+        if (isWarnEnabled) {
+            Objects.requireNonNull(messageSupplier, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageSupplierProvided"));
+            warn(messageSupplier.get());
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Silently ignores the call when warn-level handling is disabled.
+     *
+     * @throws NullPointerException if either {@code messageSupplier}, its production, or {@code contextInfo} is {@code null}
+     */
+    public void warn(final @Nonnull Supplier<String> messageSupplier, final @Nonnull ContextInfo contextInfo) {
+        if (isWarnEnabled) {
+            Objects.requireNonNull(messageSupplier, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageSupplierProvided"));
+            warn(messageSupplier.get(), contextInfo);
         }
     }
 
     /**
      * Performs the actual warning-level message dispatch.
      * <p>
-     * Called by {@link #handleWarnMessage(String)} only when warn handling is enabled
+     * Called by {@link #warn(String)} only when warn handling is enabled
      * and the message has been validated as non-null.
      *
      * @param message the validated, non-null warning message to handle
      */
-    protected abstract void handleWarnMessageImpl(final String message);
-
-    /**
-     * Forwards an error-level message to the concrete implementation if error messages are enabled.
-     * <p>
-     * The supplier is evaluated only when error is enabled, avoiding unnecessary string construction
-     * for disabled levels.
-     *
-     * @param messageSupplier a non-null supplier that produces the message string
-     * @throws NullPointerException if {@code messageSupplier} is {@code null}
-     */
-    public void handleErrorMessage(final @Nonnull Supplier<String> messageSupplier) {
-        Objects.requireNonNull(messageSupplier, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageSupplierProvided"));
-        if (isErrorEnabled) {
-            handleErrorMessage(messageSupplier.get());
-        }
-    }
+    protected abstract void handleWarnMessageImpl(final String message, final ContextInfo contextInfo);
 
     /**
      * {@inheritDoc}
@@ -250,38 +293,135 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * @throws NullPointerException if {@code message} is {@code null}
      */
     @Override
-    public void handleErrorMessage(final @Nonnull String message) {
-        Objects.requireNonNull(message, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageProvided"));
+    public void error(final @Nonnull String message) {
         if (isErrorEnabled) {
-            handleErrorMessageImpl(message);
+            Objects.requireNonNull(message, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageProvided"));
+            handleErrorMessageImpl(message, EMPTY_CONTEXT_INFO);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Silently ignores the call when error-level handling is disabled.
+     *
+     * @throws NullPointerException if either {@code message} or {@code contextInfo} is {@code null}
+     */
+    @Override
+    public void error(final @Nonnull String message, final @Nonnull ContextInfo contextInfo) {
+        if (isErrorEnabled) {
+            Objects.requireNonNull(message, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageProvided"));
+            Objects.requireNonNull(contextInfo, MessageHandlerResourceBundle.BUNDLE.getString("nullContextInfoProvided"));
+            handleErrorMessageImpl(message, contextInfo);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Silently ignores the call when error-level handling is disabled.
+     *
+     * @throws NullPointerException if either {@code messageSupplier} or its production is {@code null}
+     */
+    public void error(final @Nonnull Supplier<String> messageSupplier) {
+        if (isErrorEnabled) {
+            Objects.requireNonNull(messageSupplier, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageSupplierProvided"));
+            error(messageSupplier.get());
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Silently ignores the call when error-level handling is disabled.
+     *
+     * @throws NullPointerException if either {@code messageSupplier}, its production, or {@code contextInfo} is {@code null}
+     */
+    public void error(final @Nonnull Supplier<String> messageSupplier, final @Nonnull ContextInfo contextInfo) {
+        if (isErrorEnabled) {
+            Objects.requireNonNull(messageSupplier, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageSupplierProvided"));
+            error(messageSupplier.get(), contextInfo);
         }
     }
 
     /**
      * Performs the actual error-level message dispatch.
      * <p>
-     * Called by {@link #handleErrorMessage(String)} only when error handling is enabled
+     * Called by {@link #error(String)} only when error handling is enabled
      * and the message has been validated as non-null.
      *
      * @param message the validated, non-null error message to handle
      */
-    protected abstract void handleErrorMessageImpl(final String message);
+    protected abstract void handleErrorMessageImpl(final String message, final ContextInfo contextInfo);
 
     /**
-     * Forwards a debug-level message to the concrete implementation if debug messages are enabled.
+     * {@inheritDoc}
      * <p>
-     * The supplier is evaluated only when debug is enabled, avoiding unnecessary string construction
-     * for disabled levels.
+     * Silently ignores the call when fatal-level handling is disabled.
      *
-     * @param messageSupplier a non-null supplier that produces the message string
-     * @throws NullPointerException if {@code messageSupplier} is {@code null}
+     * @throws NullPointerException if either {@code message} or {@code contextInfo} is {@code null}
      */
-    public void handleDebugMessage(final @Nonnull Supplier<String> messageSupplier) {
-        Objects.requireNonNull(messageSupplier, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageSupplierProvided"));
-        if (isDebugEnabled) {
-            handleDebugMessage(messageSupplier.get());
+    @Override
+    public void fatal(final @Nonnull String message) {
+        if (isFatalEnabled) {
+            Objects.requireNonNull(message, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageProvided"));
+            handleFatalMessageImpl(message, EMPTY_CONTEXT_INFO);
         }
     }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Silently ignores the call when fatal-level handling is disabled.
+     *
+     * @throws NullPointerException if either {@code message} or {@code contextInfo} is {@code null}
+     */
+    @Override
+    public void fatal(final @Nonnull String message, final @Nonnull ContextInfo contextInfo) {
+        if (isFatalEnabled) {
+            Objects.requireNonNull(message, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageProvided"));
+            Objects.requireNonNull(contextInfo, MessageHandlerResourceBundle.BUNDLE.getString("nullContextInfoProvided"));
+            handleFatalMessageImpl(message, contextInfo);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Silently ignores the call when fatal-level handling is disabled.
+     *
+     * @throws NullPointerException if either {@code messageSupplier} or its production is {@code null}
+     */
+    public void fatal(final @Nonnull Supplier<String> messageSupplier) {
+        if (isFatalEnabled) {
+            Objects.requireNonNull(messageSupplier, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageSupplierProvided"));
+            fatal(messageSupplier.get());
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Silently ignores the call when fatal-level handling is disabled.
+     *
+     * @throws NullPointerException if either {@code messageSupplier}, its production, or {@code contextInfo} is {@code null}
+     */
+    public void fatal(final @Nonnull Supplier<String> messageSupplier, final @Nonnull ContextInfo contextInfo) {
+        if (isFatalEnabled) {
+            Objects.requireNonNull(messageSupplier, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageSupplierProvided"));
+            fatal(messageSupplier.get(), contextInfo);
+        }
+    }
+
+    /**
+     * Performs the actual error-level message dispatch.
+     * <p>
+     * Called by {@link #error(String)} only when error handling is enabled
+     * and the message has been validated as non-null.
+     *
+     * @param message the validated, non-null error message to handle
+     */
+    protected abstract void handleFatalMessageImpl(final String message, final ContextInfo contextInfo);
 
     /**
      * {@inheritDoc}
@@ -291,22 +431,67 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * @throws NullPointerException if {@code message} is {@code null}
      */
     @Override
-    public void handleDebugMessage(final @Nonnull String message) {
-        Objects.requireNonNull(message, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageProvided"));
+    public void debug(final @Nonnull String message) {
         if (isDebugEnabled) {
-            handleDebugMessageImpl(message);
+            Objects.requireNonNull(message, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageProvided"));
+            handleDebugMessageImpl(message, EMPTY_CONTEXT_INFO);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Silently ignores the call when debug-level handling is disabled.
+     *
+     * @throws NullPointerException if {@code message} is {@code null}
+     * @throws NullPointerException if {@code contextInfo} is {@code null}
+     */
+    @Override
+    public void debug(final @Nonnull String message, final @Nonnull ContextInfo contextInfo) {
+        if (isDebugEnabled) {
+            Objects.requireNonNull(message, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageProvided"));
+            Objects.requireNonNull(contextInfo, MessageHandlerResourceBundle.BUNDLE.getString("nullContextInfoProvided"));
+            handleDebugMessageImpl(message, contextInfo);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Silently ignores the call when debug-level handling is disabled.
+     *
+     * @throws NullPointerException if {@code messageSupplier} is {@code null}
+     */
+    public void debug(final @Nonnull Supplier<String> messageSupplier) {
+        if (isDebugEnabled) {
+            Objects.requireNonNull(messageSupplier, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageSupplierProvided"));
+            debug(messageSupplier.get());
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Silently ignores the call when debug-level handling is disabled.
+     *
+     * @throws NullPointerException if {@code messageSupplier} is {@code null}
+     */
+    public void debug(final @Nonnull Supplier<String> messageSupplier, final @Nonnull ContextInfo contextInfo) {
+        if (isDebugEnabled) {
+            Objects.requireNonNull(messageSupplier, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageSupplierProvided"));
+            debug(messageSupplier.get(), contextInfo);
         }
     }
 
     /**
      * Performs the actual debug-level message dispatch.
      * <p>
-     * Called by {@link #handleDebugMessage(String)} only when debug handling is enabled
+     * Called by {@link #debug(String)} only when debug handling is enabled
      * and the message has been validated as non-null.
      *
      * @param message the validated, non-null debug message to handle
      */
-    protected abstract void handleDebugMessageImpl(final String message);
+    protected abstract void handleDebugMessageImpl(final String message, final ContextInfo contextInfo);
 
     /**
      * {@inheritDoc}
@@ -316,38 +501,68 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * @throws NullPointerException if {@code message} is {@code null}
      */
     @Override
-    public void handleTraceMessage(final @Nonnull String message) {
-        Objects.requireNonNull(message, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageProvided"));
+    public void trace(final @Nonnull String message) {
         if (isTraceEnabled) {
-            handleTraceMessageImpl(message);
+            Objects.requireNonNull(message, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageProvided"));
+            handleTraceMessageImpl(message, EMPTY_CONTEXT_INFO);
         }
     }
 
     /**
-     * Forwards a trace-level message to the concrete implementation if trace messages are enabled.
+     * {@inheritDoc}
      * <p>
-     * The supplier is evaluated only when trace is enabled, avoiding unnecessary string construction
-     * for disabled levels.
+     * Silently ignores the call when trace-level handling is disabled.
      *
-     * @param messageSupplier a non-null supplier that produces the message string
+     * @throws NullPointerException if {@code message} is {@code null}
+     * @throws NullPointerException if {@code contextInfo} is {@code null}
+     */
+    @Override
+    public void trace(final @Nonnull String message, final @Nonnull ContextInfo contextInfo) {
+        if (isTraceEnabled) {
+            Objects.requireNonNull(message, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageProvided"));
+            Objects.requireNonNull(contextInfo, MessageHandlerResourceBundle.BUNDLE.getString("nullContextInfoProvided"));
+            handleTraceMessageImpl(message, contextInfo);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Silently ignores the call when trace-level handling is disabled.
+     *
      * @throws NullPointerException if {@code messageSupplier} is {@code null}
      */
-    public void handleTraceMessage(final @Nonnull Supplier<String> messageSupplier) {
-        Objects.requireNonNull(messageSupplier, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageSupplierProvided"));
+    public void trace(final @Nonnull Supplier<String> messageSupplier) {
         if (isTraceEnabled) {
-            handleTraceMessage(messageSupplier.get());
+            Objects.requireNonNull(messageSupplier, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageSupplierProvided"));
+            trace(messageSupplier.get());
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Silently ignores the call when trace-level handling is disabled.
+     *
+     * @throws NullPointerException if {@code messageSupplier} is {@code null}
+     * @throws NullPointerException if {@code contextInfo} is {@code null}
+     */
+    public void trace(final @Nonnull Supplier<String> messageSupplier, final @Nonnull ContextInfo contextInfo) {
+        if (isTraceEnabled) {
+            Objects.requireNonNull(messageSupplier, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageSupplierProvided"));
+            trace(messageSupplier.get(), contextInfo);
         }
     }
 
     /**
      * Performs the actual trace-level message dispatch.
      * <p>
-     * Called by {@link #handleTraceMessage(String)} only when trace handling is enabled
+     * Called by {@link #trace(String)} only when trace handling is enabled
      * and the message has been validated as non-null.
      *
      * @param message the validated, non-null trace message to handle
      */
-    protected abstract void handleTraceMessageImpl(final String message);
+    protected abstract void handleTraceMessageImpl(final String message, final ContextInfo contextInfo);
 
     /**
      * {@inheritDoc}
@@ -357,22 +572,39 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * @throws NullPointerException if {@code exception} is {@code null}
      */
     @Override
-    public void handleException(final @Nonnull Exception exception) {
-        Objects.requireNonNull(exception, MessageHandlerResourceBundle.BUNDLE.getString("nullExceptionProvided"));
+    public void exception(final @Nonnull Exception exception) {
         if (isExceptionEnabled) {
-            handleExceptionImpl(exception);
+            Objects.requireNonNull(exception, MessageHandlerResourceBundle.BUNDLE.getString("nullExceptionProvided"));
+            handleExceptionImpl(exception, EMPTY_CONTEXT_INFO);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Silently ignores the call when exception handling is disabled.
+     *
+     * @throws NullPointerException if {@code exception} is {@code null}
+     * @throws NullPointerException if {@code contextInfo} is {@code null}
+     */
+    @Override
+    public void exception(final @Nonnull Exception exception, final @Nonnull ContextInfo contextInfo) {
+        if (isExceptionEnabled) {
+            Objects.requireNonNull(exception, MessageHandlerResourceBundle.BUNDLE.getString("nullExceptionProvided"));
+            Objects.requireNonNull(contextInfo, MessageHandlerResourceBundle.BUNDLE.getString("nullContextInfoProvided"));
+            handleExceptionImpl(exception, contextInfo);
         }
     }
 
     /**
      * Performs the actual exception dispatch (without a contextual message).
      * <p>
-     * Called by {@link #handleException(Exception)} only when exception handling is enabled
+     * Called by {@link #exception(Exception)} only when exception handling is enabled
      * and the exception has been validated as non-null.
      *
      * @param exception the validated, non-null exception to handle
      */
-    protected abstract void handleExceptionImpl(final Exception exception);
+    protected abstract void handleExceptionImpl(final Exception exception, final ContextInfo contextInfo);
 
     /**
      * {@inheritDoc}
@@ -381,22 +613,38 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      *
      * @throws NullPointerException if either {@code message} or {@code exception} is {@code null}
      */
-    public void handleException(final @Nonnull String message, final @Nonnull Exception exception) {
-        Objects.requireNonNull(message, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageProvided"));
-        Objects.requireNonNull(exception, MessageHandlerResourceBundle.BUNDLE.getString("nullExceptionProvided"));
+    public void exception(final @Nonnull String message, final @Nonnull Exception exception) {
         if (isExceptionEnabled) {
-            handleExceptionImpl(message, exception);
+            Objects.requireNonNull(message, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageProvided"));
+            Objects.requireNonNull(exception, MessageHandlerResourceBundle.BUNDLE.getString("nullExceptionProvided"));
+            handleExceptionImpl(message, exception, EMPTY_CONTEXT_INFO);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Silently ignores the call when exception handling is disabled.
+     *
+     * @throws NullPointerException if either {@code message}, {@code exception} or {@code contextInfo} is {@code null}
+     */
+    public void exception(final @Nonnull String message, final @Nonnull Exception exception, final @Nonnull ContextInfo contextInfo) {
+        if (isExceptionEnabled) {
+            Objects.requireNonNull(message, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageProvided"));
+            Objects.requireNonNull(exception, MessageHandlerResourceBundle.BUNDLE.getString("nullExceptionProvided"));
+            Objects.requireNonNull(contextInfo, MessageHandlerResourceBundle.BUNDLE.getString("nullContextInfoProvided"));
+            handleExceptionImpl(message, exception, contextInfo);
         }
     }
 
     /**
      * Performs the actual exception dispatch with a contextual message.
      * <p>
-     * Called by {@link #handleException(String, Exception)} only when exception handling is enabled
+     * Called by {@link #exception(String, Exception)} only when exception handling is enabled
      * and both arguments have been validated as non-null.
      *
      * @param message   the validated, non-null contextual description of the failure
      * @param exception the validated, non-null exception to handle
      */
-    protected abstract void handleExceptionImpl(final String message, final Exception exception);
+    protected abstract void handleExceptionImpl(final String message, final Exception exception, final ContextInfo contextInfo);
 }

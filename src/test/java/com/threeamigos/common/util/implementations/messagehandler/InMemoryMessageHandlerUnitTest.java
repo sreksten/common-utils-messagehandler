@@ -1,6 +1,5 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
-import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -30,7 +29,7 @@ class InMemoryMessageHandlerUnitTest {
         // When
         String infoMessage = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.handleInfoMessage(infoMessage));
+        assertThrows(NullPointerException.class, () -> sut.info(infoMessage));
     }
 
     @Test
@@ -39,13 +38,14 @@ class InMemoryMessageHandlerUnitTest {
         //Given
         InMemoryMessageHandler sut = new InMemoryMessageHandler();
         //When
-        sut.handleInfoMessage(FIRST_MESSAGE);
-        sut.handleInfoMessage(SECOND_MESSAGE);
+        sut.info(FIRST_MESSAGE);
+        sut.info(SECOND_MESSAGE);
         //Then
         assertEquals(2, sut.getAllMessages().size(), "Wrong all messages size");
         assertEquals(2, sut.getAllInfoMessages().size(), "Wrong info messages size");
         assertEquals(0, sut.getAllWarnMessages().size(), "Wrong warn messages size");
         assertEquals(0, sut.getAllErrorMessages().size(), "Wrong error messages size");
+        assertEquals(0, sut.getAllFatalMessages().size(), "Wrong fatal messages size");
         assertEquals(0, sut.getAllDebugMessages().size(), "Wrong debug messages size");
         assertEquals(0, sut.getAllTraceMessages().size(), "Wrong trace messages size");
         assertEquals(0, sut.getAllExceptionMessages().size(), "Wrong exception messages size");
@@ -61,7 +61,7 @@ class InMemoryMessageHandlerUnitTest {
         // When
         String warnMessage = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.handleWarnMessage(warnMessage));
+        assertThrows(NullPointerException.class, () -> sut.warn(warnMessage));
     }
 
     @Test
@@ -70,13 +70,14 @@ class InMemoryMessageHandlerUnitTest {
         //Given
         InMemoryMessageHandler sut = new InMemoryMessageHandler();
         //When
-        sut.handleWarnMessage(FIRST_MESSAGE);
-        sut.handleWarnMessage(SECOND_MESSAGE);
+        sut.warn(FIRST_MESSAGE);
+        sut.warn(SECOND_MESSAGE);
         //Then
         assertEquals(2, sut.getAllMessages().size(), "Wrong all messages size");
         assertEquals(0, sut.getAllInfoMessages().size(), "Wrong info messages size");
         assertEquals(2, sut.getAllWarnMessages().size(), "Wrong warn messages size");
         assertEquals(0, sut.getAllErrorMessages().size(), "Wrong error messages size");
+        assertEquals(0, sut.getAllFatalMessages().size(), "Wrong fatal messages size");
         assertEquals(0, sut.getAllDebugMessages().size(), "Wrong debug messages size");
         assertEquals(0, sut.getAllTraceMessages().size(), "Wrong trace messages size");
         assertEquals(0, sut.getAllExceptionMessages().size(), "Wrong exception messages size");
@@ -92,7 +93,7 @@ class InMemoryMessageHandlerUnitTest {
         // When
         String errorMessage = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.handleErrorMessage(errorMessage));
+        assertThrows(NullPointerException.class, () -> sut.error(errorMessage));
     }
 
     @Test
@@ -101,13 +102,46 @@ class InMemoryMessageHandlerUnitTest {
         //Given
         InMemoryMessageHandler sut = new InMemoryMessageHandler();
         //When
-        sut.handleErrorMessage(FIRST_MESSAGE);
-        sut.handleErrorMessage(SECOND_MESSAGE);
+        sut.error(FIRST_MESSAGE);
+        sut.error(SECOND_MESSAGE);
         //Then
         assertEquals(2, sut.getAllMessages().size(), "Wrong all messages size");
         assertEquals(0, sut.getAllInfoMessages().size(), "Wrong info messages size");
         assertEquals(0, sut.getAllWarnMessages().size(), "Wrong warn messages size");
         assertEquals(2, sut.getAllErrorMessages().size(), "Wrong error messages size");
+        assertEquals(0, sut.getAllFatalMessages().size(), "Wrong fatal messages size");
+        assertEquals(0, sut.getAllDebugMessages().size(), "Wrong debug messages size");
+        assertEquals(0, sut.getAllTraceMessages().size(), "Wrong trace messages size");
+        assertEquals(0, sut.getAllExceptionMessages().size(), "Wrong exception messages size");
+        assertEquals(0, sut.getAllExceptions().size(), "Wrong exceptions size");
+        assertEquals(SECOND_MESSAGE, sut.getLastMessage(), "Wrong last message");
+    }
+
+    @Test
+    @DisplayName("Should throw an exception if a null fatal message is provided")
+    void shouldThrowAnExceptionIfANullFatalMessageIsProvided() {
+        // Given
+        InMemoryMessageHandler sut = new InMemoryMessageHandler();
+        // When
+        String fatalMessage = null;
+        // Then
+        assertThrows(NullPointerException.class, () -> sut.fatal(fatalMessage));
+    }
+
+    @Test
+    @DisplayName("Should store all fatal messages")
+    void shouldStoreAllFatalMessages() {
+        //Given
+        InMemoryMessageHandler sut = new InMemoryMessageHandler();
+        //When
+        sut.fatal(FIRST_MESSAGE);
+        sut.fatal(SECOND_MESSAGE);
+        //Then
+        assertEquals(2, sut.getAllMessages().size(), "Wrong all messages size");
+        assertEquals(0, sut.getAllInfoMessages().size(), "Wrong info messages size");
+        assertEquals(0, sut.getAllWarnMessages().size(), "Wrong warn messages size");
+        assertEquals(0, sut.getAllErrorMessages().size(), "Wrong error messages size");
+        assertEquals(2, sut.getAllFatalMessages().size(), "Wrong fatal messages size");
         assertEquals(0, sut.getAllDebugMessages().size(), "Wrong debug messages size");
         assertEquals(0, sut.getAllTraceMessages().size(), "Wrong trace messages size");
         assertEquals(0, sut.getAllExceptionMessages().size(), "Wrong exception messages size");
@@ -123,7 +157,7 @@ class InMemoryMessageHandlerUnitTest {
         // When
         String debugMessage = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.handleDebugMessage(debugMessage));
+        assertThrows(NullPointerException.class, () -> sut.debug(debugMessage));
     }
 
     @Test
@@ -132,13 +166,14 @@ class InMemoryMessageHandlerUnitTest {
         //Given
         InMemoryMessageHandler sut = new InMemoryMessageHandler();
         //When
-        sut.handleDebugMessage(FIRST_MESSAGE);
-        sut.handleDebugMessage(SECOND_MESSAGE);
+        sut.debug(FIRST_MESSAGE);
+        sut.debug(SECOND_MESSAGE);
         //Then
         assertEquals(2, sut.getAllMessages().size(), "Wrong all messages size");
         assertEquals(0, sut.getAllInfoMessages().size(), "Wrong info messages size");
         assertEquals(0, sut.getAllWarnMessages().size(), "Wrong warn messages size");
         assertEquals(0, sut.getAllErrorMessages().size(), "Wrong error messages size");
+        assertEquals(0, sut.getAllFatalMessages().size(), "Wrong fatal messages size");
         assertEquals(2, sut.getAllDebugMessages().size(), "Wrong debug messages size");
         assertEquals(0, sut.getAllTraceMessages().size(), "Wrong trace messages size");
         assertEquals(0, sut.getAllExceptionMessages().size(), "Wrong exception messages size");
@@ -154,7 +189,7 @@ class InMemoryMessageHandlerUnitTest {
         // When
         String traceMessage = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.handleTraceMessage(traceMessage));
+        assertThrows(NullPointerException.class, () -> sut.trace(traceMessage));
     }
 
     @Test
@@ -163,13 +198,14 @@ class InMemoryMessageHandlerUnitTest {
         //Given
         InMemoryMessageHandler sut = new InMemoryMessageHandler();
         //When
-        sut.handleTraceMessage(FIRST_MESSAGE);
-        sut.handleTraceMessage(SECOND_MESSAGE);
+        sut.trace(FIRST_MESSAGE);
+        sut.trace(SECOND_MESSAGE);
         //Then
         assertEquals(2, sut.getAllMessages().size(), "Wrong all messages size");
         assertEquals(0, sut.getAllInfoMessages().size(), "Wrong info messages size");
         assertEquals(0, sut.getAllWarnMessages().size(), "Wrong warn messages size");
         assertEquals(0, sut.getAllErrorMessages().size(), "Wrong error messages size");
+        assertEquals(0, sut.getAllFatalMessages().size(), "Wrong fatal messages size");
         assertEquals(0, sut.getAllDebugMessages().size(), "Wrong debug messages size");
         assertEquals(2, sut.getAllTraceMessages().size(), "Wrong trace messages size");
         assertEquals(0, sut.getAllExceptionMessages().size(), "Wrong exception messages size");
@@ -185,7 +221,7 @@ class InMemoryMessageHandlerUnitTest {
         // When
         Exception exception = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.handleException(exception));
+        assertThrows(NullPointerException.class, () -> sut.exception(exception));
     }
 
     @Test
@@ -196,13 +232,14 @@ class InMemoryMessageHandlerUnitTest {
         Exception firstException = new IllegalArgumentException("My IllegalArgumentException");
         Exception secondException = new ClassNotFoundException("My ClassNotFoundException");
         // When
-        sut.handleException(firstException);
-        sut.handleException(secondException);
+        sut.exception(firstException);
+        sut.exception(secondException);
         // Then
         assertEquals(2, sut.getAllMessages().size(), "Wrong all messages size");
         assertEquals(0, sut.getAllInfoMessages().size(), "Wrong info messages size");
         assertEquals(0, sut.getAllWarnMessages().size(), "Wrong warn messages size");
         assertEquals(0, sut.getAllErrorMessages().size(), "Wrong error messages size");
+        assertEquals(0, sut.getAllFatalMessages().size(), "Wrong fatal messages size");
         assertEquals(0, sut.getAllDebugMessages().size(), "Wrong debug messages size");
         assertEquals(0, sut.getAllTraceMessages().size(), "Wrong trace messages size");
         assertEquals(2, sut.getAllExceptionMessages().size(), "Wrong exception messages size");
@@ -216,7 +253,7 @@ class InMemoryMessageHandlerUnitTest {
         InMemoryMessageHandler sut = new InMemoryMessageHandler();
         Exception ex = new Exception((String) null);
 
-        sut.handleException(ex);
+        sut.exception(ex);
 
         assertEquals(1, sut.getAllExceptionMessages().size());
         assertEquals(ex.toString(), sut.getAllExceptionMessages().get(0));
@@ -228,9 +265,9 @@ class InMemoryMessageHandlerUnitTest {
     void shouldEvictOldestWhenMaxEntriesExceeded() {
         InMemoryMessageHandler handler = new InMemoryMessageHandler(2);
 
-        handler.handleInfoMessage("one");
-        handler.handleInfoMessage("two");
-        handler.handleInfoMessage("three");
+        handler.info("one");
+        handler.info("two");
+        handler.info("three");
 
         assertEquals(2, handler.getAllMessages().size());
         assertEquals("two", handler.getAllMessages().get(0));
@@ -251,31 +288,37 @@ class InMemoryMessageHandlerUnitTest {
         InMemoryMessageHandler sut = new InMemoryMessageHandler();
 
         sut.setInfoEnabled(false);
-        sut.handleInfoMessage((java.util.function.Supplier<String>) () -> {
+        sut.info((java.util.function.Supplier<String>) () -> {
             throw new AssertionError("Supplier should not be called");
         });
         sut.setInfoEnabled(true);
 
         sut.setWarnEnabled(false);
-        sut.handleWarnMessage((java.util.function.Supplier<String>) () -> {
+        sut.warn((java.util.function.Supplier<String>) () -> {
             throw new AssertionError("Supplier should not be called");
         });
         sut.setWarnEnabled(true);
 
         sut.setErrorEnabled(false);
-        sut.handleErrorMessage((java.util.function.Supplier<String>) () -> {
+        sut.error((java.util.function.Supplier<String>) () -> {
             throw new AssertionError("Supplier should not be called");
         });
         sut.setErrorEnabled(true);
 
+        sut.setFatalEnabled(false);
+        sut.fatal((java.util.function.Supplier<String>) () -> {
+            throw new AssertionError("Supplier should not be called");
+        });
+        sut.setFatalEnabled(true);
+
         sut.setDebugEnabled(false);
-        sut.handleDebugMessage((java.util.function.Supplier<String>) () -> {
+        sut.debug((java.util.function.Supplier<String>) () -> {
             throw new AssertionError("Supplier should not be called");
         });
         sut.setDebugEnabled(true);
 
         sut.setTraceEnabled(false);
-        sut.handleTraceMessage((java.util.function.Supplier<String>) () -> {
+        sut.trace((java.util.function.Supplier<String>) () -> {
             throw new AssertionError("Supplier should not be called");
         });
         sut.setTraceEnabled(true);
@@ -284,6 +327,7 @@ class InMemoryMessageHandlerUnitTest {
         assertEquals(0, sut.getAllInfoMessages().size());
         assertEquals(0, sut.getAllWarnMessages().size());
         assertEquals(0, sut.getAllErrorMessages().size());
+        assertEquals(0, sut.getAllFatalMessages().size());
         assertEquals(0, sut.getAllDebugMessages().size());
         assertEquals(0, sut.getAllTraceMessages().size());
         assertEquals(0, sut.getAllExceptionMessages().size());
@@ -296,7 +340,7 @@ class InMemoryMessageHandlerUnitTest {
         InMemoryMessageHandler sut = new InMemoryMessageHandler();
         Exception exception = new RuntimeException("boom");
 
-        sut.handleException("prefix", exception);
+        sut.exception("prefix", exception);
 
         assertEquals(1, sut.getAllExceptionMessages().size());
         assertEquals("prefix: boom", sut.getAllExceptionMessages().get(0));
@@ -311,7 +355,7 @@ class InMemoryMessageHandlerUnitTest {
         InMemoryMessageHandler sut = new InMemoryMessageHandler();
         Exception exception = new RuntimeException((String) null);
 
-        sut.handleException("prefix", exception);
+        sut.exception("prefix", exception);
 
         assertEquals(1, sut.getAllExceptionMessages().size());
         assertEquals("prefix: " + exception.toString(), sut.getAllExceptionMessages().get(0));
@@ -323,19 +367,21 @@ class InMemoryMessageHandlerUnitTest {
     void snapshotShouldExposeImmutableAndConsistentView() {
         InMemoryMessageHandler sut = new InMemoryMessageHandler();
 
-        sut.handleInfoMessage("info");
-        sut.handleWarnMessage("warn");
-        sut.handleErrorMessage("error");
-        sut.handleDebugMessage("debug");
-        sut.handleTraceMessage("trace");
-        sut.handleException("prefix", new RuntimeException("boom"));
+        sut.info("info");
+        sut.warn("warn");
+        sut.error("error");
+        sut.fatal("fatal");
+        sut.debug("debug");
+        sut.trace("trace");
+        sut.exception("prefix", new RuntimeException("boom"));
 
         InMemoryMessageHandler.Snapshot snapshot = sut.snapshot();
 
-        assertEquals(6, snapshot.getAllMessages().size());
+        assertEquals(7, snapshot.getAllMessages().size());
         assertEquals(1, snapshot.getAllInfoMessages().size());
         assertEquals(1, snapshot.getAllWarnMessages().size());
         assertEquals(1, snapshot.getAllErrorMessages().size());
+        assertEquals(1, snapshot.getAllFatalMessages().size());
         assertEquals(1, snapshot.getAllDebugMessages().size());
         assertEquals(1, snapshot.getAllTraceMessages().size());
         assertEquals(1, snapshot.getAllExceptionMessages().size());
@@ -350,13 +396,14 @@ class InMemoryMessageHandlerUnitTest {
     @DisplayName("Clear should reset all lists and lastMessage to null")
     void clearShouldResetAllListsAndLastMessage() {
         InMemoryMessageHandler sut = new InMemoryMessageHandler();
-        sut.handleInfoMessage("info");
-        sut.handleWarnMessage("warn");
-        sut.handleErrorMessage("error");
-        sut.handleDebugMessage("debug");
-        sut.handleTraceMessage("trace");
-        sut.handleException(new RuntimeException("ex"));
-        sut.handleException("prefix", new RuntimeException("ex2"));
+        sut.info("info");
+        sut.warn("warn");
+        sut.error("error");
+        sut.fatal("fatal");
+        sut.debug("debug");
+        sut.trace("trace");
+        sut.exception(new RuntimeException("ex"));
+        sut.exception("prefix", new RuntimeException("ex2"));
 
         sut.clear();
 
@@ -364,6 +411,7 @@ class InMemoryMessageHandlerUnitTest {
         assertEquals(0, sut.getAllInfoMessages().size());
         assertEquals(0, sut.getAllWarnMessages().size());
         assertEquals(0, sut.getAllErrorMessages().size());
+        assertEquals(0, sut.getAllFatalMessages().size());
         assertEquals(0, sut.getAllDebugMessages().size());
         assertEquals(0, sut.getAllTraceMessages().size());
         assertEquals(0, sut.getAllExceptionMessages().size());
@@ -375,10 +423,10 @@ class InMemoryMessageHandlerUnitTest {
     @DisplayName("Clear should allow new messages to be added after reset")
     void clearShouldAllowNewMessagesAfterReset() {
         InMemoryMessageHandler sut = new InMemoryMessageHandler();
-        sut.handleInfoMessage("before");
+        sut.info("before");
         sut.clear();
 
-        sut.handleInfoMessage("after");
+        sut.info("after");
 
         assertEquals(1, sut.getAllMessages().size());
         assertEquals(1, sut.getAllInfoMessages().size());
@@ -404,7 +452,7 @@ class InMemoryMessageHandlerUnitTest {
             try {
                 start.await();
                 for (int i = 0; i < messageCount; i++) {
-                    handler.handleInfoMessage("snapshot-msg-" + i);
+                    handler.info("snapshot-msg-" + i);
                 }
             } catch (InterruptedException ignored) {
                 Thread.currentThread().interrupt();

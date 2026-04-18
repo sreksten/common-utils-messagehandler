@@ -5,18 +5,19 @@ import jakarta.annotation.Nonnull;
 /**
  * An interface used to handle debug messages.<br/>
  * If the message construction may be expensive, consider using a supplier instead
- * (see {@link SupplierDebugMessageHandler}).
+ * (see {@link DebugSupplierHandler}).
  *
  * @author Stefano Reksten
  */
 @FunctionalInterface
-public interface DebugMessageHandler {
+public interface DebugHandler {
 
     /**
      * Handles a single debug message.
      *
-     * @param debugMessage a debug message to show to the programmer
+     * @param message a non-null debug message to show to the programmer
+     * @throws NullPointerException if {@code message} is {@code null}
      */
-    void handleDebugMessage(final @Nonnull String debugMessage);
+    void debug(final @Nonnull String message);
 
 }

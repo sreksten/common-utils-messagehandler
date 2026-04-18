@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
+import com.threeamigos.common.util.interfaces.messagehandler.ContextInfo;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.annotation.Nonnull;
 
@@ -145,38 +146,43 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
     }
 
     @Override
-    protected void handleInfoMessageImpl(final String message) {
-        forEachHandler(mh -> mh.handleInfoMessage(message));
+    protected void handleInfoMessageImpl(final String message, final ContextInfo contextInfo) {
+        forEachHandler(mh -> mh.info(message, contextInfo));
     }
 
     @Override
-    protected void handleWarnMessageImpl(final String message) {
-        forEachHandler(mh -> mh.handleWarnMessage(message));
+    protected void handleWarnMessageImpl(final String message, final ContextInfo contextInfo) {
+        forEachHandler(mh -> mh.warn(message, contextInfo));
     }
 
     @Override
-    protected void handleErrorMessageImpl(final String message) {
-        forEachHandler(mh -> mh.handleErrorMessage(message));
+    protected void handleErrorMessageImpl(final String message, final ContextInfo contextInfo) {
+        forEachHandler(mh -> mh.error(message, contextInfo));
     }
 
     @Override
-    protected void handleDebugMessageImpl(final String message) {
-        forEachHandler(mh -> mh.handleDebugMessage(message));
+    protected void handleFatalMessageImpl(final String message, final ContextInfo contextInfo) {
+        forEachHandler(mh -> mh.fatal(message, contextInfo));
     }
 
     @Override
-    protected void handleTraceMessageImpl(final String message) {
-        forEachHandler(mh -> mh.handleTraceMessage(message));
+    protected void handleDebugMessageImpl(final String message, final ContextInfo contextInfo) {
+        forEachHandler(mh -> mh.debug(message, contextInfo));
     }
 
     @Override
-    protected void handleExceptionImpl(final Exception exception) {
-        forEachHandler(mh -> mh.handleException(exception));
+    protected void handleTraceMessageImpl(final String message, final ContextInfo contextInfo) {
+        forEachHandler(mh -> mh.trace(message, contextInfo));
     }
 
     @Override
-    protected void handleExceptionImpl(final String message, final Exception exception) {
-        forEachHandler(mh -> mh.handleException(message, exception));
+    protected void handleExceptionImpl(final Exception exception, final ContextInfo contextInfo) {
+        forEachHandler(mh -> mh.exception(exception, contextInfo));
+    }
+
+    @Override
+    protected void handleExceptionImpl(final String message, final Exception exception, final ContextInfo contextInfo) {
+        forEachHandler(mh -> mh.exception(message, exception, contextInfo));
     }
 
     private void forEachHandler(java.util.function.Consumer<MessageHandler> consumer) {

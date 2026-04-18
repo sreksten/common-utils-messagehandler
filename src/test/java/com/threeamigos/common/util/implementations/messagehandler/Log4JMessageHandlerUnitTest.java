@@ -38,23 +38,26 @@ class Log4JMessageHandlerUnitTest {
         Logger logger = mock(Logger.class);
         Log4JMessageHandler handler = new Log4JMessageHandler(logger);
 
-        handler.handleInfoMessage("info");
+        handler.info("info");
         verify(logger).info("info");
 
-        handler.handleWarnMessage("warn");
+        handler.warn("warn");
         verify(logger).warn("warn");
 
-        handler.handleErrorMessage("error");
+        handler.error("error");
         verify(logger).error("error");
 
-        handler.handleDebugMessage("debug");
+        handler.fatal("fatal");
+        verify(logger).error("fatal");
+
+        handler.debug("debug");
         verify(logger).debug("debug");
 
-        handler.handleTraceMessage("trace");
+        handler.trace("trace");
         verify(logger).trace("trace");
 
         RuntimeException exception = new RuntimeException("boom");
-        handler.handleException(exception);
+        handler.exception(exception);
         verify(logger).error("boom", (Throwable) exception);
     }
 
@@ -67,16 +70,18 @@ class Log4JMessageHandlerUnitTest {
         handler.setInfoEnabled(false);
         handler.setWarnEnabled(false);
         handler.setErrorEnabled(false);
+        handler.setFatalEnabled(false);
         handler.setDebugEnabled(false);
         handler.setTraceEnabled(false);
         handler.setExceptionEnabled(false);
 
-        handler.handleInfoMessage("info");
-        handler.handleWarnMessage("warn");
-        handler.handleErrorMessage("error");
-        handler.handleDebugMessage("debug");
-        handler.handleTraceMessage("trace");
-        handler.handleException(new RuntimeException("boom"));
+        handler.info("info");
+        handler.warn("warn");
+        handler.error("error");
+        handler.fatal("fatal");
+        handler.debug("debug");
+        handler.trace("trace");
+        handler.exception(new RuntimeException("boom"));
 
         verifyNoInteractions(logger);
     }
@@ -88,7 +93,7 @@ class Log4JMessageHandlerUnitTest {
         Log4JMessageHandler handler = new Log4JMessageHandler(logger);
         RuntimeException exception = new RuntimeException("boom");
 
-        handler.handleException("prefix", exception);
+        handler.exception("prefix", exception);
 
         verify(logger).error("prefix", (Throwable) exception);
     }

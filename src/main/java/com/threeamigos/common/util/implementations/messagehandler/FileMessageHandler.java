@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
+import com.threeamigos.common.util.interfaces.messagehandler.ContextInfo;
+import com.threeamigos.common.util.interfaces.messagehandler.LogLevelEnum;
 import com.threeamigos.common.util.interfaces.messagehandler.RotationPolicy;
 
 import jakarta.annotation.Nonnull;
@@ -11,8 +13,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.Objects;
 import java.util.function.Consumer;
 
@@ -194,64 +194,48 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
     // -------------------------------------------------------------------------
 
     @Override
-    protected void handleInfoMessageImpl(final String message) {
-        writeMessage(format("INFO ", message));
+    protected void handleInfoMessageImpl(final String message, ContextInfo contextInfo) {
+        writeMessage(getFormatter().format(LogLevelEnum.INFO, message, contextInfo));
     }
 
     @Override
-    protected void handleWarnMessageImpl(final String message) {
-        writeMessage(format("WARN ", message));
+    protected void handleWarnMessageImpl(final String message, ContextInfo contextInfo) {
+        writeMessage(getFormatter().format(LogLevelEnum.WARN, message, contextInfo));
     }
 
     @Override
-    protected void handleErrorMessageImpl(final String message) {
-        writeMessage(format("ERROR", message));
+    protected void handleErrorMessageImpl(final String message, ContextInfo contextInfo) {
+        writeMessage(getFormatter().format(LogLevelEnum.ERROR, message, contextInfo));
     }
 
     @Override
-    protected void handleDebugMessageImpl(final String message) {
-        writeMessage(format("DEBUG", message));
+    protected void handleFatalMessageImpl(final String message, ContextInfo contextInfo) {
+        writeMessage(getFormatter().format(LogLevelEnum.FATAL, message, contextInfo));
     }
 
     @Override
-    protected void handleTraceMessageImpl(final String message) {
-        writeMessage(format("TRACE", message));
+    protected void handleDebugMessageImpl(final String message, ContextInfo contextInfo) {
+        writeMessage(getFormatter().format(LogLevelEnum.DEBUG, message, contextInfo));
     }
 
     @Override
-    protected void handleExceptionImpl(final Exception exception) {
-        writeMessage(format("EXCEP", ExceptionMessageFormatter.detail(exception)));
-        dispatch(() -> {
-            synchronized (writeLock) {
-                reopenIfNeeded();
-                exception.printStackTrace(writer);
-                checkWriteError();
-                rotateIfNeeded();
-            }
-        });
+    protected void handleTraceMessageImpl(final String message, ContextInfo contextInfo) {
+        writeMessage(getFormatter().format(LogLevelEnum.TRACE, message, contextInfo));
     }
 
     @Override
-    protected void handleExceptionImpl(final String message, final Exception exception) {
-        writeMessage(format("EXCEP", ExceptionMessageFormatter.withPrefix(message, exception)));
-        dispatch(() -> {
-            synchronized (writeLock) {
-                reopenIfNeeded();
-                exception.printStackTrace(writer);
-                checkWriteError();
-                rotateIfNeeded();
-            }
-        });
+    protected void handleExceptionImpl(final Exception exception, ContextInfo contextInfo) {
+        writeMessage(getFormatter().formatException(exception, contextInfo));
+    }
+
+    @Override
+    protected void handleExceptionImpl(final String message, final Exception exception, ContextInfo contextInfo) {
+        writeMessage(getFormatter().formatException(message, exception, contextInfo));
     }
 
     // -------------------------------------------------------------------------
     // Internal helpers
     // -------------------------------------------------------------------------
-
-    private String format(String level, String message) {
-        String date = ZonedDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
-        return String.format("[%s] [%s] %s", date, level, message);
-    }
 
     private void writeMessage(String message) {
         dispatch(() -> {

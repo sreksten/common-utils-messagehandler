@@ -18,16 +18,17 @@ import jakarta.annotation.Nonnull;
  * @see ExceptionHandler
  */
 @FunctionalInterface
-public interface ExceptionWithMessageHandler {
+public interface ExceptionWithMessageAndContextHandler {
 
     /**
      * Handles an exception together with a caller-supplied contextual message.
      *
-     * @param message   a non-null string describing the context in which the exception occurred
-     *                  (e.g., the operation attempted or the resource involved)
-     * @param exception a non-null exception to handle
-     * @throws NullPointerException if either {@code message} or {@code exception} is {@code null}
+     * @param message     a non-null string describing the context in which the exception occurred
+     *                    (e.g., the operation attempted or the resource involved)
+     * @param exception   a non-null exception to handle
+     * @param contextInfo a non-null context in which the exception was generated
+     * @throws NullPointerException if any of {@code message}, {@code exception} or {@code contextInfo} is {@code null}
      */
-    void exception(final @Nonnull String message, final @Nonnull Exception exception);
+    void exception(final @Nonnull String message, final @Nonnull Exception exception, final @Nonnull ContextInfo contextInfo);
 
 }

@@ -5,11 +5,12 @@ package com.threeamigos.common.util.interfaces.messagehandler;
  * <p>
  * Aggregates all per-level handler interfaces into a single contract:
  * <ul>
- *   <li>{@link InfoMessageHandler} / {@link SupplierInfoMessageHandler} — informational messages</li>
- *   <li>{@link WarnMessageHandler} / {@link SupplierWarnMessageHandler} — warnings</li>
- *   <li>{@link ErrorMessageHandler} / {@link SupplierErrorMessageHandler} — non-fatal errors</li>
- *   <li>{@link DebugMessageHandler} / {@link SupplierDebugMessageHandler} — debug output</li>
- *   <li>{@link TraceMessageHandler} / {@link SupplierTraceMessageHandler} — fine-grained trace output</li>
+ *   <li>{@link InfoHandler} / {@link InfoSupplierHandler} — informational messages</li>
+ *   <li>{@link WarnHandler} / {@link WarnSupplierHandler} — warnings</li>
+ *   <li>{@link ErrorHandler} / {@link ErrorSupplierHandler} — non-fatal errors</li>
+ *   <li>{@link FatalHandler} / {@link FatalSupplierHandler} — fatal errors</li>
+ *   <li>{@link DebugHandler} / {@link DebugSupplierHandler} — debug output</li>
+ *   <li>{@link TraceHandler} / {@link TraceSupplierHandler} — fine-grained trace output</li>
  *   <li>{@link ExceptionHandler} — exceptions without a contextual message</li>
  *   <li>{@link ExceptionWithMessageHandler} — exceptions paired with a contextual message</li>
  * </ul>
@@ -33,22 +34,30 @@ package com.threeamigos.common.util.interfaces.messagehandler;
  * <ul>
  *   <li>{@link com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler}</li>
  *   <li>{@link com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler}</li>
- *   <li>{@link com.threeamigos.common.util.implementations.messagehandler.JULMessageHandler}</li>
  *   <li>{@link com.threeamigos.common.util.implementations.messagehandler.SwingMessageHandler}</li>
  *   <li>{@link com.threeamigos.common.util.implementations.messagehandler.CompositeMessageHandler}
  *       — fan-out to multiple handlers simultaneously</li>
  *   <li>{@link com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler}
  *       — useful for testing</li>
+ *   <li>{@link com.threeamigos.common.util.implementations.messagehandler.JULMessageHandler}
+ *       — Java Util Logging integration</li>
+ *   <li>{@link com.threeamigos.common.util.implementations.messagehandler.Log4JMessageHandler}
+ *       — Log4J integration</li>
+ *   <li>{@link com.threeamigos.common.util.implementations.messagehandler.SLF4JMessageHandler}
+ *       — SLF4J integration</li>
  * </ul>
  *
  * @author Stefano Reksten
  */
-public interface MessageHandler extends InfoMessageHandler, SupplierInfoMessageHandler,
-        WarnMessageHandler, SupplierWarnMessageHandler,
-        ErrorMessageHandler, SupplierErrorMessageHandler,
-        DebugMessageHandler, SupplierDebugMessageHandler,
-        TraceMessageHandler, SupplierTraceMessageHandler,
-        ExceptionHandler, ExceptionWithMessageHandler, AutoCloseable {
+public interface MessageHandler extends
+        InfoHandler, InfoWithContextHandler, InfoSupplierHandler, InfoSupplierWithContextHandler,
+        WarnHandler, WarnWithContextHandler, WarnSupplierHandler, WarnSupplierWithContextHandler,
+        ErrorHandler, ErrorWithContextHandler, ErrorSupplierHandler, ErrorSupplierWithContextHandler,
+        FatalHandler, FatalWithContextHandler, FatalSupplierHandler, FatalSupplierWithContextHandler,
+        DebugHandler, DebugWithContextHandler, DebugSupplierHandler, DebugSupplierWithContextHandler,
+        TraceHandler, TraceWithContextHandler, TraceSupplierHandler, TraceSupplierWithContextHandler,
+        ExceptionHandler, ExceptionWithContextHandler, ExceptionWithMessageHandler, ExceptionWithMessageAndContextHandler,
+        AutoCloseable {
 
     /**
      * Releases any resources held by this handler.

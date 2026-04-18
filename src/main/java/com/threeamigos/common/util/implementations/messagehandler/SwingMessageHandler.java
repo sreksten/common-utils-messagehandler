@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
+import com.threeamigos.common.util.interfaces.messagehandler.ContextInfo;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import com.threeamigos.common.util.ui.AWTCalls;
 import jakarta.annotation.Nullable;
@@ -76,7 +77,7 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      *
      * @param message the info-level text to display
      */
-    protected void handleInfoMessageImpl(final String message) {
+    protected void handleInfoMessageImpl(final String message, final ContextInfo contextInfo) {
         showOptionPane(message, MessageHandlerResourceBundle.BUNDLE.getString("info"), JOptionPane.INFORMATION_MESSAGE);
     }
 
@@ -85,7 +86,7 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      *
      * @param message the warn-level text to display
      */
-    protected void handleWarnMessageImpl(final String message) {
+    protected void handleWarnMessageImpl(final String message, final ContextInfo contextInfo) {
         showOptionPane(message, MessageHandlerResourceBundle.BUNDLE.getString("warning"), JOptionPane.WARNING_MESSAGE);
     }
 
@@ -94,7 +95,16 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      *
      * @param message the error-level text to display
      */
-    protected void handleErrorMessageImpl(final String message) {
+    protected void handleErrorMessageImpl(final String message, final ContextInfo contextInfo) {
+        showOptionPane(message, MessageHandlerResourceBundle.BUNDLE.getString("error"), JOptionPane.ERROR_MESSAGE);
+    }
+
+    /**
+     * Displays the message in an error dialog with a localized title.
+     *
+     * @param message the error-level text to display
+     */
+    protected void handleFatalMessageImpl(final String message, final ContextInfo contextInfo) {
         showOptionPane(message, MessageHandlerResourceBundle.BUNDLE.getString("error"), JOptionPane.ERROR_MESSAGE);
     }
 
@@ -106,7 +116,7 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      *
      * @param message the debug-level text to display
      */
-    protected void handleDebugMessageImpl(final String message) {
+    protected void handleDebugMessageImpl(final String message, final ContextInfo contextInfo) {
         showOptionPane(message, MessageHandlerResourceBundle.BUNDLE.getString("debug"), JOptionPane.INFORMATION_MESSAGE);
     }
 
@@ -118,7 +128,7 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      *
      * @param message the trace-level text to display
      */
-    protected void handleTraceMessageImpl(final String message) {
+    protected void handleTraceMessageImpl(final String message, final ContextInfo contextInfo) {
         showOptionPane(message, MessageHandlerResourceBundle.BUNDLE.getString("trace"), JOptionPane.INFORMATION_MESSAGE);
     }
 
@@ -130,7 +140,7 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      *
      * @param exception the exception to display
      */
-    protected void handleExceptionImpl(final Exception exception) {
+    protected void handleExceptionImpl(final Exception exception, final ContextInfo contextInfo) {
         showOptionPane(ExceptionMessageFormatter.detail(exception), MessageHandlerResourceBundle.BUNDLE.getString("exception"), JOptionPane.ERROR_MESSAGE);
     }
 
@@ -143,7 +153,7 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      * @param message   a contextual prefix describing where or why the exception occurred
      * @param exception the exception to display
      */
-    protected void handleExceptionImpl(final String message, final Exception exception) {
+    protected void handleExceptionImpl(final String message, final Exception exception, final ContextInfo contextInfo) {
         showOptionPane(ExceptionMessageFormatter.withPrefix(message, exception), MessageHandlerResourceBundle.BUNDLE.getString("exception"), JOptionPane.ERROR_MESSAGE);
     }
 }

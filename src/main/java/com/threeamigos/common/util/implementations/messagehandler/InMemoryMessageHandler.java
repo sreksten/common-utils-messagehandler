@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
+import com.threeamigos.common.util.interfaces.messagehandler.ContextInfo;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.annotation.Nullable;
 
@@ -24,6 +25,7 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     private final ArrayDeque<String> allInfoMessages = new ArrayDeque<>();
     private final ArrayDeque<String> allWarnMessages = new ArrayDeque<>();
     private final ArrayDeque<String> allErrorMessages = new ArrayDeque<>();
+    private final ArrayDeque<String> allFatalMessages = new ArrayDeque<>();
     private final ArrayDeque<String> allDebugMessages = new ArrayDeque<>();
     private final ArrayDeque<String> allTraceMessages = new ArrayDeque<>();
     private final ArrayDeque<String> allExceptionMessages = new ArrayDeque<>();
@@ -46,6 +48,7 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
         private final List<String> allInfoMessages;
         private final List<String> allWarnMessages;
         private final List<String> allErrorMessages;
+        private final List<String> allFatalMessages;
         private final List<String> allDebugMessages;
         private final List<String> allTraceMessages;
         private final List<String> allExceptionMessages;
@@ -54,6 +57,7 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
 
         private Snapshot(final List<String> allMessages, final List<String> allInfoMessages,
                          final List<String> allWarnMessages, final List<String> allErrorMessages,
+                         final List<String> allFatalMessages,
                          final List<String> allDebugMessages, final List<String> allTraceMessages,
                          final List<String> allExceptionMessages, final List<Exception> allExceptions,
                          final String lastMessage) {
@@ -61,6 +65,7 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
             this.allInfoMessages = allInfoMessages;
             this.allWarnMessages = allWarnMessages;
             this.allErrorMessages = allErrorMessages;
+            this.allFatalMessages = allFatalMessages;
             this.allDebugMessages = allDebugMessages;
             this.allTraceMessages = allTraceMessages;
             this.allExceptionMessages = allExceptionMessages;
@@ -94,6 +99,13 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
          */
         public List<String> getAllErrorMessages() {
             return allErrorMessages;
+        }
+
+        /**
+         * @return unmodifiable list of all fatal-level messages, in arrival order
+         */
+        public List<String> getAllFatalMessages() {
+            return allFatalMessages;
         }
 
         /**
@@ -157,87 +169,99 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     }
 
     @Override
-    protected void handleInfoMessageImpl(final String message) {
+    protected void handleInfoMessageImpl(final String message, final ContextInfo contextInfo) {
         lock.lock();
         try {
             addWithLimit(allInfoMessages, message);
-            handleImpl(message);
+            handleImpl(message, contextInfo);
         } finally {
             lock.unlock();
         }
     }
 
     @Override
-    protected void handleWarnMessageImpl(final String message) {
+    protected void handleWarnMessageImpl(final String message, final ContextInfo contextInfo) {
         lock.lock();
         try {
             addWithLimit(allWarnMessages, message);
-            handleImpl(message);
+            handleImpl(message, contextInfo);
         } finally {
             lock.unlock();
         }
     }
 
     @Override
-    protected void handleErrorMessageImpl(final String message) {
+    protected void handleErrorMessageImpl(final String message, final ContextInfo contextInfo) {
         lock.lock();
         try {
             addWithLimit(allErrorMessages, message);
-            handleImpl(message);
+            handleImpl(message, contextInfo);
         } finally {
             lock.unlock();
         }
     }
 
     @Override
-    protected void handleDebugMessageImpl(final String message) {
+    protected void handleFatalMessageImpl(final String message, final ContextInfo contextInfo) {
+        lock.lock();
+        try {
+            addWithLimit(allFatalMessages, message);
+            handleImpl(message, contextInfo);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    @Override
+    protected void handleDebugMessageImpl(final String message, final ContextInfo contextInfo) {
         lock.lock();
         try {
             addWithLimit(allDebugMessages, message);
-            handleImpl(message);
+            handleImpl(message, contextInfo);
         } finally {
             lock.unlock();
         }
     }
 
     @Override
-    protected void handleTraceMessageImpl(final String message) {
+    protected void handleTraceMessageImpl(final String message, final ContextInfo contextInfo) {
         lock.lock();
         try {
             addWithLimit(allTraceMessages, message);
-            handleImpl(message);
+            handleImpl(message, contextInfo);
         } finally {
             lock.unlock();
         }
     }
 
     @Override
-    protected void handleExceptionImpl(final Exception exception) {
+    protected void handleExceptionImpl(final Exception exception, final ContextInfo contextInfo) {
         lock.lock();
         try {
             String detail = ExceptionMessageFormatter.detail(exception);
             addWithLimit(allExceptionMessages, detail);
             addWithLimit(allExceptions, exception);
-            handleImpl(detail);
+            handleImpl(detail, contextInfo);
         } finally {
             lock.unlock();
         }
     }
 
     @Override
-    protected void handleExceptionImpl(final String message, final Exception exception) {
+    protected void handleExceptionImpl(final String message, final Exception exception, final ContextInfo contextInfo) {
         lock.lock();
         try {
             String formatted = ExceptionMessageFormatter.withPrefix(message, exception);
             addWithLimit(allExceptionMessages, formatted);
             addWithLimit(allExceptions, exception);
-            handleImpl(formatted);
+            handleImpl(formatted, contextInfo);
         } finally {
             lock.unlock();
         }
     }
 
-    private void handleImpl(final String message) {
+    //FIXME ?
+    private void handleImpl(final String message, final ContextInfo contextInfo) {
         addWithLimit(allMessages, message);
         lastMessage = message;
     }
@@ -299,6 +323,18 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
         lock.lock();
         try {
             return Collections.unmodifiableList(new ArrayList<>(allErrorMessages));
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * @return an unmodifiable list of all fatal messages handled by this instance.
+     */
+    public List<String> getAllFatalMessages() {
+        lock.lock();
+        try {
+            return Collections.unmodifiableList(new ArrayList<>(allFatalMessages));
         } finally {
             lock.unlock();
         }
@@ -378,6 +414,7 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
             allInfoMessages.clear();
             allWarnMessages.clear();
             allErrorMessages.clear();
+            allFatalMessages.clear();
             allDebugMessages.clear();
             allTraceMessages.clear();
             allExceptionMessages.clear();
@@ -403,6 +440,7 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
                     Collections.unmodifiableList(new ArrayList<>(allInfoMessages)),
                     Collections.unmodifiableList(new ArrayList<>(allWarnMessages)),
                     Collections.unmodifiableList(new ArrayList<>(allErrorMessages)),
+                    Collections.unmodifiableList(new ArrayList<>(allFatalMessages)),
                     Collections.unmodifiableList(new ArrayList<>(allDebugMessages)),
                     Collections.unmodifiableList(new ArrayList<>(allTraceMessages)),
                     Collections.unmodifiableList(new ArrayList<>(allExceptionMessages)),
