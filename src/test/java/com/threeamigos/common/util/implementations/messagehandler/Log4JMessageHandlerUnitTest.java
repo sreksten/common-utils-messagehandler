@@ -48,7 +48,7 @@ class Log4JMessageHandlerUnitTest {
         verify(logger).error("error");
 
         handler.fatal("fatal");
-        verify(logger).error("fatal");
+        verify(logger).fatal("fatal");
 
         handler.debug("debug");
         verify(logger).debug("debug");
