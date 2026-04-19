@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
+import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import org.junit.jupiter.api.DisplayName;
@@ -17,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@DisplayName("OtelAttributeValidator unit tests")
+@DisplayName("OpenTelemetryAttributeValidator unit tests")
 @Tag("unit")
 @Tag("messageHandler")
 class OpenTelemetryAttributeValidatorUnitTest {
@@ -51,7 +52,9 @@ class OpenTelemetryAttributeValidatorUnitTest {
         NullPointerException ex = assertThrows(
                 NullPointerException.class,
                 () -> OpenTelemetryAttributeValidator.copyAndValidateKeyValues(source, "attrs"));
-        assertTrue(ex.getMessage().contains("contains null element"));
+        assertEquals(
+                MessageHandlerResourceBundle.format("fieldContainsNullElementAtIndex", "attrs", 1),
+                ex.getMessage());
     }
 
     @Test
@@ -72,7 +75,9 @@ class OpenTelemetryAttributeValidatorUnitTest {
         NullPointerException ex = assertThrows(
                 NullPointerException.class,
                 () -> OpenTelemetryAttributeValidator.copyAndValidateKeyValues(Collections.singletonList(invalid), "attrs"));
-        assertTrue(ex.getMessage().contains("key must not be null"));
+        assertEquals(
+                MessageHandlerResourceBundle.format("fieldKeyMustNotBeNullAtIndex", "attrs", 0),
+                ex.getMessage());
     }
 
     @Test
@@ -93,7 +98,9 @@ class OpenTelemetryAttributeValidatorUnitTest {
         IllegalArgumentException ex = assertThrows(
                 IllegalArgumentException.class,
                 () -> OpenTelemetryAttributeValidator.copyAndValidateKeyValues(Collections.singletonList(invalid), "attrs"));
-        assertTrue(ex.getMessage().contains("key must not be empty"));
+        assertEquals(
+                MessageHandlerResourceBundle.format("fieldKeyMustNotBeEmptyAtIndex", "attrs", 0),
+                ex.getMessage());
     }
 
     @Test
@@ -114,7 +121,9 @@ class OpenTelemetryAttributeValidatorUnitTest {
         NullPointerException ex = assertThrows(
                 NullPointerException.class,
                 () -> OpenTelemetryAttributeValidator.copyAndValidateKeyValues(Collections.singletonList(invalid), "attrs"));
-        assertTrue(ex.getMessage().contains("value must not be null"));
+        assertEquals(
+                MessageHandlerResourceBundle.format("fieldValueMustNotBeNullAtIndex", "attrs", 0),
+                ex.getMessage());
     }
 
     @Test
@@ -127,7 +136,9 @@ class OpenTelemetryAttributeValidatorUnitTest {
         IllegalArgumentException ex = assertThrows(
                 IllegalArgumentException.class,
                 () -> OpenTelemetryAttributeValidator.copyAndValidateKeyValues(source, "attrs"));
-        assertTrue(ex.getMessage().contains("duplicate key"));
+        assertEquals(
+                MessageHandlerResourceBundle.format("fieldContainsDuplicateKey", "attrs", "dup"),
+                ex.getMessage());
     }
 
     @Test
