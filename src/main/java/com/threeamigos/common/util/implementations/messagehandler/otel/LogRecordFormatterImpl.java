@@ -14,11 +14,24 @@ import java.util.Base64;
 import java.util.List;
 
 /**
- * A {@link LogRecordFormatter} that serializes a {@link LogRecord} as a single-line NDJSON object
- * following the
- * <a href="https://opentelemetry.io/docs/specs/otel/logs/data-model/">OpenTelemetry Log Data Model</a>
- * and the
- * <a href="https://opentelemetry.io/docs/specs/otlp/#otlphttp-json-encoding">OTLP JSON encoding</a>.
+ * A {@link LogRecordFormatter} that serializes a {@link LogRecord} as a single-line JSON string
+ * in the
+ * <a href="https://opentelemetry.io/docs/specs/otlp/#otlphttp-json-encoding">OTLP JSON</a>
+ * {@code ExportLogsServiceRequest} envelope, following the
+ * <a href="https://opentelemetry.io/docs/specs/otel/logs/data-model/">OpenTelemetry Log Data Model</a>.
+ * <p>
+ * The output structure is:
+ * <pre>
+ * {"resourceLogs":[{
+ *   "resource":{"attributes":[...]},
+ *   "schemaUrl":"...",              ← Resource.getSchemaUrl(), omitted if null
+ *   "scopeLogs":[{
+ *     "scope":{"name":"...","version":"...","attributes":[...]},
+ *     "schemaUrl":"...",            ← InstrumentationScope.getSchemaUrl(), omitted if null
+ *     "logRecords":[{ ... }]
+ *   }]
+ * }]}
+ * </pre>
  * <p>
  * Key encoding rules:
  * <ul>
@@ -31,26 +44,25 @@ import java.util.List;
  *       {@code boolValue}, {@code arrayValue}, {@code kvlistValue}, or {@code bytesValue}
  *       (base64-encoded string).</li>
  *   <li>{@code intValue} is always encoded as a decimal string per the OTLP JSON spec.</li>
- *   <li>The instrumentation scope is encoded as
- *       {@code "scope":{"name":"...","version":"...","schemaUrl":"...","attributes":[...],"droppedAttributesCount":N}};
- *       {@code schemaUrl}, {@code version}, {@code attributes}, and {@code droppedAttributesCount} are omitted when absent/empty/zero.</li>
- *   <li>The resource is encoded as
- *       {@code "resource":{"schemaUrl":"...","attributes":[...],"droppedAttributesCount":N}};
- *       {@code schemaUrl} is omitted when absent.</li>
+ *   <li>{@code schemaUrl} for the resource is emitted at the {@code ResourceLogs} level,
+ *       not inside the {@code resource} object (per OTLP proto layout).</li>
+ *   <li>{@code schemaUrl} for the scope is emitted at the {@code ScopeLogs} level,
+ *       not inside the {@code scope} object (per OTLP proto layout).</li>
  *   <li>{@link SeverityNumber#UNSPECIFIED} and zero-value numeric fields are omitted.</li>
  *   <li>Fields that are {@code null} or empty are omitted.</li>
  * </ul>
  * <p>
  * Example output for a fully-populated record:
  * <pre>
- * {"timeUnixNano":"1745056800000000000","observedTimeUnixNano":"1745056800000000000",
+ * {"resourceLogs":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"my-service"}}]},
+ *  "schemaUrl":"https://opentelemetry.io/schemas/1.25.0",
+ *  "scopeLogs":[{"scope":{"name":"com.example","version":"1.0.0"},
+ *  "schemaUrl":"https://opentelemetry.io/schemas/1.25.0",
+ *  "logRecords":[{"timeUnixNano":"1745056800000000000","observedTimeUnixNano":"1745056800000000000",
  *  "traceId":"5b8efff798038103d269b633813fc60c","spanId":"eee19b7ec3c1b174","flags":1,
- *  "severityText":"INFO","severityNumber":9,
- *  "body":{"stringValue":"User logged in"},
- *  "resource":{"attributes":[{"key":"service.name","value":{"stringValue":"my-service"}}],"droppedAttributesCount":0},
- *  "scope":{"name":"com.example","version":"1.0.0","attributes":[],"droppedAttributesCount":0},
+ *  "severityText":"INFO","severityNumber":9,"body":{"stringValue":"User logged in"},
  *  "attributes":[{"key":"userId","value":{"stringValue":"42"}}],
- *  "droppedAttributesCount":0,"eventName":"user.login"}
+ *  "eventName":"user.login"}]}]}]}
  * </pre>
  *
  * @author Stefano Reksten
@@ -60,30 +72,97 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
     @Nonnull
     @Override
     public String format(@Nonnull final LogRecord logRecord) {
-        StringBuilder sb = new StringBuilder("{");
-        boolean first = true;
-        first = appendTimeNanos(sb, first, "timeUnixNano",         logRecord.getTimestamp());
-        first = appendTimeNanos(sb, first, "observedTimeUnixNano", logRecord.getObservedTimestamp());
-        first = appendString   (sb, first, "traceId",              logRecord.getTraceId());
-        first = appendString   (sb, first, "spanId",               logRecord.getSpanId());
-        if (logRecord.getTraceFlags() != 0) {
-            first = appendInt  (sb, first, "flags",                logRecord.getTraceFlags());
+        StringBuilder sb = new StringBuilder("{\"resourceLogs\":[{");
+        appendResourceBlock(sb, logRecord.getResource());
+        sb.append(",\"scopeLogs\":[{");
+        appendScopeBlock(sb, logRecord.getInstrumentationScope());
+        sb.append(",\"logRecords\":[");
+        appendLogRecordObject(sb, logRecord);
+        sb.append("]}]}]}");
+        return sb.toString();
+    }
+
+    // -------------------------------------------------------------------------
+    // OTLP envelope blocks
+    // -------------------------------------------------------------------------
+
+    /**
+     * Emits {@code "resource":{...}} at the current position, then optionally
+     * {@code ,"schemaUrl":"..."} at the {@code ResourceLogs} level (per OTLP proto layout).
+     */
+    private static void appendResourceBlock(final StringBuilder sb, final Resource resource) {
+        sb.append("\"resource\":{\"attributes\":");
+        if (resource != null) {
+            appendKeyValueArrayInline(sb, resource.getAttributes());
+            if (resource.getDroppedAttributesCount() != 0) {
+                sb.append(",\"droppedAttributesCount\":").append(resource.getDroppedAttributesCount());
+            }
+        } else {
+            sb.append("[]");
         }
-        first = appendString   (sb, first, "severityText",         logRecord.getSeverityText());
+        sb.append('}');
+        if (resource != null && resource.getSchemaUrl() != null) {
+            sb.append(",\"schemaUrl\":\"").append(escape(resource.getSchemaUrl())).append('"');
+        }
+    }
+
+    /**
+     * Emits {@code "scope":{...}} at the current position, then optionally
+     * {@code ,"schemaUrl":"..."} at the {@code ScopeLogs} level (per OTLP proto layout).
+     */
+    private static void appendScopeBlock(final StringBuilder sb, final InstrumentationScope scope) {
+        sb.append("\"scope\":{");
+        if (scope != null) {
+            boolean scopeFirst = true;
+            if (scope.getName() != null) {
+                sb.append("\"name\":\"").append(escape(scope.getName())).append('"');
+                scopeFirst = false;
+            }
+            if (scope.getVersion() != null) {
+                if (!scopeFirst) sb.append(',');
+                sb.append("\"version\":\"").append(escape(scope.getVersion())).append('"');
+                scopeFirst = false;
+            }
+            if (!scope.getAttributes().isEmpty()) {
+                if (!scopeFirst) sb.append(',');
+                sb.append("\"attributes\":");
+                appendKeyValueArrayInline(sb, scope.getAttributes());
+                scopeFirst = false;
+            }
+            if (scope.getDroppedAttributesCount() != 0) {
+                if (!scopeFirst) sb.append(',');
+                sb.append("\"droppedAttributesCount\":").append(scope.getDroppedAttributesCount());
+            }
+        }
+        sb.append('}');
+        if (scope != null && scope.getSchemaUrl() != null) {
+            sb.append(",\"schemaUrl\":\"").append(escape(scope.getSchemaUrl())).append('"');
+        }
+    }
+
+    /** Emits a single {@code logRecords} entry containing all {@link LogRecord} fields. */
+    private static void appendLogRecordObject(final StringBuilder sb, final LogRecord logRecord) {
+        sb.append('{');
+        boolean first = true;
+        first = appendTimeNanos(sb, first, "timeUnixNano",            logRecord.getTimestamp());
+        first = appendTimeNanos(sb, first, "observedTimeUnixNano",    logRecord.getObservedTimestamp());
+        first = appendString   (sb, first, "traceId",                 logRecord.getTraceId());
+        first = appendString   (sb, first, "spanId",                  logRecord.getSpanId());
+        if (logRecord.getTraceFlags() != 0) {
+            first = appendInt  (sb, first, "flags",                   logRecord.getTraceFlags());
+        }
+        first = appendString   (sb, first, "severityText",            logRecord.getSeverityText());
         SeverityNumber sn = logRecord.getSeverityNumber();
         if (sn != null && sn != SeverityNumber.UNSPECIFIED) {
-            first = appendInt  (sb, first, "severityNumber",       sn.getValue());
+            first = appendInt  (sb, first, "severityNumber",          sn.getValue());
         }
-        first = appendBody     (sb, first,                         logRecord.getBody());
-        first = appendResource (sb, first,                         logRecord.getResource());
-        first = appendScope    (sb, first,                         logRecord.getInstrumentationScope());
-        first = appendKeyValueArray(sb, first, "attributes",       logRecord.getAttributes());
+        first = appendBody     (sb, first,                            logRecord.getBody());
+        first = appendKeyValueArray(sb, first, "attributes",          logRecord.getAttributes());
         if (logRecord.getDroppedAttributesCount() != 0) {
-            first = appendInt  (sb, first, "droppedAttributesCount", logRecord.getDroppedAttributesCount());
+            first = appendInt  (sb, first, "droppedAttributesCount",  logRecord.getDroppedAttributesCount());
         }
-              appendString     (sb, first, "eventName",            logRecord.getEventName());
+              appendString     (sb, first, "eventName",               logRecord.getEventName());
         sb.append('}');
-        return sb.toString();
     }
 
     // -------------------------------------------------------------------------
@@ -127,66 +206,6 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
         separator(sb, first);
         sb.append("\"body\":");
         appendAnyValue(sb, body);
-        return false;
-    }
-
-    /** Encodes the {@link Resource} as {@code "resource":{"schemaUrl":"...","attributes":[...],"droppedAttributesCount":N}}. */
-    private static boolean appendResource(final StringBuilder sb, final boolean first,
-                                          final Resource resource) {
-        if (resource == null) {
-            return first;
-        }
-        separator(sb, first);
-        sb.append("\"resource\":{");
-        boolean resourceFirst = true;
-        if (resource.getSchemaUrl() != null) {
-            sb.append("\"schemaUrl\":\"").append(escape(resource.getSchemaUrl())).append('"');
-            resourceFirst = false;
-        }
-        if (!resourceFirst) sb.append(',');
-        sb.append("\"attributes\":");
-        appendKeyValueArrayInline(sb, resource.getAttributes());
-        if (resource.getDroppedAttributesCount() != 0) {
-            sb.append(",\"droppedAttributesCount\":").append(resource.getDroppedAttributesCount());
-        }
-        sb.append('}');
-        return false;
-    }
-
-    /** Encodes the {@link InstrumentationScope}. */
-    private static boolean appendScope(final StringBuilder sb, final boolean first,
-                                       final InstrumentationScope scope) {
-        if (scope == null) {
-            return first;
-        }
-        separator(sb, first);
-        sb.append("\"scope\":{");
-        boolean scopeFirst = true;
-        if (scope.getName() != null) {
-            sb.append("\"name\":\"").append(escape(scope.getName())).append('"');
-            scopeFirst = false;
-        }
-        if (scope.getVersion() != null) {
-            if (!scopeFirst) sb.append(',');
-            sb.append("\"version\":\"").append(escape(scope.getVersion())).append('"');
-            scopeFirst = false;
-        }
-        if (scope.getSchemaUrl() != null) {
-            if (!scopeFirst) sb.append(',');
-            sb.append("\"schemaUrl\":\"").append(escape(scope.getSchemaUrl())).append('"');
-            scopeFirst = false;
-        }
-        if (!scope.getAttributes().isEmpty()) {
-            if (!scopeFirst) sb.append(',');
-            sb.append("\"attributes\":");
-            appendKeyValueArrayInline(sb, scope.getAttributes());
-            scopeFirst = false;
-        }
-        if (scope.getDroppedAttributesCount() != 0) {
-            if (!scopeFirst) sb.append(',');
-            sb.append("\"droppedAttributesCount\":").append(scope.getDroppedAttributesCount());
-        }
-        sb.append('}');
         return false;
     }
 

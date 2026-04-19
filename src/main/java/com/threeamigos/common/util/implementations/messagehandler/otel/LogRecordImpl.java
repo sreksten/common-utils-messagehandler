@@ -14,13 +14,15 @@ import java.util.List;
 
 /**
  * A mutable implementation of the {@link LogRecord} interface.
- * All fields default to {@code null} / {@code 0} / empty list and may be set via the corresponding setters.
+ * {@code timestamp} defaults to {@link Instant#now()} at construction time, reflecting the moment
+ * the log record is created. All other fields default to {@code null} / {@code 0} / empty list
+ * and may be set via the corresponding setters.
  *
  * @author Stefano Reksten
  */
 public class LogRecordImpl implements LogRecord {
 
-    private Instant timestamp;
+    private Instant timestamp = Instant.now();
     private Instant observedTimestamp;
     private String traceId;
     private String spanId;
@@ -93,17 +95,19 @@ public class LogRecordImpl implements LogRecord {
         return severityText;
     }
 
-    public void setSeverityText(final String severityText) {
-        this.severityText = severityText;
-    }
-
     @Override
     public SeverityNumber getSeverityNumber() {
         return severityNumber;
     }
 
     public void setSeverityNumber(final SeverityNumber severityNumber) {
-        this.severityNumber = severityNumber != null ? severityNumber : SeverityNumber.UNSPECIFIED;
+        if (severityNumber == null || severityNumber == SeverityNumber.UNSPECIFIED) {
+            this.severityNumber = SeverityNumber.UNSPECIFIED;
+            this.severityText = null;
+        } else {
+            this.severityNumber = severityNumber;
+            this.severityText = severityNumber.name();
+        }
     }
 
     @Override
