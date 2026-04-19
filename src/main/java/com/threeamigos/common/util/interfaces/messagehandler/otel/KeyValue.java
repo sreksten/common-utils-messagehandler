@@ -5,8 +5,9 @@ package com.threeamigos.common.util.interfaces.messagehandler.otel;
  * <a href="https://opentelemetry.io/docs/specs/otel/common/#attribute">KeyValue</a> specification.
  * <p>
  * The key MUST be a non-null, non-empty string. If the value is an {@link AnyValue} of type
- * {@link AnyValue.Type#ARRAY}, all elements of that array MUST be of the same primitive type
- * (STRING, BOOL, INT, or DOUBLE) — see the homogeneity note on {@link AnyValue}.
+ * {@link AnyValue.Type#ARRAY}, all elements of that array MUST be of the same type —
+ * {@code KeyValueImpl} enforces this at construction time by counting distinct element types
+ * and throwing {@link IllegalArgumentException} if more than one is found.
  *
  * @author Stefano Reksten
  */

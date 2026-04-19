@@ -9,10 +9,11 @@ import java.util.List;
  * An {@code AnyValue} holds exactly one value whose type is indicated by {@link #getType()}.
  * Calling a getter for a type other than the held type will throw {@link IllegalStateException}.
  * <p>
- * <b>Homogeneity requirement:</b> The OTel specification requires that array attribute values
- * contain elements of the same type. {@code AnyValueImpl.ofArray} enforces this at construction
- * time — passing a list with more than one distinct element type throws
- * {@link IllegalArgumentException}. Empty arrays and single-element arrays are always accepted.
+ * <b>Homogeneity requirement:</b> The OTel specification requires that arrays used as
+ * <em>attribute values</em> (i.e., as the value of a {@link KeyValue}) contain elements of the
+ * same type. This constraint is enforced by {@code KeyValueImpl} at construction time.
+ * {@code AnyValue} itself imposes no element-type restriction, so heterogeneous arrays are
+ * valid when used as a log record body or inside a {@link Type#KVLIST}.
  *
  * @author Stefano Reksten
  */
