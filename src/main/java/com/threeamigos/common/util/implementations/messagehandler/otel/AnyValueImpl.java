@@ -61,6 +61,11 @@ public final class AnyValueImpl implements AnyValue {
 
     public static AnyValue ofArray(final List<AnyValue> value) {
         Objects.requireNonNull(value, "value must not be null");
+        long distinctTypes = value.stream().map(AnyValue::getType).distinct().count();
+        if (distinctTypes > 1) {
+            throw new IllegalArgumentException(
+                    "array elements must all have the same type (OTel homogeneity requirement)");
+        }
         return new AnyValueImpl(Type.ARRAY, null, false, 0L, 0.0,
                 Collections.unmodifiableList(value), null, null);
     }
