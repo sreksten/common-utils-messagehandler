@@ -20,7 +20,7 @@ public class ContextInfoImpl implements ContextInfo {
 
     @Override
     public void add(@Nonnull String key, Object value) {
-        Objects.requireNonNull(key, MessageHandlerResourceBundle.BUNDLE.getString("nullContextInfoKeyProvided"));
+        Objects.requireNonNull(key, MessageHandlerResourceBundle.get("nullContextInfoKeyProvided"));
         if (value == null) {
             context.remove(key);
         } else {
@@ -30,7 +30,7 @@ public class ContextInfoImpl implements ContextInfo {
 
     @Override
     public Object get(@Nonnull String key) {
-        Objects.requireNonNull(key, MessageHandlerResourceBundle.BUNDLE.getString("nullContextInfoKeyProvided"));
+        Objects.requireNonNull(key, MessageHandlerResourceBundle.get("nullContextInfoKeyProvided"));
         return context.get(key);
     }
 

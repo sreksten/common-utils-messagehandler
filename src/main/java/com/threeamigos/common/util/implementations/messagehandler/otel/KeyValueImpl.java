@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
+import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 
@@ -16,11 +17,11 @@ public final class KeyValueImpl implements KeyValue {
     private final AnyValue value;
 
     public KeyValueImpl(final String key, final AnyValue value) {
-        Objects.requireNonNull(key, "key must not be null");
+        Objects.requireNonNull(key, MessageHandlerResourceBundle.get("keyMustNotBeNull"));
         if (key.isEmpty()) {
-            throw new IllegalArgumentException("key must not be empty");
+            throw new IllegalArgumentException(MessageHandlerResourceBundle.get("keyMustNotBeEmpty"));
         }
-        Objects.requireNonNull(value, "value must not be null");
+        Objects.requireNonNull(value, MessageHandlerResourceBundle.get("valueMustNotBeNull"));
         this.key = key;
         this.value = value;
     }

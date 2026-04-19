@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
+import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Resource;
 
@@ -34,7 +35,9 @@ public class ResourceImpl implements Resource {
     }
 
     public void setAttributes(final List<KeyValue> attributes) {
-        this.attributes = OpenTelemetryAttributeValidator.copyAndValidateKeyValues(attributes, "resource attributes");
+        this.attributes = OpenTelemetryAttributeValidator.copyAndValidateKeyValues(
+                attributes,
+                MessageHandlerResourceBundle.get("resourceAttributesFieldName"));
     }
 
     @Override
@@ -44,7 +47,9 @@ public class ResourceImpl implements Resource {
 
     public void setDroppedAttributesCount(final int droppedAttributesCount) {
         if (droppedAttributesCount < 0) {
-            throw new IllegalArgumentException("droppedAttributesCount must not be negative, got: " + droppedAttributesCount);
+            throw new IllegalArgumentException(MessageHandlerResourceBundle.format(
+                    "droppedAttributesCountMustNotBeNegative",
+                    droppedAttributesCount));
         }
         this.droppedAttributesCount = droppedAttributesCount;
     }

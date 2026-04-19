@@ -78,7 +78,7 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      * @param message the info-level text to display
      */
     protected void handleInfoMessageImpl(final String message, final ContextInfo contextInfo) {
-        showOptionPane(message, MessageHandlerResourceBundle.BUNDLE.getString("info"), JOptionPane.INFORMATION_MESSAGE);
+        showOptionPane(message, MessageHandlerResourceBundle.get("info"), JOptionPane.INFORMATION_MESSAGE);
     }
 
     /**
@@ -87,7 +87,7 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      * @param message the warn-level text to display
      */
     protected void handleWarnMessageImpl(final String message, final ContextInfo contextInfo) {
-        showOptionPane(message, MessageHandlerResourceBundle.BUNDLE.getString("warning"), JOptionPane.WARNING_MESSAGE);
+        showOptionPane(message, MessageHandlerResourceBundle.get("warning"), JOptionPane.WARNING_MESSAGE);
     }
 
     /**
@@ -96,7 +96,7 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      * @param message the error-level text to display
      */
     protected void handleErrorMessageImpl(final String message, final ContextInfo contextInfo) {
-        showOptionPane(message, MessageHandlerResourceBundle.BUNDLE.getString("error"), JOptionPane.ERROR_MESSAGE);
+        showOptionPane(message, MessageHandlerResourceBundle.get("error"), JOptionPane.ERROR_MESSAGE);
     }
 
     /**
@@ -105,7 +105,7 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      * @param message the error-level text to display
      */
     protected void handleFatalMessageImpl(final String message, final ContextInfo contextInfo) {
-        showOptionPane(message, MessageHandlerResourceBundle.BUNDLE.getString("error"), JOptionPane.ERROR_MESSAGE);
+        showOptionPane(message, MessageHandlerResourceBundle.get("error"), JOptionPane.ERROR_MESSAGE);
     }
 
     /**
@@ -117,7 +117,7 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      * @param message the debug-level text to display
      */
     protected void handleDebugMessageImpl(final String message, final ContextInfo contextInfo) {
-        showOptionPane(message, MessageHandlerResourceBundle.BUNDLE.getString("debug"), JOptionPane.INFORMATION_MESSAGE);
+        showOptionPane(message, MessageHandlerResourceBundle.get("debug"), JOptionPane.INFORMATION_MESSAGE);
     }
 
     /**
@@ -129,7 +129,7 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      * @param message the trace-level text to display
      */
     protected void handleTraceMessageImpl(final String message, final ContextInfo contextInfo) {
-        showOptionPane(message, MessageHandlerResourceBundle.BUNDLE.getString("trace"), JOptionPane.INFORMATION_MESSAGE);
+        showOptionPane(message, MessageHandlerResourceBundle.get("trace"), JOptionPane.INFORMATION_MESSAGE);
     }
 
     /**
@@ -141,7 +141,7 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      * @param exception the exception to display
      */
     protected void handleExceptionImpl(final Exception exception, final ContextInfo contextInfo) {
-        showOptionPane(ExceptionMessageFormatter.detail(exception), MessageHandlerResourceBundle.BUNDLE.getString("exception"), JOptionPane.ERROR_MESSAGE);
+        showOptionPane(ExceptionMessageFormatter.detail(exception), MessageHandlerResourceBundle.get("exception"), JOptionPane.ERROR_MESSAGE);
     }
 
     /**
@@ -154,6 +154,6 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      * @param exception the exception to display
      */
     protected void handleExceptionImpl(final String message, final Exception exception, final ContextInfo contextInfo) {
-        showOptionPane(ExceptionMessageFormatter.withPrefix(message, exception), MessageHandlerResourceBundle.BUNDLE.getString("exception"), JOptionPane.ERROR_MESSAGE);
+        showOptionPane(ExceptionMessageFormatter.withPrefix(message, exception), MessageHandlerResourceBundle.get("exception"), JOptionPane.ERROR_MESSAGE);
     }
 }

@@ -33,7 +33,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
      * @param handlers a collection of non-null MessageHandlers
      */
     public CompositeMessageHandler(final @Nonnull Collection<MessageHandler> handlers) {
-        Objects.requireNonNull(handlers, MessageHandlerResourceBundle.BUNDLE.getString("noMessageHandlersProvided"));
+        Objects.requireNonNull(handlers, MessageHandlerResourceBundle.get("noMessageHandlersProvided"));
         addMessageHandlers(handlers);
     }
 
@@ -41,7 +41,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
      * @param handlers a collection of non-null MessageHandlers
      */
     public CompositeMessageHandler(final @Nonnull MessageHandler... handlers) {
-        Objects.requireNonNull(handlers, MessageHandlerResourceBundle.BUNDLE.getString("noMessageHandlersProvided"));
+        Objects.requireNonNull(handlers, MessageHandlerResourceBundle.get("noMessageHandlersProvided"));
         addMessageHandlers(Arrays.asList(handlers));
     }
 
@@ -49,7 +49,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
         lock.writeLock().lock();
         try {
             for (MessageHandler handler : handlers) {
-                messageHandlers.add(Objects.requireNonNull(handler, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageHandlerProvided")));
+                messageHandlers.add(Objects.requireNonNull(handler, MessageHandlerResourceBundle.get("nullMessageHandlerProvided")));
             }
         } finally {
             lock.writeLock().unlock();
@@ -66,7 +66,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
      * @throws NullPointerException if {@code messageHandler} is {@code null}
      */
     public void addMessageHandler(final @Nonnull MessageHandler messageHandler) {
-        Objects.requireNonNull(messageHandler, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageHandlerProvided"));
+        Objects.requireNonNull(messageHandler, MessageHandlerResourceBundle.get("nullMessageHandlerProvided"));
         lock.writeLock().lock();
         try {
             messageHandlers.add(messageHandler);
@@ -86,7 +86,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
      * @throws NullPointerException if {@code messageHandler} is {@code null}
      */
     public void removeMessageHandler(final @Nonnull MessageHandler messageHandler) {
-        Objects.requireNonNull(messageHandler, MessageHandlerResourceBundle.BUNDLE.getString("nullMessageHandlerProvided"));
+        Objects.requireNonNull(messageHandler, MessageHandlerResourceBundle.get("nullMessageHandlerProvided"));
         lock.writeLock().lock();
         try {
             messageHandlers.remove(messageHandler);
@@ -141,7 +141,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
      * @throws NullPointerException if {@code errorConsumer} is {@code null}
      */
     public void setErrorConsumer(@Nonnull final Consumer<String> errorConsumer) {
-        Objects.requireNonNull(errorConsumer, MessageHandlerResourceBundle.BUNDLE.getString("nullErrorConsumerProvided"));
+        Objects.requireNonNull(errorConsumer, MessageHandlerResourceBundle.get("nullErrorConsumerProvided"));
         this.errorConsumer = errorConsumer;
     }
 
@@ -198,7 +198,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
                 consumer.accept(handler);
             } catch (Throwable t) {
                 String msg = String.format(
-                        MessageHandlerResourceBundle.BUNDLE.getString("exceptionDuringDispatch"), handler);
+                        MessageHandlerResourceBundle.get("exceptionDuringDispatch"), handler);
                 StringWriter sw = new StringWriter();
                 t.printStackTrace(new PrintWriter(sw, true));
                 errorConsumer.accept(msg + System.lineSeparator() + sw);

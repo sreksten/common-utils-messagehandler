@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
+import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 
 import java.util.ArrayList;
@@ -26,18 +27,33 @@ final class OpenTelemetryAttributeValidator {
         int index = 0;
         for (KeyValue kv : keyValues) {
             if (kv == null) {
-                throw new NullPointerException(fieldName + " contains null element at index " + index);
+                throw new NullPointerException(MessageHandlerResourceBundle.format(
+                        "fieldContainsNullElementAtIndex",
+                        fieldName,
+                        index));
             }
 
             String key = Objects.requireNonNull(kv.getKey(),
-                    fieldName + " key must not be null at index " + index);
+                    MessageHandlerResourceBundle.format(
+                            "fieldKeyMustNotBeNullAtIndex",
+                            fieldName,
+                            index));
             if (key.isEmpty()) {
-                throw new IllegalArgumentException(fieldName + " key must not be empty at index " + index);
+                throw new IllegalArgumentException(MessageHandlerResourceBundle.format(
+                        "fieldKeyMustNotBeEmptyAtIndex",
+                        fieldName,
+                        index));
             }
             Objects.requireNonNull(kv.getValue(),
-                    fieldName + " value must not be null at index " + index);
+                    MessageHandlerResourceBundle.format(
+                            "fieldValueMustNotBeNullAtIndex",
+                            fieldName,
+                            index));
             if (!keys.add(key)) {
-                throw new IllegalArgumentException(fieldName + " contains duplicate key: \"" + key + "\"");
+                throw new IllegalArgumentException(MessageHandlerResourceBundle.format(
+                        "fieldContainsDuplicateKey",
+                        fieldName,
+                        key));
             }
             copy.add(kv);
             index++;

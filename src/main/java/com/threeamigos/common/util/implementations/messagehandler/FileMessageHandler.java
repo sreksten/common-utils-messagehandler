@@ -263,7 +263,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
             // Recovery failed; fall through to notification
         }
         // Layer 2: notify via the configurable consumer
-        errorConsumer.accept(MessageHandlerResourceBundle.BUNDLE.getString("fileWriteError"));
+        errorConsumer.accept(MessageHandlerResourceBundle.get("fileWriteError"));
         // Layer 3: optionally close
         if (closeOnWriteError) {
             if (isAsync()) {
@@ -291,7 +291,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
                 writer = openWriter(filePath);
                 bytesWritten = 0;
             } catch (IOException e) {
-                errorConsumer.accept(MessageHandlerResourceBundle.BUNDLE.getString("fileReopenError"));
+                errorConsumer.accept(MessageHandlerResourceBundle.get("fileReopenError"));
             }
         }
     }
@@ -317,7 +317,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
             bytesWritten = 0;
             rotationPolicy.onRotated();
         } catch (IOException e) {
-            errorConsumer.accept(MessageHandlerResourceBundle.BUNDLE.getString("fileRotationError"));
+            errorConsumer.accept(MessageHandlerResourceBundle.get("fileRotationError"));
         }
     }
 

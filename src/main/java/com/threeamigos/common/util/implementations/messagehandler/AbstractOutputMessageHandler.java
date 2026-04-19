@@ -125,14 +125,14 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
     protected final void dispatch(final Runnable task) {
         if (!async) {
             if (closed.get()) {
-                throw new IllegalStateException(MessageHandlerResourceBundle.BUNDLE.getString("handlerIsClosed"));
+                throw new IllegalStateException(MessageHandlerResourceBundle.get("handlerIsClosed"));
             }
             task.run();
             return;
         }
         synchronized (dispatchLock) {
             if (closed.get()) {
-                throw new IllegalStateException(MessageHandlerResourceBundle.BUNDLE.getString("handlerIsClosed"));
+                throw new IllegalStateException(MessageHandlerResourceBundle.get("handlerIsClosed"));
             }
             if (!queue.offer(task)) {
                 // queue full: run synchronously to avoid losing messages
@@ -207,7 +207,7 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
      */
     public final void setFormatter(@Nonnull final LogFormatter formatter) {
         Objects.requireNonNull(formatter,
-                MessageHandlerResourceBundle.BUNDLE.getString("nullFormatterProvided"));
+                MessageHandlerResourceBundle.get("nullFormatterProvided"));
         this.formatter = formatter;
     }
 

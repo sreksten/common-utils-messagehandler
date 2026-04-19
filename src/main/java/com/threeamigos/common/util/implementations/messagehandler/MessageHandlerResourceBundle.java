@@ -16,9 +16,9 @@ import java.util.ResourceBundle;
  * The shared {@link #BUNDLE} constant provides a single point of access to all localized
  * strings used across the handler package, loaded once at class-initialization time.
  * <p>
- * This class is package-private and not part of the public API.
+ * This class is public so sibling implementation packages can share the same bundle.
  */
-final class MessageHandlerResourceBundle {
+public final class MessageHandlerResourceBundle {
 
     /**
      * The single shared {@link ResourceBundle} for all message-handler implementations.
@@ -27,7 +27,7 @@ final class MessageHandlerResourceBundle {
      * {@code com/threeamigos/common/util/implementations/messagehandler/MessageHandler/MessageHandler.properties}
      * (and its locale variants) using this class's own {@link ClassLoader}.
      */
-    static final ResourceBundle BUNDLE = load(
+    private static final ResourceBundle BUNDLE = load(
             "com.threeamigos.common.util.implementations.messagehandler.MessageHandler.MessageHandler",
             MessageHandlerResourceBundle.class);
 
@@ -46,5 +46,26 @@ final class MessageHandlerResourceBundle {
      */
     static ResourceBundle load(final String bundleBaseName, final Class<?> ownerClass) {
         return ResourceBundle.getBundle(bundleBaseName, Locale.getDefault(), ownerClass.getClassLoader());
+    }
+
+    /**
+     * Returns a localized message by key from the shared bundle.
+     *
+     * @param key message key
+     * @return localized message
+     */
+    public static String get(final String key) {
+        return BUNDLE.getString(key);
+    }
+
+    /**
+     * Returns a formatted localized message using {@link String#format(String, Object...)}.
+     *
+     * @param key  message key
+     * @param args format arguments
+     * @return formatted localized message
+     */
+    public static String format(final String key, final Object... args) {
+        return String.format(BUNDLE.getString(key), args);
     }
 }

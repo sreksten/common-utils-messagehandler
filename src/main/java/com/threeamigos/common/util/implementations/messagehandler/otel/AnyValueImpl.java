@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
+import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 
@@ -51,7 +52,7 @@ public final class AnyValueImpl implements AnyValue {
     }
 
     public static AnyValue ofString(final String value) {
-        Objects.requireNonNull(value, "value must not be null");
+        Objects.requireNonNull(value, MessageHandlerResourceBundle.get("valueMustNotBeNull"));
         return new AnyValueImpl(Type.STRING, value, false, 0L, 0.0, null, null, null);
     }
 
@@ -68,11 +69,12 @@ public final class AnyValueImpl implements AnyValue {
     }
 
     public static AnyValue ofArray(final List<AnyValue> value) {
-        Objects.requireNonNull(value, "value must not be null");
+        Objects.requireNonNull(value, MessageHandlerResourceBundle.get("valueMustNotBeNull"));
         List<AnyValue> copy = new ArrayList<>(value.size());
         int index = 0;
         for (AnyValue entry : value) {
-            copy.add(Objects.requireNonNull(entry, "array value must not contain null element at index " + index));
+            copy.add(Objects.requireNonNull(entry,
+                    MessageHandlerResourceBundle.format("arrayValueMustNotContainNullElementAtIndex", index)));
             index++;
         }
         return new AnyValueImpl(Type.ARRAY, null, false, 0L, 0.0, Collections.unmodifiableList(copy), null, null);
@@ -80,13 +82,13 @@ public final class AnyValueImpl implements AnyValue {
 
     public static AnyValue ofKvList(final List<KeyValue> value) {
         List<KeyValue> copy = OpenTelemetryAttributeValidator.copyAndValidateKeyValues(
-                Objects.requireNonNull(value, "value must not be null"),
-                "kvlist values");
+                Objects.requireNonNull(value, MessageHandlerResourceBundle.get("valueMustNotBeNull")),
+                MessageHandlerResourceBundle.get("kvlistValuesFieldName"));
         return new AnyValueImpl(Type.KVLIST, null, false, 0L, 0.0, null, Collections.unmodifiableList(copy), null);
     }
 
     public static AnyValue ofBytes(final byte[] value) {
-        Objects.requireNonNull(value, "value must not be null");
+        Objects.requireNonNull(value, MessageHandlerResourceBundle.get("valueMustNotBeNull"));
         byte[] copy = new byte[value.length];
         System.arraycopy(value, 0, copy, 0, value.length);
         return new AnyValueImpl(Type.BYTES, null, false, 0L, 0.0, null, null, copy);
@@ -143,7 +145,10 @@ public final class AnyValueImpl implements AnyValue {
 
     private void checkType(final Type expectedType) {
         if (type != expectedType) {
-            throw new IllegalStateException("AnyValue type is " + type + ", not " + expectedType);
+            throw new IllegalStateException(MessageHandlerResourceBundle.format(
+                    "anyValueTypeMismatch",
+                    type,
+                    expectedType));
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
+import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 
@@ -59,7 +60,9 @@ public class InstrumentationScopeImpl implements InstrumentationScope {
     }
 
     public void setAttributes(final List<KeyValue> attributes) {
-        this.attributes = OpenTelemetryAttributeValidator.copyAndValidateKeyValues(attributes, "scope attributes");
+        this.attributes = OpenTelemetryAttributeValidator.copyAndValidateKeyValues(
+                attributes,
+                MessageHandlerResourceBundle.get("scopeAttributesFieldName"));
     }
 
     @Override
@@ -69,7 +72,9 @@ public class InstrumentationScopeImpl implements InstrumentationScope {
 
     public void setDroppedAttributesCount(final int droppedAttributesCount) {
         if (droppedAttributesCount < 0) {
-            throw new IllegalArgumentException("droppedAttributesCount must not be negative, got: " + droppedAttributesCount);
+            throw new IllegalArgumentException(MessageHandlerResourceBundle.format(
+                    "droppedAttributesCountMustNotBeNegative",
+                    droppedAttributesCount));
         }
         this.droppedAttributesCount = droppedAttributesCount;
     }

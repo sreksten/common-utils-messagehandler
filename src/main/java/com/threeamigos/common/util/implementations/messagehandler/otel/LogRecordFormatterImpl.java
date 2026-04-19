@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
+import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
@@ -192,7 +193,7 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
     @Nonnull
     @Override
     public String formatRecord(@Nonnull final LogRecord logRecord) {
-        Objects.requireNonNull(logRecord, "logRecord must not be null");
+        Objects.requireNonNull(logRecord, MessageHandlerResourceBundle.get("logRecordMustNotBeNull"));
         StringBuilder sb = new StringBuilder("{");
         boolean first;
         first = appendTimeNanos(sb, true, F_TIME_UNIX_NANO, logRecord.getTimestamp());
@@ -220,7 +221,7 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
     @Nonnull
     @Override
     public String format(@Nonnull final LogRecord logRecord) {
-        Objects.requireNonNull(logRecord, "logRecord must not be null");
+        Objects.requireNonNull(logRecord, MessageHandlerResourceBundle.get("logRecordMustNotBeNull"));
         StringBuilder sb = new StringBuilder("{\"").append(F_RESOURCE_LOGS).append("\":[{");
         if (logRecord.getResource() != null) {
             appendResourceBlock(sb, logRecord.getResource());
@@ -323,10 +324,10 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
                 .multiply(NANOS_PER_SECOND)
                 .add(BigInteger.valueOf(value.getNano()));
         if (nanos.signum() < 0) {
-            throw new IllegalArgumentException("OTLP timestamp fields must be unsigned nanoseconds since Unix epoch");
+            throw new IllegalArgumentException(MessageHandlerResourceBundle.get("otlpTimestampMustBeUnsigned"));
         }
         if (nanos.compareTo(UINT64_MAX) > 0) {
-            throw new IllegalArgumentException("OTLP timestamp fields must fit into uint64 nanoseconds");
+            throw new IllegalArgumentException(MessageHandlerResourceBundle.get("otlpTimestampMustFitUint64"));
         }
         return nanos.toString();
     }
@@ -402,7 +403,7 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
     private static void appendAnyValue(final StringBuilder sb, final AnyValue value) {
         AnyValue.Type type = value.getType();
         if (type == null) {
-            throw new IllegalArgumentException("AnyValue type must not be null");
+            throw new IllegalArgumentException(MessageHandlerResourceBundle.get("anyValueTypeMustNotBeNull"));
         }
 
         if (type == AnyValue.Type.EMPTY) {

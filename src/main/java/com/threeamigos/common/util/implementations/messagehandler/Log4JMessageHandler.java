@@ -38,7 +38,7 @@ public class Log4JMessageHandler extends AbstractMessageHandler {
      * @throws NullPointerException if {@code logger} is {@code null}
      */
     public Log4JMessageHandler(final Logger logger) {
-        this.logger = Objects.requireNonNull(logger, MessageHandlerResourceBundle.BUNDLE.getString("loggerCannotBeNull"));
+        this.logger = Objects.requireNonNull(logger, MessageHandlerResourceBundle.get("loggerCannotBeNull"));
     }
 
     /**
@@ -52,9 +52,9 @@ public class Log4JMessageHandler extends AbstractMessageHandler {
      * @throws IllegalArgumentException if {@code loggerName} is blank
      */
     public Log4JMessageHandler(final String loggerName) {
-        Objects.requireNonNull(loggerName, MessageHandlerResourceBundle.BUNDLE.getString("loggerNameCannotBeNull"));
+        Objects.requireNonNull(loggerName, MessageHandlerResourceBundle.get("loggerNameCannotBeNull"));
         if (loggerName.trim().isEmpty()) {
-            throw new IllegalArgumentException(MessageHandlerResourceBundle.BUNDLE.getString("loggerNameCannotBeEmpty"));
+            throw new IllegalArgumentException(MessageHandlerResourceBundle.get("loggerNameCannotBeEmpty"));
         }
         this.logger = LogManager.getLogger(loggerName);
     }

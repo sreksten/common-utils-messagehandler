@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
+import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
@@ -47,7 +48,7 @@ public class LogRecordImpl implements LogRecord {
 
     public void setTimestamp(final Instant timestamp) {
         if (timestamp == null) {
-            throw new IllegalArgumentException("timestamp must not be null");
+            throw new IllegalArgumentException(MessageHandlerResourceBundle.get("timestampMustNotBeNull"));
         }
         this.timestamp = timestamp;
     }
@@ -68,8 +69,9 @@ public class LogRecordImpl implements LogRecord {
 
     public void setTraceId(final String traceId) {
         if (traceId != null && !TRACE_ID_PATTERN.matcher(traceId).matches()) {
-            throw new IllegalArgumentException(
-                    "traceId must be 32 lowercase hex characters and not all zeros, got: \"" + traceId + "\"");
+            throw new IllegalArgumentException(MessageHandlerResourceBundle.format(
+                    "traceIdInvalid",
+                    traceId));
         }
         this.traceId = traceId;
     }
@@ -81,8 +83,9 @@ public class LogRecordImpl implements LogRecord {
 
     public void setSpanId(final String spanId) {
         if (spanId != null && !SPAN_ID_PATTERN.matcher(spanId).matches()) {
-            throw new IllegalArgumentException(
-                    "spanId must be 16 lowercase hex characters and not all zeros, got: \"" + spanId + "\"");
+            throw new IllegalArgumentException(MessageHandlerResourceBundle.format(
+                    "spanIdInvalid",
+                    spanId));
         }
         this.spanId = spanId;
     }
@@ -94,7 +97,9 @@ public class LogRecordImpl implements LogRecord {
 
     public void setTraceFlags(final int traceFlags) {
         if (traceFlags < 0 || traceFlags > 0xFF) {
-            throw new IllegalArgumentException("traceFlags must be in the range 0x00–0xFF, got: " + traceFlags);
+            throw new IllegalArgumentException(MessageHandlerResourceBundle.format(
+                    "traceFlagsOutOfRange",
+                    traceFlags));
         }
         this.traceFlags = traceFlags;
     }
@@ -150,7 +155,9 @@ public class LogRecordImpl implements LogRecord {
     }
 
     public void setAttributes(final List<KeyValue> attributes) {
-        this.attributes = OpenTelemetryAttributeValidator.copyAndValidateKeyValues(attributes, "logRecord attributes");
+        this.attributes = OpenTelemetryAttributeValidator.copyAndValidateKeyValues(
+                attributes,
+                MessageHandlerResourceBundle.get("logRecordAttributesFieldName"));
     }
 
     @Override
@@ -160,7 +167,9 @@ public class LogRecordImpl implements LogRecord {
 
     public void setDroppedAttributesCount(final int droppedAttributesCount) {
         if (droppedAttributesCount < 0) {
-            throw new IllegalArgumentException("droppedAttributesCount must not be negative, got: " + droppedAttributesCount);
+            throw new IllegalArgumentException(MessageHandlerResourceBundle.format(
+                    "droppedAttributesCountMustNotBeNegative",
+                    droppedAttributesCount));
         }
         this.droppedAttributesCount = droppedAttributesCount;
     }
