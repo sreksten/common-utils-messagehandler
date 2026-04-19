@@ -6,14 +6,9 @@ import java.util.List;
  * A typed value container following the OpenTelemetry
  * <a href="https://opentelemetry.io/docs/specs/otel/common/#anyvalue">AnyValue</a> specification.
  * <p>
- * An {@code AnyValue} holds exactly one value whose type is indicated by {@link #getType()}.
- * Calling a getter for a type other than the held type will throw {@link IllegalStateException}.
- * <p>
- * <b>Homogeneity requirement:</b> The OTel specification requires that arrays used as
- * <em>attribute values</em> (i.e., as the value of a {@link KeyValue}) contain elements of the
- * same type. This constraint is enforced by {@code KeyValueImpl} at construction time.
- * {@code AnyValue} itself imposes no element-type restriction, so heterogeneous arrays are
- * valid when used as a log record body or inside a {@link Type#KVLIST}.
+ * An {@code AnyValue} holds one typed value (or an explicit empty value) whose kind is indicated
+ * by {@link #getType()}. Calling a getter for a type other than the held type will throw
+ * {@link IllegalStateException}.
  *
  * @author Stefano Reksten
  */
@@ -23,7 +18,7 @@ public interface AnyValue {
      * The discriminated-union type of {@link AnyValue}.
      */
     enum Type {
-        STRING, BOOL, INT, DOUBLE, ARRAY, KVLIST, BYTES
+        EMPTY, STRING, BOOL, INT, DOUBLE, ARRAY, KVLIST, BYTES
     }
 
     /**

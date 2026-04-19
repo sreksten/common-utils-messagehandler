@@ -16,6 +16,9 @@ import java.util.Objects;
  */
 public final class AnyValueImpl implements AnyValue {
 
+    private static final AnyValue EMPTY_VALUE =
+            new AnyValueImpl(Type.EMPTY, null, false, 0L, 0.0, null, null, null);
+
     private final Type type;
     private final String stringValue;
     private final boolean boolValue;
@@ -43,6 +46,10 @@ public final class AnyValueImpl implements AnyValue {
         this.bytesValue = bytesValue;
     }
 
+    public static AnyValue empty() {
+        return EMPTY_VALUE;
+    }
+
     public static AnyValue ofString(final String value) {
         Objects.requireNonNull(value, "value must not be null");
         return new AnyValueImpl(Type.STRING, value, false, 0L, 0.0, null, null, null);
@@ -62,14 +69,20 @@ public final class AnyValueImpl implements AnyValue {
 
     public static AnyValue ofArray(final List<AnyValue> value) {
         Objects.requireNonNull(value, "value must not be null");
-        return new AnyValueImpl(Type.ARRAY, null, false, 0L, 0.0,
-                Collections.unmodifiableList(new ArrayList<>(value)), null, null);
+        List<AnyValue> copy = new ArrayList<>(value.size());
+        int index = 0;
+        for (AnyValue entry : value) {
+            copy.add(Objects.requireNonNull(entry, "array value must not contain null element at index " + index));
+            index++;
+        }
+        return new AnyValueImpl(Type.ARRAY, null, false, 0L, 0.0, Collections.unmodifiableList(copy), null, null);
     }
 
     public static AnyValue ofKvList(final List<KeyValue> value) {
-        Objects.requireNonNull(value, "value must not be null");
-        return new AnyValueImpl(Type.KVLIST, null, false, 0L, 0.0,
-                null, Collections.unmodifiableList(new ArrayList<>(value)), null);
+        List<KeyValue> copy = OpenTelemetryAttributeValidator.copyAndValidateKeyValues(
+                Objects.requireNonNull(value, "value must not be null"),
+                "kvlist values");
+        return new AnyValueImpl(Type.KVLIST, null, false, 0L, 0.0, null, Collections.unmodifiableList(copy), null);
     }
 
     public static AnyValue ofBytes(final byte[] value) {
@@ -86,59 +99,51 @@ public final class AnyValueImpl implements AnyValue {
 
     @Override
     public String asString() {
-        if (type != Type.STRING) {
-            throw new IllegalStateException("AnyValue type is " + type + ", not STRING");
-        }
+        checkType(Type.STRING);
         return stringValue;
     }
 
     @Override
     public boolean asBoolean() {
-        if (type != Type.BOOL) {
-            throw new IllegalStateException("AnyValue type is " + type + ", not BOOL");
-        }
+        checkType(Type.BOOL);
         return boolValue;
     }
 
     @Override
     public long asLong() {
-        if (type != Type.INT) {
-            throw new IllegalStateException("AnyValue type is " + type + ", not INT");
-        }
+        checkType(Type.INT);
         return longValue;
     }
 
     @Override
     public double asDouble() {
-        if (type != Type.DOUBLE) {
-            throw new IllegalStateException("AnyValue type is " + type + ", not DOUBLE");
-        }
+        checkType(Type.DOUBLE);
         return doubleValue;
     }
 
     @Override
     public List<AnyValue> asArray() {
-        if (type != Type.ARRAY) {
-            throw new IllegalStateException("AnyValue type is " + type + ", not ARRAY");
-        }
+        checkType(Type.ARRAY);
         return arrayValue;
     }
 
     @Override
     public List<KeyValue> asKvList() {
-        if (type != Type.KVLIST) {
-            throw new IllegalStateException("AnyValue type is " + type + ", not KVLIST");
-        }
+        checkType(Type.KVLIST);
         return kvListValue;
     }
 
     @Override
     public byte[] asBytes() {
-        if (type != Type.BYTES) {
-            throw new IllegalStateException("AnyValue type is " + type + ", not BYTES");
-        }
+        checkType(Type.BYTES);
         byte[] copy = new byte[bytesValue.length];
         System.arraycopy(bytesValue, 0, copy, 0, bytesValue.length);
         return copy;
+    }
+
+    private void checkType(final Type expectedType) {
+        if (type != expectedType) {
+            throw new IllegalStateException("AnyValue type is " + type + ", not " + expectedType);
+        }
     }
 }

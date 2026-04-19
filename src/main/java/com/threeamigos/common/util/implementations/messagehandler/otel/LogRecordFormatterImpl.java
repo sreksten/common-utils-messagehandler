@@ -9,9 +9,11 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.Resource;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 import jakarta.annotation.Nonnull;
 
+import java.math.BigInteger;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * A {@link LogRecordFormatter} that serializes a {@link LogRecord} following the
@@ -27,10 +29,10 @@ import java.util.List;
  * <pre>
  * {"resourceLogs":[{
  *   "resource":{"attributes":[...]},
- *   "schemaUrl":"...",              ← Resource.getSchemaUrl(), omitted if null
+ *   "schemaUrl":"...", ← Resource.getSchemaUrl(), omitted if null
  *   "scopeLogs":[{
  *     "scope":{"name":"...","version":"...","attributes":[...]},
- *     "schemaUrl":"...",            ← InstrumentationScope.getSchemaUrl(), omitted if null
+ *     "schemaUrl":"...", ← InstrumentationScope.getSchemaUrl(), omitted if null
  *     "logRecords":[{ ... }]
  *   }]
  * }]}
@@ -128,7 +130,7 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
      *  {@code dropped_attributes_count}. Omitted when zero. */
     private static final String F_DROPPED_ATTRIBUTES_COUNT = "droppedAttributesCount";
 
-    /** Proto field 8: {@code flags}. W3C TraceFlags byte value (0x00–0xFF). Omitted when zero. */
+    /** Proto field 8: {@code flags}. W3C TraceFlags byte value (0x00 - 0xFF). Omitted when zero. */
     private static final String F_FLAGS = "flags";
 
     /** Proto field 9: {@code trace_id}. 32 lowercase hex characters. */
@@ -137,12 +139,12 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
     /** Proto field 10: {@code span_id}. 16 lowercase hex characters. */
     private static final String F_SPAN_ID = "spanId";
 
-    /** Proto field 20: {@code event_name}. Identifies the class/type of event. */
+    /** Proto field 12: {@code event_name}. Identifies the class/type of event. */
     private static final String F_EVENT_NAME = "eventName";
 
     // --- InstrumentationScope fields (opentelemetry/proto/common/v1/common.proto) ---
 
-    /** Proto field 1: {@code name}. Name of the instrumentation scope (e.g. library name). */
+    /** Proto field 1: {@code name}. Name of the instrumentation scope (e.g., library name). */
     private static final String F_NAME = "name";
 
     /** Proto field 2: {@code version}. Version of the instrumentation scope. */
@@ -158,55 +160,59 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
 
     // --- AnyValue type-wrapper fields (opentelemetry/proto/common/v1/common.proto) ---
 
-    /** AnyValue oneof field: {@code string_value}. */
+    /** AnyValue type {@code string_value}. */
     private static final String F_STRING_VALUE = "stringValue";
 
-    /** AnyValue oneof field: {@code bool_value}. */
+    /** AnyValue type {@code bool_value}. */
     private static final String F_BOOL_VALUE = "boolValue";
 
-    /** AnyValue oneof field: {@code int_value}. Always a decimal string per OTLP JSON spec. */
+    /** AnyValue type {@code int_value}. Always a decimal string per OTLP JSON spec. */
     private static final String F_INT_VALUE = "intValue";
 
-    /** AnyValue oneof field: {@code double_value}. */
+    /** AnyValue type {@code double_value}. */
     private static final String F_DOUBLE_VALUE = "doubleValue";
 
-    /** AnyValue oneof field: {@code array_value}. Wraps an {@code ArrayValue} object. */
+    /** AnyValue type {@code array_value}. Wraps an {@code ArrayValue} object. */
     private static final String F_ARRAY_VALUE = "arrayValue";
 
-    /** AnyValue oneof field: {@code kvlist_value}. Wraps a {@code KeyValueList} object. */
+    /** AnyValue type {@code kvlist_value}. Wraps a {@code KeyValueList} object. */
     private static final String F_KVLIST_VALUE = "kvlistValue";
 
-    /** AnyValue oneof field: {@code bytes_value}. Base64-encoded string. */
+    /** AnyValue type {@code bytes_value}. Base64-encoded string. */
     private static final String F_BYTES_VALUE = "bytesValue";
 
     /** Field of {@code ArrayValue} and {@code KeyValueList}: {@code values}. */
     private static final String F_VALUES = "values";
+
+    private static final BigInteger NANOS_PER_SECOND = BigInteger.valueOf(1_000_000_000L);
+    private static final BigInteger UINT64_MAX = BigInteger.ONE.shiftLeft(64).subtract(BigInteger.ONE);
 
     // -------------------------------------------------------------------------
 
     @Nonnull
     @Override
     public String formatRecord(@Nonnull final LogRecord logRecord) {
+        Objects.requireNonNull(logRecord, "logRecord must not be null");
         StringBuilder sb = new StringBuilder("{");
-        boolean first = true;
-        first = appendTimeNanos(sb, first, F_TIME_UNIX_NANO,           logRecord.getTimestamp());
+        boolean first;
+        first = appendTimeNanos(sb, true, F_TIME_UNIX_NANO, logRecord.getTimestamp());
         first = appendTimeNanos(sb, first, F_OBSERVED_TIME_UNIX_NANO, logRecord.getObservedTimestamp());
-        first = appendString   (sb, first, F_TRACE_ID,                logRecord.getTraceId());
-        first = appendString   (sb, first, F_SPAN_ID,                 logRecord.getSpanId());
+        first = appendString(sb, first, F_TRACE_ID, logRecord.getTraceId());
+        first = appendString(sb, first, F_SPAN_ID, logRecord.getSpanId());
         if (logRecord.getTraceFlags() != 0) {
-            first = appendInt  (sb, first, F_FLAGS,                   logRecord.getTraceFlags());
+            first = appendInt(sb, first, F_FLAGS, logRecord.getTraceFlags());
         }
-        first = appendString   (sb, first, F_SEVERITY_TEXT,           logRecord.getSeverityText());
+        first = appendString(sb, first, F_SEVERITY_TEXT, logRecord.getSeverityText());
         SeverityNumber sn = logRecord.getSeverityNumber();
         if (sn != null && sn != SeverityNumber.UNSPECIFIED) {
-            first = appendInt  (sb, first, F_SEVERITY_NUMBER,         sn.getValue());
+            first = appendInt(sb, first, F_SEVERITY_NUMBER, sn.getValue());
         }
-        first = appendBody     (sb, first,                            logRecord.getBody());
-        first = appendKeyValueArray(sb, first, F_ATTRIBUTES,          logRecord.getAttributes());
+        first = appendBody(sb, first, logRecord.getBody());
+        first = appendKeyValueArray(sb, first, logRecord.getAttributes());
         if (logRecord.getDroppedAttributesCount() != 0) {
-            first = appendInt  (sb, first, F_DROPPED_ATTRIBUTES_COUNT, logRecord.getDroppedAttributesCount());
+            first = appendInt(sb, first, F_DROPPED_ATTRIBUTES_COUNT, logRecord.getDroppedAttributesCount());
         }
-              appendString     (sb, first, F_EVENT_NAME,              logRecord.getEventName());
+        appendString(sb, first, F_EVENT_NAME, logRecord.getEventName());
         sb.append('}');
         return sb.toString();
     }
@@ -214,6 +220,7 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
     @Nonnull
     @Override
     public String format(@Nonnull final LogRecord logRecord) {
+        Objects.requireNonNull(logRecord, "logRecord must not be null");
         StringBuilder sb = new StringBuilder("{\"").append(F_RESOURCE_LOGS).append("\":[{");
         if (logRecord.getResource() != null) {
             appendResourceBlock(sb, logRecord.getResource());
@@ -299,23 +306,29 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
     /**
      * Encodes {@code value} as a nanosecond-precision decimal string and appends
      * {@code "key":"<nanos>"} to {@code sb}.
-     * <p>
-     * <b>Year-2262 boundary:</b> the result is computed as
-     * {@code getEpochSecond() * 1_000_000_000L + getNano()}, which fits in a signed
-     * {@code long} (max ≈ 9.22 × 10¹⁸ ns) only for {@link Instant}s before approximately
-     * 2262-04-11T23:47:16Z. For any {@code Instant} beyond that point the multiplication
-     * overflows silently and the emitted value will be wrong. This is not a practical
-     * concern for a logging library but callers should be aware of the boundary.
      */
     private static boolean appendTimeNanos(final StringBuilder sb, final boolean first,
                                            final String key, final Instant value) {
         if (value == null) {
             return first;
         }
-        long nanos = value.getEpochSecond() * 1_000_000_000L + value.getNano();
+        String nanos = toUnixNanosDecimalString(value);
         separator(sb, first);
         sb.append('"').append(key).append("\":\"").append(nanos).append('"');
         return false;
+    }
+
+    private static String toUnixNanosDecimalString(final Instant value) {
+        BigInteger nanos = BigInteger.valueOf(value.getEpochSecond())
+                .multiply(NANOS_PER_SECOND)
+                .add(BigInteger.valueOf(value.getNano()));
+        if (nanos.signum() < 0) {
+            throw new IllegalArgumentException("OTLP timestamp fields must be unsigned nanoseconds since Unix epoch");
+        }
+        if (nanos.compareTo(UINT64_MAX) > 0) {
+            throw new IllegalArgumentException("OTLP timestamp fields must fit into uint64 nanoseconds");
+        }
+        return nanos.toString();
     }
 
     private static boolean appendString(final StringBuilder sb, final boolean first,
@@ -348,13 +361,12 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
     }
 
     private static boolean appendKeyValueArray(final StringBuilder sb, final boolean first,
-                                               final String fieldName,
                                                final List<KeyValue> attrs) {
         if (attrs == null || attrs.isEmpty()) {
             return first;
         }
         separator(sb, first);
-        sb.append('"').append(fieldName).append("\":");
+        sb.append('"').append(LogRecordFormatterImpl.F_ATTRIBUTES).append("\":");
         appendKeyValueArrayInline(sb, attrs);
         return false;
     }
@@ -375,7 +387,7 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
     }
 
     /**
-     * Serialises an {@link AnyValue} as an OTel AnyValue JSON object.
+     * Serializes an {@link AnyValue} as an OTel AnyValue JSON object.
      * <ul>
      *   <li>{@link AnyValue.Type#STRING}  → {@code {"stringValue":"..."}}</li>
      *   <li>{@link AnyValue.Type#BOOL}    → {@code {"boolValue":true}}</li>
@@ -388,48 +400,44 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
      * </ul>
      */
     private static void appendAnyValue(final StringBuilder sb, final AnyValue value) {
-        switch (value.getType()) {
-            case STRING:
-                sb.append("{\"").append(F_STRING_VALUE).append("\":\"").append(escape(value.asString())).append("\"}");
-                break;
-            case BOOL:
-                sb.append("{\"").append(F_BOOL_VALUE).append("\":").append(value.asBoolean()).append('}');
-                break;
-            case INT:
-                sb.append("{\"").append(F_INT_VALUE).append("\":\"").append(value.asLong()).append("\"}");
-                break;
-            case DOUBLE:
-                sb.append("{\"").append(F_DOUBLE_VALUE).append("\":");
-                double d = value.asDouble();
-                if (Double.isNaN(d))                       sb.append("\"NaN\"");
-                else if (d == Double.POSITIVE_INFINITY)    sb.append("\"Infinity\"");
-                else if (d == Double.NEGATIVE_INFINITY)    sb.append("\"-Infinity\"");
-                else                                       sb.append(d);
-                sb.append('}');
-                break;
-            case ARRAY:
-                sb.append("{\"").append(F_ARRAY_VALUE).append("\":{\"").append(F_VALUES).append("\":[");
-                boolean firstArr = true;
-                for (AnyValue element : value.asArray()) {
-                    if (!firstArr) sb.append(',');
-                    appendAnyValue(sb, element);
-                    firstArr = false;
-                }
-                sb.append("]}}");
-                break;
-            case KVLIST:
-                sb.append("{\"").append(F_KVLIST_VALUE).append("\":{\"").append(F_VALUES).append("\":");
-                appendKeyValueArrayInline(sb, value.asKvList());
-                sb.append("}}");
-                break;
-            case BYTES:
-                sb.append("{\"").append(F_BYTES_VALUE).append("\":\"")
-                  .append(Base64.getEncoder().encodeToString(value.asBytes()))
-                  .append("\"}");
-                break;
-            default:
-                sb.append("{\"").append(F_STRING_VALUE).append("\":\"\"}");
-                break;
+        AnyValue.Type type = value.getType();
+        if (type == null) {
+            throw new IllegalArgumentException("AnyValue type must not be null");
+        }
+
+        if (type == AnyValue.Type.EMPTY) {
+            sb.append("{}");
+        } else if (type == AnyValue.Type.STRING) {
+            sb.append("{\"").append(F_STRING_VALUE).append("\":\"").append(escape(value.asString())).append("\"}");
+        } else if (type == AnyValue.Type.BOOL) {
+            sb.append("{\"").append(F_BOOL_VALUE).append("\":").append(value.asBoolean()).append('}');
+        } else if (type == AnyValue.Type.INT) {
+            sb.append("{\"").append(F_INT_VALUE).append("\":\"").append(value.asLong()).append("\"}");
+        } else if (type == AnyValue.Type.DOUBLE) {
+            sb.append("{\"").append(F_DOUBLE_VALUE).append("\":");
+            double d = value.asDouble();
+            if (Double.isNaN(d))                       sb.append("\"NaN\"");
+            else if (d == Double.POSITIVE_INFINITY)    sb.append("\"Infinity\"");
+            else if (d == Double.NEGATIVE_INFINITY)    sb.append("\"-Infinity\"");
+            else                                       sb.append(d);
+            sb.append('}');
+        } else if (type == AnyValue.Type.ARRAY) {
+            sb.append("{\"").append(F_ARRAY_VALUE).append("\":{\"").append(F_VALUES).append("\":[");
+            boolean firstArr = true;
+            for (AnyValue element : value.asArray()) {
+                if (!firstArr) sb.append(',');
+                appendAnyValue(sb, element);
+                firstArr = false;
+            }
+            sb.append("]}}");
+        } else if (type == AnyValue.Type.KVLIST) {
+            sb.append("{\"").append(F_KVLIST_VALUE).append("\":{\"").append(F_VALUES).append("\":");
+            appendKeyValueArrayInline(sb, value.asKvList());
+            sb.append("}}");
+        } else {
+            sb.append("{\"").append(F_BYTES_VALUE).append("\":\"")
+              .append(Base64.getEncoder().encodeToString(value.asBytes()))
+              .append("\"}");
         }
     }
 

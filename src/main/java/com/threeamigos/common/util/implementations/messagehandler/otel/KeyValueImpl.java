@@ -21,13 +21,6 @@ public final class KeyValueImpl implements KeyValue {
             throw new IllegalArgumentException("key must not be empty");
         }
         Objects.requireNonNull(value, "value must not be null");
-        if (value.getType() == AnyValue.Type.ARRAY) {
-            long distinctTypes = value.asArray().stream().map(AnyValue::getType).distinct().count();
-            if (distinctTypes > 1) {
-                throw new IllegalArgumentException(
-                        "attribute array elements must all have the same type (OTel homogeneity requirement)");
-            }
-        }
         this.key = key;
         this.value = value;
     }

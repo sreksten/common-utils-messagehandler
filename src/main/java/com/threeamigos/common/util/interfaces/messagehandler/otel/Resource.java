@@ -3,7 +3,7 @@ package com.threeamigos.common.util.interfaces.messagehandler.otel;
 import java.util.List;
 
 /**
- * Describes the entity that produced a telemetry signal, following the OTel
+ * Describes the entity that produced a telemetry signal, following the OpenTelemetry
  * <a href="https://opentelemetry.io/docs/specs/otel/resource/sdk/">Resource specification</a>.
  * <p>
  * Common attributes include {@code service.name}, {@code service.version},

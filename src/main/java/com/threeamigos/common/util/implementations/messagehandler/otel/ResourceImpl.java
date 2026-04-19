@@ -9,7 +9,7 @@ import java.util.List;
 
 /**
  * Mutable implementation of {@link Resource}.
- * All fields default to empty list / {@code 0} and may be set via the corresponding setters.
+ * All fields default to an empty list / {@code 0} and may be set via the corresponding setters.
  *
  * @author Stefano Reksten
  */
@@ -34,7 +34,7 @@ public class ResourceImpl implements Resource {
     }
 
     public void setAttributes(final List<KeyValue> attributes) {
-        this.attributes = attributes != null ? new ArrayList<>(attributes) : new ArrayList<>();
+        this.attributes = OpenTelemetryAttributeValidator.copyAndValidateKeyValues(attributes, "resource attributes");
     }
 
     @Override

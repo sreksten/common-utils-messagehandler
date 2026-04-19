@@ -16,15 +16,15 @@ import java.util.regex.Pattern;
 /**
  * A mutable implementation of the {@link LogRecord} interface.
  * {@code timestamp} defaults to {@link Instant#now()} at construction time, reflecting the moment
- * the log record is created. All other fields default to {@code null} / {@code 0} / empty list
+ * the log record is created. All other fields default to {@code null} / {@code 0} / an empty list
  * and may be set via the corresponding setters.
  *
  * @author Stefano Reksten
  */
 public class LogRecordImpl implements LogRecord {
 
-    private static final Pattern TRACE_ID_PATTERN = Pattern.compile("[0-9a-f]{32}");
-    private static final Pattern SPAN_ID_PATTERN  = Pattern.compile("[0-9a-f]{16}");
+    private static final Pattern TRACE_ID_PATTERN = Pattern.compile("(?!0{32})[0-9a-f]{32}");
+    private static final Pattern SPAN_ID_PATTERN  = Pattern.compile("(?!0{16})[0-9a-f]{16}");
 
     private Instant timestamp = Instant.now();
     private Instant observedTimestamp;
@@ -68,7 +68,8 @@ public class LogRecordImpl implements LogRecord {
 
     public void setTraceId(final String traceId) {
         if (traceId != null && !TRACE_ID_PATTERN.matcher(traceId).matches()) {
-            throw new IllegalArgumentException("traceId must be 32 lowercase hex characters, got: \"" + traceId + "\"");
+            throw new IllegalArgumentException(
+                    "traceId must be 32 lowercase hex characters and not all zeros, got: \"" + traceId + "\"");
         }
         this.traceId = traceId;
     }
@@ -80,7 +81,8 @@ public class LogRecordImpl implements LogRecord {
 
     public void setSpanId(final String spanId) {
         if (spanId != null && !SPAN_ID_PATTERN.matcher(spanId).matches()) {
-            throw new IllegalArgumentException("spanId must be 16 lowercase hex characters, got: \"" + spanId + "\"");
+            throw new IllegalArgumentException(
+                    "spanId must be 16 lowercase hex characters and not all zeros, got: \"" + spanId + "\"");
         }
         this.spanId = spanId;
     }
@@ -107,14 +109,12 @@ public class LogRecordImpl implements LogRecord {
         return severityNumber;
     }
 
+    public void setSeverityText(final String severityText) {
+        this.severityText = severityText;
+    }
+
     public void setSeverityNumber(final SeverityNumber severityNumber) {
-        if (severityNumber == null || severityNumber == SeverityNumber.UNSPECIFIED) {
-            this.severityNumber = SeverityNumber.UNSPECIFIED;
-            this.severityText = null;
-        } else {
-            this.severityNumber = severityNumber;
-            this.severityText = severityNumber.name();
-        }
+        this.severityNumber = severityNumber != null ? severityNumber : SeverityNumber.UNSPECIFIED;
     }
 
     @Override
@@ -150,7 +150,7 @@ public class LogRecordImpl implements LogRecord {
     }
 
     public void setAttributes(final List<KeyValue> attributes) {
-        this.attributes = attributes != null ? new ArrayList<>(attributes) : new ArrayList<>();
+        this.attributes = OpenTelemetryAttributeValidator.copyAndValidateKeyValues(attributes, "logRecord attributes");
     }
 
     @Override

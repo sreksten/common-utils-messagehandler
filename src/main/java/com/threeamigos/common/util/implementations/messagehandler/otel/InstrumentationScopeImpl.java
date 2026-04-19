@@ -28,13 +28,8 @@ public class InstrumentationScopeImpl implements InstrumentationScope {
 
     /**
      * Sets the name of the instrumentation scope.
-     * <p>
-     * The OTel specification states that the name SHOULD be set. Passing {@code null} is accepted
-     * but constitutes a spec deviation: the {@code "name"} field will be omitted from the
-     * serialized {@code ScopeLogs} scope object, making the emitting library unidentifiable.
      *
-     * @param name the instrumentation scope name, e.g. the library package name; {@code null} is
-     *             permitted but discouraged.
+     * @param name the instrumentation scope name, e.g., the library package name; may be {@code null}.
      */
     public void setName(final String name) {
         this.name = name;
@@ -64,7 +59,7 @@ public class InstrumentationScopeImpl implements InstrumentationScope {
     }
 
     public void setAttributes(final List<KeyValue> attributes) {
-        this.attributes = attributes != null ? new ArrayList<>(attributes) : new ArrayList<>();
+        this.attributes = OpenTelemetryAttributeValidator.copyAndValidateKeyValues(attributes, "scope attributes");
     }
 
     @Override

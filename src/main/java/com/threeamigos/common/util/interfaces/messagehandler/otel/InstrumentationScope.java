@@ -3,8 +3,8 @@ package com.threeamigos.common.util.interfaces.messagehandler.otel;
 import java.util.List;
 
 /**
- * Identifies the library or component that emitted a telemetry signal, following the OTel
- * <a href="https://opentelemetry.io/docs/specs/otel/glossary/#instrumentation-scope">
+ * Identifies the library or component that emitted a telemetry signal, following the
+ * OpenTelemetry <a href="https://opentelemetry.io/docs/specs/otel/glossary/#instrumentation-scope">
  * Instrumentation Scope specification</a>.
  *
  * @author Stefano Reksten
@@ -13,9 +13,6 @@ public interface InstrumentationScope {
 
     /**
      * @return the name of the instrumentation scope (e.g., a library name); may be {@code null}.
-     *         The OTel Instrumentation Scope specification states that the name SHOULD be set —
-     *         it is the primary identifier for the library or component emitting telemetry.
-     *         Returning {@code null} is permitted by this interface but constitutes a spec deviation.
      */
     String getName();
 
