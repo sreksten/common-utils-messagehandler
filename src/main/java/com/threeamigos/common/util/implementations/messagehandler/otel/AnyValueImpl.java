@@ -3,6 +3,7 @@ package com.threeamigos.common.util.implementations.messagehandler.otel;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -62,13 +63,13 @@ public final class AnyValueImpl implements AnyValue {
     public static AnyValue ofArray(final List<AnyValue> value) {
         Objects.requireNonNull(value, "value must not be null");
         return new AnyValueImpl(Type.ARRAY, null, false, 0L, 0.0,
-                Collections.unmodifiableList(value), null, null);
+                Collections.unmodifiableList(new ArrayList<>(value)), null, null);
     }
 
     public static AnyValue ofKvList(final List<KeyValue> value) {
         Objects.requireNonNull(value, "value must not be null");
         return new AnyValueImpl(Type.KVLIST, null, false, 0L, 0.0,
-                null, Collections.unmodifiableList(value), null);
+                null, Collections.unmodifiableList(new ArrayList<>(value)), null);
     }
 
     public static AnyValue ofBytes(final byte[] value) {

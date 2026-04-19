@@ -42,6 +42,9 @@ public class LogRecordImpl implements LogRecord {
     }
 
     public void setTimestamp(final Instant timestamp) {
+        if (timestamp == null) {
+            throw new IllegalArgumentException("timestamp must not be null");
+        }
         this.timestamp = timestamp;
     }
 
@@ -143,7 +146,7 @@ public class LogRecordImpl implements LogRecord {
     }
 
     public void setAttributes(final List<KeyValue> attributes) {
-        this.attributes = attributes != null ? attributes : new ArrayList<>();
+        this.attributes = attributes != null ? new ArrayList<>(attributes) : new ArrayList<>();
     }
 
     @Override
@@ -152,6 +155,9 @@ public class LogRecordImpl implements LogRecord {
     }
 
     public void setDroppedAttributesCount(final int droppedAttributesCount) {
+        if (droppedAttributesCount < 0) {
+            throw new IllegalArgumentException("droppedAttributesCount must not be negative, got: " + droppedAttributesCount);
+        }
         this.droppedAttributesCount = droppedAttributesCount;
     }
 

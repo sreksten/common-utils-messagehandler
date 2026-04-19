@@ -286,6 +286,17 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
     // Field helpers
     // -------------------------------------------------------------------------
 
+    /**
+     * Encodes {@code value} as a nanosecond-precision decimal string and appends
+     * {@code "key":"<nanos>"} to {@code sb}.
+     * <p>
+     * <b>Year-2262 boundary:</b> the result is computed as
+     * {@code getEpochSecond() * 1_000_000_000L + getNano()}, which fits in a signed
+     * {@code long} (max ≈ 9.22 × 10¹⁸ ns) only for {@link Instant}s before approximately
+     * 2262-04-11T23:47:16Z. For any {@code Instant} beyond that point the multiplication
+     * overflows silently and the emitted value will be wrong. This is not a practical
+     * concern for a logging library but callers should be aware of the boundary.
+     */
     private static boolean appendTimeNanos(final StringBuilder sb, final boolean first,
                                            final String key, final Instant value) {
         if (value == null) {
@@ -359,7 +370,8 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
      *   <li>{@link AnyValue.Type#STRING}  → {@code {"stringValue":"..."}}</li>
      *   <li>{@link AnyValue.Type#BOOL}    → {@code {"boolValue":true}}</li>
      *   <li>{@link AnyValue.Type#INT}     → {@code {"intValue":"42"}} (decimal string per spec)</li>
-     *   <li>{@link AnyValue.Type#DOUBLE}  → {@code {"doubleValue":3.14}}</li>
+     *   <li>{@link AnyValue.Type#DOUBLE}  → {@code {"doubleValue":3.14}}; NaN/±Infinity encoded as
+     *       the strings {@code "NaN"}, {@code "Infinity"}, {@code "-Infinity"} per proto3 JSON mapping</li>
      *   <li>{@link AnyValue.Type#ARRAY}   → {@code {"arrayValue":{"values":[...]}}}</li>
      *   <li>{@link AnyValue.Type#KVLIST}  → {@code {"kvlistValue":{"values":[...]}}}</li>
      *   <li>{@link AnyValue.Type#BYTES}   → {@code {"bytesValue":"<base64>"}}</li>
@@ -377,7 +389,13 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
                 sb.append("{\"").append(F_INT_VALUE).append("\":\"").append(value.asLong()).append("\"}");
                 break;
             case DOUBLE:
-                sb.append("{\"").append(F_DOUBLE_VALUE).append("\":").append(value.asDouble()).append('}');
+                sb.append("{\"").append(F_DOUBLE_VALUE).append("\":");
+                double d = value.asDouble();
+                if (Double.isNaN(d))                       sb.append("\"NaN\"");
+                else if (d == Double.POSITIVE_INFINITY)    sb.append("\"Infinity\"");
+                else if (d == Double.NEGATIVE_INFINITY)    sb.append("\"-Infinity\"");
+                else                                       sb.append(d);
+                sb.append('}');
                 break;
             case ARRAY:
                 sb.append("{\"").append(F_ARRAY_VALUE).append("\":{\"").append(F_VALUES).append("\":[");

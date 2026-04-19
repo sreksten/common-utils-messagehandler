@@ -22,7 +22,7 @@ public interface LogRecordFormatter {
     /**
      * Serializes the log record fields as a naked JSON object {@code {...}}, without the OTLP
      * {@code ResourceLogs / ScopeLogs} envelope. Resource and instrumentation scope are
-     * included as inline fields {@code "resource"} and {@code "scope"}.
+     * <em>not</em> included; they appear only in the full envelope produced by {@link #format(LogRecord)}.
      *
      * @param logRecord the log record to serialize; must not be {@code null}.
      * @return a single-line JSON object string.

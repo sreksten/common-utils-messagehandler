@@ -34,7 +34,7 @@ public class ResourceImpl implements Resource {
     }
 
     public void setAttributes(final List<KeyValue> attributes) {
-        this.attributes = attributes != null ? attributes : new ArrayList<>();
+        this.attributes = attributes != null ? new ArrayList<>(attributes) : new ArrayList<>();
     }
 
     @Override
@@ -43,6 +43,9 @@ public class ResourceImpl implements Resource {
     }
 
     public void setDroppedAttributesCount(final int droppedAttributesCount) {
+        if (droppedAttributesCount < 0) {
+            throw new IllegalArgumentException("droppedAttributesCount must not be negative, got: " + droppedAttributesCount);
+        }
         this.droppedAttributesCount = droppedAttributesCount;
     }
 }

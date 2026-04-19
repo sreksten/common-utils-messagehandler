@@ -50,4 +50,20 @@ public enum SeverityNumber {
     public int getValue() {
         return value;
     }
+
+    /**
+     * Returns the {@code SeverityNumber} whose {@link #getValue()} equals {@code value}.
+     * Returns {@link #UNSPECIFIED} for any value outside the range 0–24.
+     *
+     * @param value the integer severity number from an OTLP log record.
+     * @return the matching {@code SeverityNumber}, or {@link #UNSPECIFIED} if out of range.
+     */
+    public static SeverityNumber fromValue(final int value) {
+        for (SeverityNumber sn : values()) {
+            if (sn.value == value) {
+                return sn;
+            }
+        }
+        return UNSPECIFIED;
+    }
 }

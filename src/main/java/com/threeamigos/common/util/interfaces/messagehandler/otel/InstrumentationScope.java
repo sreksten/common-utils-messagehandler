@@ -13,6 +13,9 @@ public interface InstrumentationScope {
 
     /**
      * @return the name of the instrumentation scope (e.g., a library name); may be {@code null}.
+     *         The OTel Instrumentation Scope specification states that the name SHOULD be set —
+     *         it is the primary identifier for the library or component emitting telemetry.
+     *         Returning {@code null} is permitted by this interface but constitutes a spec deviation.
      */
     String getName();
 
