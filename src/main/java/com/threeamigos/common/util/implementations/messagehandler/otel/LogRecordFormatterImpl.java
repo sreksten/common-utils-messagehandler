@@ -220,8 +220,11 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
             sb.append(',');
         }
         sb.append("\"").append(F_SCOPE_LOGS).append("\":[{");
-        appendScopeBlock(sb, logRecord.getInstrumentationScope());
-        sb.append(",\"").append(F_LOG_RECORDS).append("\":[");
+        if (logRecord.getInstrumentationScope() != null) {
+            appendScopeBlock(sb, logRecord.getInstrumentationScope());
+            sb.append(',');
+        }
+        sb.append("\"").append(F_LOG_RECORDS).append("\":[");
         sb.append(formatRecord(logRecord));
         sb.append("]}]}]}");
         return sb.toString();
@@ -258,33 +261,33 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
     /**
      * Emits {@code "scope":{...}} at the current position, then optionally
      * {@code ,"schemaUrl":"..."} at the {@code ScopeLogs} level (per OTLP proto layout).
+     * Must only be called when {@code scope} is non-null; the caller is responsible for
+     * omitting the field entirely when the scope is absent.
      */
     private static void appendScopeBlock(final StringBuilder sb, final InstrumentationScope scope) {
         sb.append('"').append(F_SCOPE).append("\":{");
-        if (scope != null) {
-            boolean scopeFirst = true;
-            if (scope.getName() != null) {
-                sb.append('"').append(F_NAME).append("\":\"").append(escape(scope.getName())).append('"');
-                scopeFirst = false;
-            }
-            if (scope.getVersion() != null) {
-                if (!scopeFirst) sb.append(',');
-                sb.append('"').append(F_VERSION).append("\":\"").append(escape(scope.getVersion())).append('"');
-                scopeFirst = false;
-            }
-            if (!scope.getAttributes().isEmpty()) {
-                if (!scopeFirst) sb.append(',');
-                sb.append('"').append(F_ATTRIBUTES).append("\":");
-                appendKeyValueArrayInline(sb, scope.getAttributes());
-                scopeFirst = false;
-            }
-            if (scope.getDroppedAttributesCount() != 0) {
-                if (!scopeFirst) sb.append(',');
-                sb.append('"').append(F_DROPPED_ATTRIBUTES_COUNT).append("\":").append(scope.getDroppedAttributesCount());
-            }
+        boolean scopeFirst = true;
+        if (scope.getName() != null) {
+            sb.append('"').append(F_NAME).append("\":\"").append(escape(scope.getName())).append('"');
+            scopeFirst = false;
+        }
+        if (scope.getVersion() != null) {
+            if (!scopeFirst) sb.append(',');
+            sb.append('"').append(F_VERSION).append("\":\"").append(escape(scope.getVersion())).append('"');
+            scopeFirst = false;
+        }
+        if (!scope.getAttributes().isEmpty()) {
+            if (!scopeFirst) sb.append(',');
+            sb.append('"').append(F_ATTRIBUTES).append("\":");
+            appendKeyValueArrayInline(sb, scope.getAttributes());
+            scopeFirst = false;
+        }
+        if (scope.getDroppedAttributesCount() != 0) {
+            if (!scopeFirst) sb.append(',');
+            sb.append('"').append(F_DROPPED_ATTRIBUTES_COUNT).append("\":").append(scope.getDroppedAttributesCount());
         }
         sb.append('}');
-        if (scope != null && scope.getSchemaUrl() != null) {
+        if (scope.getSchemaUrl() != null) {
             sb.append(",\"").append(F_SCHEMA_URL).append("\":\"").append(escape(scope.getSchemaUrl())).append('"');
         }
     }
