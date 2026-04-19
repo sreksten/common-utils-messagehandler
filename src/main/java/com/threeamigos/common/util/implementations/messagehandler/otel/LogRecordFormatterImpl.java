@@ -14,11 +14,14 @@ import java.util.Base64;
 import java.util.List;
 
 /**
- * A {@link LogRecordFormatter} that serializes a {@link LogRecord} as a single-line JSON string
- * in the
- * <a href="https://opentelemetry.io/docs/specs/otlp/#otlphttp-json-encoding">OTLP JSON</a>
- * {@code ExportLogsServiceRequest} envelope, following the
- * <a href="https://opentelemetry.io/docs/specs/otel/logs/data-model/">OpenTelemetry Log Data Model</a>.
+ * A {@link LogRecordFormatter} that serializes a {@link LogRecord} following the
+ * <a href="https://opentelemetry.io/docs/specs/otel/logs/data-model/">OpenTelemetry Log Data Model</a>
+ * and the
+ * <a href="https://opentelemetry.io/docs/specs/otlp/#otlphttp-json-encoding">OTLP JSON</a> encoding.
+ * <p>
+ * {@link #formatRecord(LogRecord)} produces the naked log record JSON object {@code {...}}.
+ * {@link #format(LogRecord)} wraps that output in the full {@code ExportLogsServiceRequest} envelope,
+ * delegating to {@link #formatRecord(LogRecord)} for the inner content.
  * <p>
  * The output structure is:
  * <pre>
@@ -52,7 +55,7 @@ import java.util.List;
  *   <li>Fields that are {@code null} or empty are omitted.</li>
  * </ul>
  * <p>
- * Example output for a fully-populated record:
+ * Example output for a fully populated record:
  * <pre>
  * {"resourceLogs":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"my-service"}}]},
  *  "schemaUrl":"https://opentelemetry.io/schemas/1.25.0",
@@ -69,15 +72,154 @@ import java.util.List;
  */
 public class LogRecordFormatterImpl implements LogRecordFormatter {
 
+    // -------------------------------------------------------------------------
+    // OTLP JSON field name constants
+    // Each constant holds the lowerCamelCase JSON key produced by the standard
+    // proto3 → JSON name mapping (snake_case → lowerCamelCase).
+    // Proto source: opentelemetry/proto/logs/v1/logs.proto
+    //               opentelemetry/proto/common/v1/common.proto
+    //               opentelemetry/proto/resource/v1/resource.proto
+    // -------------------------------------------------------------------------
+
+    // --- ExportLogsServiceRequest / ResourceLogs / ScopeLogs envelope --------
+
+    /** Top-level field of {@code ExportLogsServiceRequest}. Proto: {@code resource_logs}. */
+    private static final String F_RESOURCE_LOGS = "resourceLogs";
+
+    /** Field of {@code ResourceLogs}. Proto: {@code resource}. */
+    private static final String F_RESOURCE = "resource";
+
+    /** Field of {@code ResourceLogs} and {@code ScopeLogs}. Proto: {@code schema_url}.
+     *  Placed at the parent level, NOT inside the resource/scope object. */
+    private static final String F_SCHEMA_URL = "schemaUrl";
+
+    /** Field of {@code ResourceLogs}. Proto: {@code scope_logs}. */
+    private static final String F_SCOPE_LOGS = "scopeLogs";
+
+    /** Field of {@code ScopeLogs}. Proto: {@code scope}. */
+    private static final String F_SCOPE = "scope";
+
+    /** Field of {@code ScopeLogs}. Proto: {@code log_records}. */
+    private static final String F_LOG_RECORDS = "logRecords";
+
+    // --- LogRecord fields (opentelemetry/proto/logs/v1/logs.proto) -----------
+
+    /** Proto field 1: {@code time_unix_nano}. Nanoseconds since Unix epoch, decimal string. */
+    private static final String F_TIME_UNIX_NANO = "timeUnixNano";
+
+    /** Proto field 11: {@code observed_time_unix_nano}. Nanoseconds since Unix epoch, decimal string. */
+    private static final String F_OBSERVED_TIME_UNIX_NANO = "observedTimeUnixNano";
+
+    /** Proto field 2: {@code severity_number}. Integer 0–24. */
+    private static final String F_SEVERITY_NUMBER = "severityNumber";
+
+    /** Proto field 3: {@code severity_text}. Free-form string; SHOULD match the canonical
+     *  short name of {@link SeverityNumber}. */
+    private static final String F_SEVERITY_TEXT = "severityText";
+
+    /** Proto field 5: {@code body}. Encoded as an AnyValue JSON object. */
+    private static final String F_BODY = "body";
+
+    /** Proto field 6 (LogRecord) / field 1 (Resource) / field 1 (InstrumentationScope):
+     *  {@code attributes}. Array of {@code {"key":...,"value":...}} objects. */
+    private static final String F_ATTRIBUTES = "attributes";
+
+    /** Proto field 7 (LogRecord) / field 2 (Resource) / field 4 (InstrumentationScope):
+     *  {@code dropped_attributes_count}. Omitted when zero. */
+    private static final String F_DROPPED_ATTRIBUTES_COUNT = "droppedAttributesCount";
+
+    /** Proto field 8: {@code flags}. W3C TraceFlags byte value (0x00–0xFF). Omitted when zero. */
+    private static final String F_FLAGS = "flags";
+
+    /** Proto field 9: {@code trace_id}. 32 lowercase hex characters. */
+    private static final String F_TRACE_ID = "traceId";
+
+    /** Proto field 10: {@code span_id}. 16 lowercase hex characters. */
+    private static final String F_SPAN_ID = "spanId";
+
+    /** Proto field 20: {@code event_name}. Identifies the class/type of event. */
+    private static final String F_EVENT_NAME = "eventName";
+
+    // --- InstrumentationScope fields (opentelemetry/proto/common/v1/common.proto) ---
+
+    /** Proto field 1: {@code name}. Name of the instrumentation scope (e.g. library name). */
+    private static final String F_NAME = "name";
+
+    /** Proto field 2: {@code version}. Version of the instrumentation scope. */
+    private static final String F_VERSION = "version";
+
+    // --- KeyValue fields (opentelemetry/proto/common/v1/common.proto) ---------
+
+    /** Proto field 1 of {@code KeyValue}: {@code key}. */
+    private static final String F_KEY = "key";
+
+    /** Proto field 2 of {@code KeyValue}: {@code value}. AnyValue JSON object. */
+    private static final String F_VALUE = "value";
+
+    // --- AnyValue type-wrapper fields (opentelemetry/proto/common/v1/common.proto) ---
+
+    /** AnyValue oneof field: {@code string_value}. */
+    private static final String F_STRING_VALUE = "stringValue";
+
+    /** AnyValue oneof field: {@code bool_value}. */
+    private static final String F_BOOL_VALUE = "boolValue";
+
+    /** AnyValue oneof field: {@code int_value}. Always a decimal string per OTLP JSON spec. */
+    private static final String F_INT_VALUE = "intValue";
+
+    /** AnyValue oneof field: {@code double_value}. */
+    private static final String F_DOUBLE_VALUE = "doubleValue";
+
+    /** AnyValue oneof field: {@code array_value}. Wraps an {@code ArrayValue} object. */
+    private static final String F_ARRAY_VALUE = "arrayValue";
+
+    /** AnyValue oneof field: {@code kvlist_value}. Wraps a {@code KeyValueList} object. */
+    private static final String F_KVLIST_VALUE = "kvlistValue";
+
+    /** AnyValue oneof field: {@code bytes_value}. Base64-encoded string. */
+    private static final String F_BYTES_VALUE = "bytesValue";
+
+    /** Field of {@code ArrayValue} and {@code KeyValueList}: {@code values}. */
+    private static final String F_VALUES = "values";
+
+    // -------------------------------------------------------------------------
+
+    @Nonnull
+    @Override
+    public String formatRecord(@Nonnull final LogRecord logRecord) {
+        StringBuilder sb = new StringBuilder("{");
+        boolean first = true;
+        first = appendTimeNanos(sb, first, F_TIME_UNIX_NANO,           logRecord.getTimestamp());
+        first = appendTimeNanos(sb, first, F_OBSERVED_TIME_UNIX_NANO, logRecord.getObservedTimestamp());
+        first = appendString   (sb, first, F_TRACE_ID,                logRecord.getTraceId());
+        first = appendString   (sb, first, F_SPAN_ID,                 logRecord.getSpanId());
+        if (logRecord.getTraceFlags() != 0) {
+            first = appendInt  (sb, first, F_FLAGS,                   logRecord.getTraceFlags());
+        }
+        first = appendString   (sb, first, F_SEVERITY_TEXT,           logRecord.getSeverityText());
+        SeverityNumber sn = logRecord.getSeverityNumber();
+        if (sn != null && sn != SeverityNumber.UNSPECIFIED) {
+            first = appendInt  (sb, first, F_SEVERITY_NUMBER,         sn.getValue());
+        }
+        first = appendBody     (sb, first,                            logRecord.getBody());
+        first = appendKeyValueArray(sb, first, F_ATTRIBUTES,          logRecord.getAttributes());
+        if (logRecord.getDroppedAttributesCount() != 0) {
+            first = appendInt  (sb, first, F_DROPPED_ATTRIBUTES_COUNT, logRecord.getDroppedAttributesCount());
+        }
+              appendString     (sb, first, F_EVENT_NAME,              logRecord.getEventName());
+        sb.append('}');
+        return sb.toString();
+    }
+
     @Nonnull
     @Override
     public String format(@Nonnull final LogRecord logRecord) {
-        StringBuilder sb = new StringBuilder("{\"resourceLogs\":[{");
+        StringBuilder sb = new StringBuilder("{\"").append(F_RESOURCE_LOGS).append("\":[{");
         appendResourceBlock(sb, logRecord.getResource());
-        sb.append(",\"scopeLogs\":[{");
+        sb.append(",\"").append(F_SCOPE_LOGS).append("\":[{");
         appendScopeBlock(sb, logRecord.getInstrumentationScope());
-        sb.append(",\"logRecords\":[");
-        appendLogRecordObject(sb, logRecord);
+        sb.append(",\"").append(F_LOG_RECORDS).append("\":[");
+        sb.append(formatRecord(logRecord));
         sb.append("]}]}]}");
         return sb.toString();
     }
@@ -91,18 +233,18 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
      * {@code ,"schemaUrl":"..."} at the {@code ResourceLogs} level (per OTLP proto layout).
      */
     private static void appendResourceBlock(final StringBuilder sb, final Resource resource) {
-        sb.append("\"resource\":{\"attributes\":");
+        sb.append('"').append(F_RESOURCE).append("\":{\"").append(F_ATTRIBUTES).append("\":");
         if (resource != null) {
             appendKeyValueArrayInline(sb, resource.getAttributes());
             if (resource.getDroppedAttributesCount() != 0) {
-                sb.append(",\"droppedAttributesCount\":").append(resource.getDroppedAttributesCount());
+                sb.append(",\"").append(F_DROPPED_ATTRIBUTES_COUNT).append("\":").append(resource.getDroppedAttributesCount());
             }
         } else {
             sb.append("[]");
         }
         sb.append('}');
         if (resource != null && resource.getSchemaUrl() != null) {
-            sb.append(",\"schemaUrl\":\"").append(escape(resource.getSchemaUrl())).append('"');
+            sb.append(",\"").append(F_SCHEMA_URL).append("\":\"").append(escape(resource.getSchemaUrl())).append('"');
         }
     }
 
@@ -111,58 +253,33 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
      * {@code ,"schemaUrl":"..."} at the {@code ScopeLogs} level (per OTLP proto layout).
      */
     private static void appendScopeBlock(final StringBuilder sb, final InstrumentationScope scope) {
-        sb.append("\"scope\":{");
+        sb.append('"').append(F_SCOPE).append("\":{");
         if (scope != null) {
             boolean scopeFirst = true;
             if (scope.getName() != null) {
-                sb.append("\"name\":\"").append(escape(scope.getName())).append('"');
+                sb.append('"').append(F_NAME).append("\":\"").append(escape(scope.getName())).append('"');
                 scopeFirst = false;
             }
             if (scope.getVersion() != null) {
                 if (!scopeFirst) sb.append(',');
-                sb.append("\"version\":\"").append(escape(scope.getVersion())).append('"');
+                sb.append('"').append(F_VERSION).append("\":\"").append(escape(scope.getVersion())).append('"');
                 scopeFirst = false;
             }
             if (!scope.getAttributes().isEmpty()) {
                 if (!scopeFirst) sb.append(',');
-                sb.append("\"attributes\":");
+                sb.append('"').append(F_ATTRIBUTES).append("\":");
                 appendKeyValueArrayInline(sb, scope.getAttributes());
                 scopeFirst = false;
             }
             if (scope.getDroppedAttributesCount() != 0) {
                 if (!scopeFirst) sb.append(',');
-                sb.append("\"droppedAttributesCount\":").append(scope.getDroppedAttributesCount());
+                sb.append('"').append(F_DROPPED_ATTRIBUTES_COUNT).append("\":").append(scope.getDroppedAttributesCount());
             }
         }
         sb.append('}');
         if (scope != null && scope.getSchemaUrl() != null) {
-            sb.append(",\"schemaUrl\":\"").append(escape(scope.getSchemaUrl())).append('"');
+            sb.append(",\"").append(F_SCHEMA_URL).append("\":\"").append(escape(scope.getSchemaUrl())).append('"');
         }
-    }
-
-    /** Emits a single {@code logRecords} entry containing all {@link LogRecord} fields. */
-    private static void appendLogRecordObject(final StringBuilder sb, final LogRecord logRecord) {
-        sb.append('{');
-        boolean first = true;
-        first = appendTimeNanos(sb, first, "timeUnixNano",            logRecord.getTimestamp());
-        first = appendTimeNanos(sb, first, "observedTimeUnixNano",    logRecord.getObservedTimestamp());
-        first = appendString   (sb, first, "traceId",                 logRecord.getTraceId());
-        first = appendString   (sb, first, "spanId",                  logRecord.getSpanId());
-        if (logRecord.getTraceFlags() != 0) {
-            first = appendInt  (sb, first, "flags",                   logRecord.getTraceFlags());
-        }
-        first = appendString   (sb, first, "severityText",            logRecord.getSeverityText());
-        SeverityNumber sn = logRecord.getSeverityNumber();
-        if (sn != null && sn != SeverityNumber.UNSPECIFIED) {
-            first = appendInt  (sb, first, "severityNumber",          sn.getValue());
-        }
-        first = appendBody     (sb, first,                            logRecord.getBody());
-        first = appendKeyValueArray(sb, first, "attributes",          logRecord.getAttributes());
-        if (logRecord.getDroppedAttributesCount() != 0) {
-            first = appendInt  (sb, first, "droppedAttributesCount",  logRecord.getDroppedAttributesCount());
-        }
-              appendString     (sb, first, "eventName",               logRecord.getEventName());
-        sb.append('}');
     }
 
     // -------------------------------------------------------------------------
@@ -204,7 +321,7 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
             return first;
         }
         separator(sb, first);
-        sb.append("\"body\":");
+        sb.append('"').append(F_BODY).append("\":");
         appendAnyValue(sb, body);
         return false;
     }
@@ -227,7 +344,8 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
         boolean firstEntry = true;
         for (KeyValue kv : attrs) {
             if (!firstEntry) sb.append(',');
-            sb.append("{\"key\":\"").append(escape(kv.getKey())).append("\",\"value\":");
+            sb.append("{\"").append(F_KEY).append("\":\"").append(escape(kv.getKey()))
+              .append("\",\"").append(F_VALUE).append("\":");
             appendAnyValue(sb, kv.getValue());
             sb.append('}');
             firstEntry = false;
@@ -250,19 +368,19 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
     private static void appendAnyValue(final StringBuilder sb, final AnyValue value) {
         switch (value.getType()) {
             case STRING:
-                sb.append("{\"stringValue\":\"").append(escape(value.asString())).append("\"}");
+                sb.append("{\"").append(F_STRING_VALUE).append("\":\"").append(escape(value.asString())).append("\"}");
                 break;
             case BOOL:
-                sb.append("{\"boolValue\":").append(value.asBoolean()).append('}');
+                sb.append("{\"").append(F_BOOL_VALUE).append("\":").append(value.asBoolean()).append('}');
                 break;
             case INT:
-                sb.append("{\"intValue\":\"").append(value.asLong()).append("\"}");
+                sb.append("{\"").append(F_INT_VALUE).append("\":\"").append(value.asLong()).append("\"}");
                 break;
             case DOUBLE:
-                sb.append("{\"doubleValue\":").append(value.asDouble()).append('}');
+                sb.append("{\"").append(F_DOUBLE_VALUE).append("\":").append(value.asDouble()).append('}');
                 break;
             case ARRAY:
-                sb.append("{\"arrayValue\":{\"values\":[");
+                sb.append("{\"").append(F_ARRAY_VALUE).append("\":{\"").append(F_VALUES).append("\":[");
                 boolean firstArr = true;
                 for (AnyValue element : value.asArray()) {
                     if (!firstArr) sb.append(',');
@@ -272,17 +390,17 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
                 sb.append("]}}");
                 break;
             case KVLIST:
-                sb.append("{\"kvlistValue\":{\"values\":");
+                sb.append("{\"").append(F_KVLIST_VALUE).append("\":{\"").append(F_VALUES).append("\":");
                 appendKeyValueArrayInline(sb, value.asKvList());
                 sb.append("}}");
                 break;
             case BYTES:
-                sb.append("{\"bytesValue\":\"")
+                sb.append("{\"").append(F_BYTES_VALUE).append("\":\"")
                   .append(Base64.getEncoder().encodeToString(value.asBytes()))
                   .append("\"}");
                 break;
             default:
-                sb.append("{\"stringValue\":\"\"}");
+                sb.append("{\"").append(F_STRING_VALUE).append("\":\"\"}");
                 break;
         }
     }
