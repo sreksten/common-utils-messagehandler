@@ -215,8 +215,11 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
     @Override
     public String format(@Nonnull final LogRecord logRecord) {
         StringBuilder sb = new StringBuilder("{\"").append(F_RESOURCE_LOGS).append("\":[{");
-        appendResourceBlock(sb, logRecord.getResource());
-        sb.append(",\"").append(F_SCOPE_LOGS).append("\":[{");
+        if (logRecord.getResource() != null) {
+            appendResourceBlock(sb, logRecord.getResource());
+            sb.append(',');
+        }
+        sb.append("\"").append(F_SCOPE_LOGS).append("\":[{");
         appendScopeBlock(sb, logRecord.getInstrumentationScope());
         sb.append(",\"").append(F_LOG_RECORDS).append("\":[");
         sb.append(formatRecord(logRecord));
@@ -231,19 +234,23 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
     /**
      * Emits {@code "resource":{...}} at the current position, then optionally
      * {@code ,"schemaUrl":"..."} at the {@code ResourceLogs} level (per OTLP proto layout).
+     * Must only be called when {@code resource} is non-null; the caller is responsible for
+     * omitting the field entirely when the resource is absent.
      */
     private static void appendResourceBlock(final StringBuilder sb, final Resource resource) {
-        sb.append('"').append(F_RESOURCE).append("\":{\"").append(F_ATTRIBUTES).append("\":");
-        if (resource != null) {
+        sb.append('"').append(F_RESOURCE).append("\":{");
+        boolean resourceFirst = true;
+        if (!resource.getAttributes().isEmpty()) {
+            sb.append('"').append(F_ATTRIBUTES).append("\":");
             appendKeyValueArrayInline(sb, resource.getAttributes());
-            if (resource.getDroppedAttributesCount() != 0) {
-                sb.append(",\"").append(F_DROPPED_ATTRIBUTES_COUNT).append("\":").append(resource.getDroppedAttributesCount());
-            }
-        } else {
-            sb.append("[]");
+            resourceFirst = false;
+        }
+        if (resource.getDroppedAttributesCount() != 0) {
+            if (!resourceFirst) sb.append(',');
+            sb.append('"').append(F_DROPPED_ATTRIBUTES_COUNT).append("\":").append(resource.getDroppedAttributesCount());
         }
         sb.append('}');
-        if (resource != null && resource.getSchemaUrl() != null) {
+        if (resource.getSchemaUrl() != null) {
             sb.append(",\"").append(F_SCHEMA_URL).append("\":\"").append(escape(resource.getSchemaUrl())).append('"');
         }
     }

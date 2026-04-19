@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * A mutable implementation of the {@link LogRecord} interface.
@@ -21,6 +22,9 @@ import java.util.List;
  * @author Stefano Reksten
  */
 public class LogRecordImpl implements LogRecord {
+
+    private static final Pattern TRACE_ID_PATTERN = Pattern.compile("[0-9a-f]{32}");
+    private static final Pattern SPAN_ID_PATTERN  = Pattern.compile("[0-9a-f]{16}");
 
     private Instant timestamp = Instant.now();
     private Instant observedTimestamp;
@@ -63,7 +67,7 @@ public class LogRecordImpl implements LogRecord {
     }
 
     public void setTraceId(final String traceId) {
-        if (traceId != null && !traceId.matches("[0-9a-f]{32}")) {
+        if (traceId != null && !TRACE_ID_PATTERN.matcher(traceId).matches()) {
             throw new IllegalArgumentException("traceId must be 32 lowercase hex characters, got: \"" + traceId + "\"");
         }
         this.traceId = traceId;
@@ -75,7 +79,7 @@ public class LogRecordImpl implements LogRecord {
     }
 
     public void setSpanId(final String spanId) {
-        if (spanId != null && !spanId.matches("[0-9a-f]{16}")) {
+        if (spanId != null && !SPAN_ID_PATTERN.matcher(spanId).matches()) {
             throw new IllegalArgumentException("spanId must be 16 lowercase hex characters, got: \"" + spanId + "\"");
         }
         this.spanId = spanId;
