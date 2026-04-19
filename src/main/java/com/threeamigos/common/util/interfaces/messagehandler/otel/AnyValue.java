@@ -8,6 +8,14 @@ import java.util.List;
  * <p>
  * An {@code AnyValue} holds exactly one value whose type is indicated by {@link #getType()}.
  * Calling a getter for a type other than the held type will throw {@link IllegalStateException}.
+ * <p>
+ * <b>Homogeneity requirement for attribute arrays:</b> When an {@code AnyValue} of type
+ * {@link Type#ARRAY} is used as the value of a {@link KeyValue} attribute (i.e., inside
+ * {@code LogRecord.getAttributes()}, {@code Resource.getAttributes()}, or
+ * {@code InstrumentationScope.getAttributes()}), the OTel specification requires that all
+ * elements of the array have the same primitive type (STRING, BOOL, INT, or DOUBLE).
+ * Heterogeneous arrays are only permitted when {@code AnyValue} is used as the log record
+ * body or as a value inside a {@link Type#KVLIST}.
  *
  * @author Stefano Reksten
  */

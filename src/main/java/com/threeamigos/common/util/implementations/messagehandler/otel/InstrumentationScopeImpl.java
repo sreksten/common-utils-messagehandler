@@ -17,6 +17,7 @@ public class InstrumentationScopeImpl implements InstrumentationScope {
 
     private String name;
     private String version;
+    private String schemaUrl;
     private List<KeyValue> attributes = new ArrayList<>();
     private int droppedAttributesCount;
 
@@ -36,6 +37,15 @@ public class InstrumentationScopeImpl implements InstrumentationScope {
 
     public void setVersion(final String version) {
         this.version = version;
+    }
+
+    @Override
+    public String getSchemaUrl() {
+        return schemaUrl;
+    }
+
+    public void setSchemaUrl(final String schemaUrl) {
+        this.schemaUrl = schemaUrl;
     }
 
     @Override

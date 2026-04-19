@@ -15,8 +15,18 @@ import java.util.List;
  */
 public class ResourceImpl implements Resource {
 
+    private String schemaUrl;
     private List<KeyValue> attributes = new ArrayList<>();
     private int droppedAttributesCount;
+
+    @Override
+    public String getSchemaUrl() {
+        return schemaUrl;
+    }
+
+    public void setSchemaUrl(final String schemaUrl) {
+        this.schemaUrl = schemaUrl;
+    }
 
     @Override
     public List<KeyValue> getAttributes() {

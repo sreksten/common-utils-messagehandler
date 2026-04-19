@@ -32,9 +32,11 @@ import java.util.List;
  *       (base64-encoded string).</li>
  *   <li>{@code intValue} is always encoded as a decimal string per the OTLP JSON spec.</li>
  *   <li>The instrumentation scope is encoded as
- *       {@code "scope":{"name":"...","version":"...","attributes":[...],"droppedAttributesCount":N}}.</li>
+ *       {@code "scope":{"name":"...","version":"...","schemaUrl":"...","attributes":[...],"droppedAttributesCount":N}};
+ *       {@code schemaUrl}, {@code version}, {@code attributes}, and {@code droppedAttributesCount} are omitted when absent/empty/zero.</li>
  *   <li>The resource is encoded as
- *       {@code "resource":{"attributes":[...],"droppedAttributesCount":N}}.</li>
+ *       {@code "resource":{"schemaUrl":"...","attributes":[...],"droppedAttributesCount":N}};
+ *       {@code schemaUrl} is omitted when absent.</li>
  *   <li>{@link SeverityNumber#UNSPECIFIED} and zero-value numeric fields are omitted.</li>
  *   <li>Fields that are {@code null} or empty are omitted.</li>
  * </ul>
@@ -128,7 +130,7 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
         return false;
     }
 
-    /** Encodes the {@link Resource} as {@code "resource":{"attributes":[...],"droppedAttributesCount":N}}. */
+    /** Encodes the {@link Resource} as {@code "resource":{"schemaUrl":"...","attributes":[...],"droppedAttributesCount":N}}. */
     private static boolean appendResource(final StringBuilder sb, final boolean first,
                                           final Resource resource) {
         if (resource == null) {
@@ -136,6 +138,12 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
         }
         separator(sb, first);
         sb.append("\"resource\":{");
+        boolean resourceFirst = true;
+        if (resource.getSchemaUrl() != null) {
+            sb.append("\"schemaUrl\":\"").append(escape(resource.getSchemaUrl())).append('"');
+            resourceFirst = false;
+        }
+        if (!resourceFirst) sb.append(',');
         sb.append("\"attributes\":");
         appendKeyValueArrayInline(sb, resource.getAttributes());
         if (resource.getDroppedAttributesCount() != 0) {
@@ -161,6 +169,11 @@ public class LogRecordFormatterImpl implements LogRecordFormatter {
         if (scope.getVersion() != null) {
             if (!scopeFirst) sb.append(',');
             sb.append("\"version\":\"").append(escape(scope.getVersion())).append('"');
+            scopeFirst = false;
+        }
+        if (scope.getSchemaUrl() != null) {
+            if (!scopeFirst) sb.append(',');
+            sb.append("\"schemaUrl\":\"").append(escape(scope.getSchemaUrl())).append('"');
             scopeFirst = false;
         }
         if (!scope.getAttributes().isEmpty()) {

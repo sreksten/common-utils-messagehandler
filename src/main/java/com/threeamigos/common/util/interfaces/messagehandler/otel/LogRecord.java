@@ -36,8 +36,8 @@ public interface LogRecord {
     String getSpanId();
 
     /**
-     * @return W3C Trace Context {@code TraceFlags} byte value; {@code 0} means not set.
-     *         Bit 0 is the sampled flag.
+     * @return W3C Trace Context {@code TraceFlags} byte value in the range {@code 0x00–0xFF};
+     *         {@code 0} means not set. Bit 0 is the sampled flag.
      */
     int getTraceFlags();
 

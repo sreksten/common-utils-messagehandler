@@ -16,7 +16,11 @@ public final class KeyValueImpl implements KeyValue {
     private final AnyValue value;
 
     public KeyValueImpl(final String key, final AnyValue value) {
-        this.key = Objects.requireNonNull(key, "key must not be null");
+        Objects.requireNonNull(key, "key must not be null");
+        if (key.isEmpty()) {
+            throw new IllegalArgumentException("key must not be empty");
+        }
+        this.key = key;
         this.value = Objects.requireNonNull(value, "value must not be null");
     }
 

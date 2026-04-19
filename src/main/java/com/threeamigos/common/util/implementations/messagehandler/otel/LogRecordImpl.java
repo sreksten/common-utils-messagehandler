@@ -58,6 +58,9 @@ public class LogRecordImpl implements LogRecord {
     }
 
     public void setTraceId(final String traceId) {
+        if (traceId != null && !traceId.matches("[0-9a-f]{32}")) {
+            throw new IllegalArgumentException("traceId must be 32 lowercase hex characters, got: \"" + traceId + "\"");
+        }
         this.traceId = traceId;
     }
 
@@ -67,6 +70,9 @@ public class LogRecordImpl implements LogRecord {
     }
 
     public void setSpanId(final String spanId) {
+        if (spanId != null && !spanId.matches("[0-9a-f]{16}")) {
+            throw new IllegalArgumentException("spanId must be 16 lowercase hex characters, got: \"" + spanId + "\"");
+        }
         this.spanId = spanId;
     }
 
@@ -76,6 +82,9 @@ public class LogRecordImpl implements LogRecord {
     }
 
     public void setTraceFlags(final int traceFlags) {
+        if (traceFlags < 0 || traceFlags > 0xFF) {
+            throw new IllegalArgumentException("traceFlags must be in the range 0x00–0xFF, got: " + traceFlags);
+        }
         this.traceFlags = traceFlags;
     }
 

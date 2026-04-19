@@ -22,6 +22,12 @@ public interface InstrumentationScope {
     String getVersion();
 
     /**
+     * @return the Schema URL that identifies the semantic convention schema used by this scope,
+     *         or {@code null} if not set. Example: {@code "https://opentelemetry.io/schemas/1.25.0"}.
+     */
+    String getSchemaUrl();
+
+    /**
      * @return additional attributes attached to this scope; never {@code null}, may be empty.
      */
     List<KeyValue> getAttributes();
