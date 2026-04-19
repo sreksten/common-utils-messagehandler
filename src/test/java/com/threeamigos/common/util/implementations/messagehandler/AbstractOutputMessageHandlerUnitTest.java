@@ -228,4 +228,33 @@ class AbstractOutputMessageHandlerUnitTest {
         verify(worker, times(2)).shutdownNow();
         verify(worker, times(1)).awaitTermination(5, TimeUnit.SECONDS);
     }
+
+    @Test
+    @DisplayName("drainQueueInCallerThread should no-op on null queue and drain all queued tasks")
+    void drainQueueInCallerThreadShouldNoOpOnNullQueueAndDrainAllQueuedTasks() throws Exception {
+        ProbeOutputMessageHandler handler = new ProbeOutputMessageHandler(false, 0);
+
+        Method drainQueueInCallerThread = AbstractOutputMessageHandler.class
+                .getDeclaredMethod("drainQueueInCallerThread");
+        drainQueueInCallerThread.setAccessible(true);
+
+        // queue == null branch (sync mode leaves queue null)
+        assertDoesNotThrow(() -> drainQueueInCallerThread.invoke(handler));
+
+        Field queueField = AbstractOutputMessageHandler.class.getDeclaredField("queue");
+        queueField.setAccessible(true);
+        BlockingQueue<Runnable> queue = new LinkedBlockingQueue<>();
+        AtomicBoolean firstExecuted = new AtomicBoolean(false);
+        AtomicBoolean secondExecuted = new AtomicBoolean(false);
+        queue.offer(() -> firstExecuted.set(true));
+        queue.offer(() -> secondExecuted.set(true));
+        queueField.set(handler, queue);
+
+        // queue != null branch: execute until poll() returns null
+        drainQueueInCallerThread.invoke(handler);
+
+        assertTrue(firstExecuted.get(), "First queued task should be executed");
+        assertTrue(secondExecuted.get(), "Second queued task should be executed");
+        assertTrue(queue.isEmpty(), "Queue should be fully drained");
+    }
 }
