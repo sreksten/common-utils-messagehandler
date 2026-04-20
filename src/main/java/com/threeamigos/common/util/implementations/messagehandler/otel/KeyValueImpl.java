@@ -16,6 +16,12 @@ public final class KeyValueImpl implements KeyValue {
     private final String key;
     private final AnyValue value;
 
+    /**
+     * Creates a key-value pair using an explicit attribute key string.
+     *
+     * @param key   attribute key
+     * @param value attribute value
+     */
     public KeyValueImpl(final String key, final AnyValue value) {
         Objects.requireNonNull(key, MessageHandlerResourceBundle.get("keyMustNotBeNull"));
         if (key.isEmpty()) {
@@ -24,6 +30,38 @@ public final class KeyValueImpl implements KeyValue {
         Objects.requireNonNull(value, MessageHandlerResourceBundle.get("valueMustNotBeNull"));
         this.key = key;
         this.value = value;
+    }
+
+    /**
+     * Creates a key-value pair using a known OpenTelemetry {@link Names} key.
+     *
+     * @param name  known OpenTelemetry attribute/resource name
+     * @param value attribute value
+     */
+    public KeyValueImpl(final Names name, final AnyValue value) {
+        this(Objects.requireNonNull(name, MessageHandlerResourceBundle.get("keyMustNotBeNull")).getValue(), value);
+    }
+
+    /**
+     * Static factory creating a key-value pair from an explicit key string.
+     *
+     * @param key   attribute key
+     * @param value attribute value
+     * @return immutable key-value pair
+     */
+    public static KeyValue of(final String key, final AnyValue value) {
+        return new KeyValueImpl(key, value);
+    }
+
+    /**
+     * Static factory creating a key-value pair from a known OpenTelemetry {@link Names} key.
+     *
+     * @param name  known OpenTelemetry attribute/resource name
+     * @param value attribute value
+     * @return immutable key-value pair
+     */
+    public static KeyValue of(final Names name, final AnyValue value) {
+        return new KeyValueImpl(name, value);
     }
 
     @Override

@@ -21,7 +21,7 @@ class KeyValueImplUnitTest {
     @Test
     @DisplayName("constructor should reject null key")
     void constructorShouldRejectNullKey() {
-        assertThrows(NullPointerException.class, () -> new KeyValueImpl(null, AnyValueImpl.ofString("v")));
+        assertThrows(NullPointerException.class, () -> new KeyValueImpl((String) null, AnyValueImpl.ofString("v")));
     }
 
     @Test
@@ -34,6 +34,21 @@ class KeyValueImplUnitTest {
     @DisplayName("constructor should reject null value")
     void constructorShouldRejectNullValue() {
         assertThrows(NullPointerException.class, () -> new KeyValueImpl("k", null));
+    }
+
+    @Test
+    @DisplayName("constructor should reject null Names key")
+    void constructorShouldRejectNullNamesKey() {
+        assertThrows(NullPointerException.class, () -> new KeyValueImpl((Names) null, AnyValueImpl.ofString("v")));
+    }
+
+    @Test
+    @DisplayName("constructor should accept Names key")
+    void constructorShouldAcceptNamesKey() {
+        AnyValue value = AnyValueImpl.ofString("service-a");
+        KeyValue kv = new KeyValueImpl(Names.RES_SERVICE_NAME, value);
+        assertEquals("service.name", kv.getKey());
+        assertSame(value, kv.getValue());
     }
 
     @Test
@@ -55,5 +70,14 @@ class KeyValueImplUnitTest {
                 AnyValueImpl.empty()
         ));
         assertDoesNotThrow(() -> new KeyValueImpl("array", array));
+    }
+
+    @Test
+    @DisplayName("factory should accept Names key")
+    void factoryShouldAcceptNamesKey() {
+        AnyValue value = AnyValueImpl.ofString("200");
+        KeyValue kv = KeyValueImpl.of(Names.ATTR_HTTP_RESPONSE_STATUS_CODE, value);
+        assertEquals("http.response.status_code", kv.getKey());
+        assertSame(value, kv.getValue());
     }
 }
