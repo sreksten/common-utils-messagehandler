@@ -30,7 +30,7 @@ class TraceContextValidatorUnitTest {
 
     @Test
     @DisplayName("isValidTraceparent() should accept short version 00 IDs by left-padding")
-    void isValidTraceparentShouldAcceptShortVersion00IdsByLeftPadding() {
+    void isValidTraceparentShouldAcceptShortVersion00IdsByLeftPadding() throws Exception {
         String shortTraceparent = "00-1-2-01";
         String normalizedTraceId = "00000000000000000000000000000001";
         String normalizedParentId = "0000000000000002";
@@ -127,7 +127,7 @@ class TraceContextValidatorUnitTest {
 
     @Test
     @DisplayName("constructors should create compliant values and parse valid inputs")
-    void constructorsShouldCreateCompliantValuesAndParseValidInputs() {
+    void constructorsShouldCreateCompliantValuesAndParseValidInputs() throws Exception {
         TraceContextValidator generated = new TraceContextValidator();
         assertTrue(TraceContextValidator.isValidTraceId(generated.getTraceId()));
         assertTrue(TraceContextValidator.isValidTraceparent(generated.getTraceparentValue()));
@@ -151,8 +151,8 @@ class TraceContextValidatorUnitTest {
     @Test
     @DisplayName("constructors should reject invalid traceparent and tracestate")
     void constructorsShouldRejectInvalidTraceparentAndTracestate() {
-        assertThrows(IllegalArgumentException.class, () -> new TraceContextValidator("bad"));
-        assertThrows(IllegalArgumentException.class, () -> new TraceContextValidator(VALID_TRACEPARENT, "k=v,k=v"));
+        assertThrows(InvalidTraceContextException.class, () -> new TraceContextValidator("bad"));
+        assertThrows(InvalidTraceContextException.class, () -> new TraceContextValidator(VALID_TRACEPARENT, "k=v,k=v"));
     }
 
     @Test
@@ -166,7 +166,7 @@ class TraceContextValidatorUnitTest {
 
     @Test
     @DisplayName("constructors should accept multiple tracestate headers")
-    void constructorsShouldAcceptMultipleTracestateHeaders() {
+    void constructorsShouldAcceptMultipleTracestateHeaders() throws Exception {
         TraceContextValidator validator = new TraceContextValidator(VALID_TRACEPARENT, "a=1", "b=2");
         assertEquals("a=1,b=2", validator.getTracestateValue());
     }
@@ -204,22 +204,22 @@ class TraceContextValidatorUnitTest {
 
     @Test
     @DisplayName("toCompliantTraceId() and extractShortTraceId() should support interop conversion")
-    void toCompliantTraceIdAndExtractShortTraceIdShouldSupportInteropConversion() {
+    void toCompliantTraceIdAndExtractShortTraceIdShouldSupportInteropConversion() throws Exception {
         assertEquals(VALID_TRACE_ID, TraceContextValidator.toCompliantTraceId(VALID_TRACE_ID));
         assertEquals("000000000000000000000000000000ab", TraceContextValidator.toCompliantTraceId("ab"));
-        assertThrows(IllegalArgumentException.class, () -> TraceContextValidator.toCompliantTraceId("AB"));
-        assertThrows(IllegalArgumentException.class, () -> TraceContextValidator.toCompliantTraceId("0"));
+        assertThrows(InvalidTraceContextException.class, () -> TraceContextValidator.toCompliantTraceId("AB"));
+        assertThrows(InvalidTraceContextException.class, () -> TraceContextValidator.toCompliantTraceId("0"));
 
         assertEquals("0e0e4736", TraceContextValidator.extractShortTraceId(VALID_TRACE_ID, 8));
         assertEquals("ab", TraceContextValidator.extractShortTraceId("ab", 2));
-        assertThrows(IllegalArgumentException.class, () -> TraceContextValidator.extractShortTraceId("AB", 2));
-        assertThrows(IllegalArgumentException.class, () -> TraceContextValidator.extractShortTraceId(VALID_TRACE_ID, 0));
-        assertThrows(IllegalArgumentException.class, () -> TraceContextValidator.extractShortTraceId(VALID_TRACE_ID, 33));
+        assertThrows(InvalidTraceContextException.class, () -> TraceContextValidator.extractShortTraceId("AB", 2));
+        assertThrows(InvalidTraceContextException.class, () -> TraceContextValidator.extractShortTraceId(VALID_TRACE_ID, 0));
+        assertThrows(InvalidTraceContextException.class, () -> TraceContextValidator.extractShortTraceId(VALID_TRACE_ID, 33));
     }
 
     @Test
     @DisplayName("tracestate truncation should remove entries longer than 128 characters first")
-    void tracestateTruncationShouldRemoveEntriesLongerThan128CharactersFirst() {
+    void tracestateTruncationShouldRemoveEntriesLongerThan128128CharactersFirst() throws Exception {
         String longEntryTracestate = "a=" + repeat("x", 130)
                 + ",b=" + repeat("y", 100)
                 + ",c=" + repeat("z", 100)
@@ -237,7 +237,7 @@ class TraceContextValidatorUnitTest {
 
     @Test
     @DisplayName("tracestate truncation should remove right-most entries until total length fits")
-    void tracestateTruncationShouldRemoveRightMostEntriesUntilTotalLengthFits() {
+    void tracestateTruncationShouldRemoveRightMostEntriesUntilTotalLengthFits() throws Exception {
         String oversized = "a=" + repeat("x", 100)
                 + ",b=" + repeat("y", 100)
                 + ",c=" + repeat("z", 100)
@@ -283,7 +283,7 @@ class TraceContextValidatorUnitTest {
 
     @Test
     @DisplayName("upsertVendorEntry() should add first, update existing and enforce member limit")
-    void upsertVendorEntryShouldAddFirstUpdateExistingAndEnforceMemberLimit() {
+    void upsertVendorEntryShouldAddFirstUpdateExistingAndEnforceMemberLimit() throws Exception {
         TraceContextValidator validator = new TraceContextValidator(VALID_TRACEPARENT, "a=1,b=2,c=3");
         validator.upsertVendorEntry("vendor", "v");
         assertEquals("vendor=v,a=1,b=2,c=3", validator.getTracestateValue());
@@ -300,15 +300,15 @@ class TraceContextValidatorUnitTest {
 
     @Test
     @DisplayName("upsertVendorEntry() should reject invalid vendor key and value")
-    void upsertVendorEntryShouldRejectInvalidVendorKeyAndValue() {
+    void upsertVendorEntryShouldRejectInvalidVendorKeyAndValue() throws Exception {
         TraceContextValidator validator = new TraceContextValidator(VALID_TRACEPARENT);
-        assertThrows(IllegalArgumentException.class, () -> validator.upsertVendorEntry("Invalid", "v"));
-        assertThrows(IllegalArgumentException.class, () -> validator.upsertVendorEntry("valid", "bad "));
+        assertThrows(InvalidTraceContextException.class, () -> validator.upsertVendorEntry("Invalid", "v"));
+        assertThrows(InvalidTraceContextException.class, () -> validator.upsertVendorEntry("valid", "bad "));
     }
 
     @Test
     @DisplayName("header output methods should expose trace values and complete HTTP header lines")
-    void headerOutputMethodsShouldExposeTraceValuesAndCompleteHttpHeaderLines() {
+    void headerOutputMethodsShouldExposeTraceValuesAndCompleteHttpHeaderLines() throws Exception {
         TraceContextValidator withoutTracestate = new TraceContextValidator(VALID_TRACEPARENT);
         assertEquals(VALID_TRACEPARENT, withoutTracestate.getTraceValue());
         assertEquals("traceparent: " + VALID_TRACEPARENT, withoutTracestate.getHttpHeaderValue());
@@ -323,12 +323,13 @@ class TraceContextValidatorUnitTest {
     @Test
     @DisplayName("private helpers should enforce low-level grammar edges")
     void privateHelpersShouldEnforceLowLevelGrammarEdges() throws Exception {
-        assertFalse(invokeBoolean("isValidTracestateKey", new Class<?>[]{String.class}, (Object) null));
-        assertFalse(invokeBoolean("isValidTracestateKey", new Class<?>[]{String.class}, ""));
-        assertFalse(invokeBoolean("isValidTracestateKey", new Class<?>[]{String.class}, repeat("a", 257)));
-        assertFalse(invokeBoolean("isValidTracestateKey", new Class<?>[]{String.class}, "_tenant@sys"));
-        assertFalse(invokeBoolean("isValidTracestateKey", new Class<?>[]{String.class}, "tenant@sy!s"));
-        assertFalse(invokeBoolean("isValidTracestateKey", new Class<?>[]{String.class}, "a!"));
+        assertTrue(invokeBoolean("isNotValidTracestateKey", new Class<?>[]{String.class}, (Object) null));
+        assertTrue(invokeBoolean("isNotValidTracestateKey", new Class<?>[]{String.class}, ""));
+        assertTrue(invokeBoolean("isNotValidTracestateKey", new Class<?>[]{String.class}, repeat("a", 257)));
+        assertTrue(invokeBoolean("isNotValidTracestateKey", new Class<?>[]{String.class}, "_tenant@sys"));
+        assertTrue(invokeBoolean("isNotValidTracestateKey", new Class<?>[]{String.class}, "tenant@sy!s"));
+        assertTrue(invokeBoolean("isNotValidTracestateKey", new Class<?>[]{String.class}, "a!"));
+        assertFalse(invokeBoolean("isNotValidTracestateKey", new Class<?>[]{String.class}, "a"));
 
         assertFalse(invokeBoolean("isValidSimpleKey", new Class<?>[]{String.class}, ""));
         assertFalse(invokeBoolean("isValidSimpleKey", new Class<?>[]{String.class}, "a!"));
@@ -342,34 +343,35 @@ class TraceContextValidatorUnitTest {
         assertFalse(invokeBoolean("isValidSystemId", new Class<?>[]{String.class}, ""));
         assertFalse(invokeBoolean("isValidSystemId", new Class<?>[]{String.class}, repeat("a", 15)));
 
-        assertTrue(invokeBoolean("isValidKeyChar", new Class<?>[]{char.class}, 'a'));
-        assertTrue(invokeBoolean("isValidKeyChar", new Class<?>[]{char.class}, '5'));
-        assertTrue(invokeBoolean("isValidKeyChar", new Class<?>[]{char.class}, '_'));
-        assertTrue(invokeBoolean("isValidKeyChar", new Class<?>[]{char.class}, '-'));
-        assertTrue(invokeBoolean("isValidKeyChar", new Class<?>[]{char.class}, '*'));
-        assertTrue(invokeBoolean("isValidKeyChar", new Class<?>[]{char.class}, '/'));
-        assertFalse(invokeBoolean("isValidKeyChar", new Class<?>[]{char.class}, '!'));
+        assertFalse(invokeBoolean("isNotValidKeyChar", new Class<?>[]{char.class}, 'a'));
+        assertFalse(invokeBoolean("isNotValidKeyChar", new Class<?>[]{char.class}, '5'));
+        assertFalse(invokeBoolean("isNotValidKeyChar", new Class<?>[]{char.class}, '_'));
+        assertFalse(invokeBoolean("isNotValidKeyChar", new Class<?>[]{char.class}, '-'));
+        assertFalse(invokeBoolean("isNotValidKeyChar", new Class<?>[]{char.class}, '*'));
+        assertFalse(invokeBoolean("isNotValidKeyChar", new Class<?>[]{char.class}, '/'));
+        assertTrue(invokeBoolean("isNotValidKeyChar", new Class<?>[]{char.class}, '!'));
 
-        assertTrue(invokeBoolean("isLowerAlpha", new Class<?>[]{char.class}, 'a'));
-        assertFalse(invokeBoolean("isLowerAlpha", new Class<?>[]{char.class}, 'A'));
-        assertFalse(invokeBoolean("isLowerAlpha", new Class<?>[]{char.class}, '{'));
-        assertTrue(invokeBoolean("isDigit", new Class<?>[]{char.class}, '8'));
-        assertFalse(invokeBoolean("isDigit", new Class<?>[]{char.class}, 'x'));
+        assertFalse(invokeBoolean("isNotLowerAlpha", new Class<?>[]{char.class}, 'a'));
+        assertTrue(invokeBoolean("isNotLowerAlpha", new Class<?>[]{char.class}, 'A'));
+        assertTrue(invokeBoolean("isNotLowerAlpha", new Class<?>[]{char.class}, '{'));
+        assertFalse(invokeBoolean("isNotDigit", new Class<?>[]{char.class}, '8'));
+        assertTrue(invokeBoolean("isNotDigit", new Class<?>[]{char.class}, 'x'));
 
-        assertFalse(invokeBoolean("isValidTracestateValue", new Class<?>[]{String.class}, (Object) null));
-        assertFalse(invokeBoolean("isValidTracestateValue", new Class<?>[]{String.class}, ""));
-        assertFalse(invokeBoolean("isValidTracestateValue", new Class<?>[]{String.class}, "a,b"));
-        assertFalse(invokeBoolean("isValidTracestateValue", new Class<?>[]{String.class}, "a=b"));
-        assertFalse(invokeBoolean("isValidTracestateValue", new Class<?>[]{String.class}, "a\u007F"));
-        assertFalse(invokeBoolean("isValidHex", new Class<?>[]{String.class, int.class}, null, 2));
-        assertFalse(invokeBoolean("isValidHex", new Class<?>[]{String.class, int.class}, "0", 2));
-        assertFalse(invokeBoolean("isValidLowerHex", new Class<?>[]{String.class, int.class}, null, 2));
-        assertFalse(invokeBoolean("isValidLowerHex", new Class<?>[]{String.class, int.class}, "0", 2));
-        assertTrue(invokeBoolean("isLowerHexCharacter", new Class<?>[]{char.class}, '5'));
-        assertTrue(invokeBoolean("isLowerHexCharacter", new Class<?>[]{char.class}, 'b'));
-        assertFalse(invokeBoolean("isLowerHexCharacter", new Class<?>[]{char.class}, 'g'));
-        assertFalse(invokeBoolean("isLowerHexCharacter", new Class<?>[]{char.class}, ':'));
-        assertFalse(invokeBoolean("isLowerHexCharacter", new Class<?>[]{char.class}, '/'));
+        assertTrue(invokeBoolean("isNotValidTracestateValue", new Class<?>[]{String.class}, (Object) null));
+        assertTrue(invokeBoolean("isNotValidTracestateValue", new Class<?>[]{String.class}, ""));
+        assertTrue(invokeBoolean("isNotValidTracestateValue", new Class<?>[]{String.class}, "a,b"));
+        assertTrue(invokeBoolean("isNotValidTracestateValue", new Class<?>[]{String.class}, "a=b"));
+        assertTrue(invokeBoolean("isNotValidTracestateValue", new Class<?>[]{String.class}, "a\u007F"));
+        assertFalse(invokeBoolean("isNotValidTracestateValue", new Class<?>[]{String.class}, "ok value"));
+        assertTrue(invokeBoolean("isNotValidHex", new Class<?>[]{String.class, int.class}, null, 2));
+        assertTrue(invokeBoolean("isNotValidHex", new Class<?>[]{String.class, int.class}, "0", 2));
+        assertTrue(invokeBoolean("isNotValidLowerHex", new Class<?>[]{String.class}, (Object) null));
+        assertTrue(invokeBoolean("isNotValidLowerHex", new Class<?>[]{String.class}, "0"));
+        assertFalse(invokeBoolean("isNotLowerHexCharacter", new Class<?>[]{char.class}, '5'));
+        assertFalse(invokeBoolean("isNotLowerHexCharacter", new Class<?>[]{char.class}, 'b'));
+        assertTrue(invokeBoolean("isNotLowerHexCharacter", new Class<?>[]{char.class}, 'g'));
+        assertTrue(invokeBoolean("isNotLowerHexCharacter", new Class<?>[]{char.class}, ':'));
+        assertTrue(invokeBoolean("isNotLowerHexCharacter", new Class<?>[]{char.class}, '/'));
         assertTrue(invokeBoolean("isHexCharacter", new Class<?>[]{char.class}, '5'));
         assertTrue(invokeBoolean("isHexCharacter", new Class<?>[]{char.class}, 'b'));
         assertTrue(invokeBoolean("isHexCharacter", new Class<?>[]{char.class}, 'B'));

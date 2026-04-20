@@ -7,6 +7,8 @@ import java.security.SecureRandom;
  * <p>
  * Specification:
  * <a href="https://www.w3.org/TR/trace-context/">W3C Trace Context</a>.
+ *
+ * @author Stefano Reksten
  */
 public final class TraceContextGenerator {
 

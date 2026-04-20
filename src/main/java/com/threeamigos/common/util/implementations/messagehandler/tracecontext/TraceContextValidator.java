@@ -18,18 +18,25 @@ import java.util.Map;
  *   or emit complete header lines with {@link #getHttpHeaderValue()}.</li>
  * </ol>
  * <pre>{@code
- * TraceContextValidator context =
- *         TraceContextValidator.fromIncomingHeaders(traceparentHeader, tracestateHeader);
- * context.upsertVendorEntry("congo", "t61rcWkgMzE");
+ * try {
+ *     TraceContextValidator context =
+ *             TraceContextValidator.fromIncomingHeaders(traceparentHeader, tracestateHeader);
+ *     context.upsertVendorEntry("congo", "t61rcWkgMzE");
  *
- * String outgoingTraceparent = context.getTraceparentValue();
- * String outgoingTracestate = context.getTracestateValue();
+ *     String outgoingTraceparent = context.getTraceparentValue();
+ *     String outgoingTracestate = context.getTracestateValue();
+ * } catch (InvalidTraceContextException ex) {
+ *     // Handle invalid vendor key/value. fromIncomingHeaders(...) normalizes
+ *     // invalid incoming headers instead of throwing; use constructors for strict handling.
+ * }
  * }</pre>
  * <p>
  * Specification:
  * <a href="https://www.w3.org/TR/trace-context/">W3C Trace Context</a>
  * (including
  * <a href="https://www.w3.org/TR/trace-context/#trace-id">trace-id</a>).
+ *
+ * @author Stefano Reksten
  */
 public final class TraceContextValidator {
 
@@ -57,7 +64,7 @@ public final class TraceContextValidator {
     /**
      * Creates a new trace context with generated compliant identifiers.
      * <p>
-     * Use this when there is no incoming {@code traceparent} to continue, for example when
+     * Use this when there is no incoming {@code traceparent} to continue, for example, when
      * starting a new root trace in this service. The same behavior is used as a fallback by
      * {@link #fromIncomingHeaders(String, String)} when incoming headers are absent or invalid.
      */
@@ -71,8 +78,9 @@ public final class TraceContextValidator {
      * Creates a validator from a {@code traceparent} value.
      *
      * @param traceparent the traceparent value to validate and load
+     * @throws InvalidTraceContextException when the provided traceparent is invalid
      */
-    public TraceContextValidator(final String traceparent) {
+    public TraceContextValidator(final String traceparent) throws InvalidTraceContextException {
         this(traceparent, (String) null);
     }
 
@@ -81,11 +89,12 @@ public final class TraceContextValidator {
      *
      * @param traceparent the traceparent value to validate and load
      * @param tracestate  the tracestate value to validate and load
+     * @throws InvalidTraceContextException when traceparent or tracestate is invalid
      */
-    public TraceContextValidator(final String traceparent, final String tracestate) {
+    public TraceContextValidator(final String traceparent, final String tracestate) throws InvalidTraceContextException {
         ParsedTraceparent parsed = parseTraceparent(traceparent);
         if (parsed == null) {
-            throw new IllegalArgumentException("Invalid traceparent value");
+            throw new InvalidTraceContextException("Invalid traceparent value");
         }
 
         this.traceId = parsed.traceId.toLowerCase(Locale.ROOT);
@@ -100,8 +109,9 @@ public final class TraceContextValidator {
      *
      * @param traceparent       the traceparent value to validate and load
      * @param tracestateHeaders one or more tracestate header values
+     * @throws InvalidTraceContextException when traceparent or tracestate is invalid
      */
-    public TraceContextValidator(final String traceparent, final String... tracestateHeaders) {
+    public TraceContextValidator(final String traceparent, final String... tracestateHeaders) throws InvalidTraceContextException {
         this(traceparent, combineTracestateHeaders(tracestateHeaders));
     }
 
@@ -170,7 +180,7 @@ public final class TraceContextValidator {
         try {
             parseTracestate(tracestate);
             return true;
-        } catch (IllegalArgumentException ex) {
+        } catch (InvalidTraceContextException ex) {
             return false;
         }
     }
@@ -222,7 +232,7 @@ public final class TraceContextValidator {
         LinkedHashMap<String, String> parsedTracestate;
         try {
             parsedTracestate = parseTracestate(tracestate);
-        } catch (IllegalArgumentException ex) {
+        } catch (InvalidTraceContextException ex) {
             parsedTracestate = new LinkedHashMap<>();
         }
 
@@ -246,11 +256,12 @@ public final class TraceContextValidator {
      *
      * @param traceId trace identifier to normalize
      * @return compliant 32-char trace-id
+     * @throws InvalidTraceContextException when trace-id is invalid
      */
-    public static String toCompliantTraceId(final String traceId) {
+    public static String toCompliantTraceId(final String traceId) throws InvalidTraceContextException {
         String normalized = normalizeLowerHexIdToLength(traceId, TRACE_ID_LENGTH);
         if (normalized == null) {
-            throw new IllegalArgumentException("Invalid trace-id");
+            throw new InvalidTraceContextException("Invalid trace-id");
         }
         return normalized;
     }
@@ -261,11 +272,12 @@ public final class TraceContextValidator {
      * @param traceId      trace identifier to extract from
      * @param targetLength desired short identifier length
      * @return right-most {@code targetLength} characters
+     * @throws InvalidTraceContextException when trace-id or target length is invalid
      */
-    public static String extractShortTraceId(final String traceId, final int targetLength) {
+    public static String extractShortTraceId(final String traceId, final int targetLength) throws InvalidTraceContextException {
         String normalized = toCompliantTraceId(traceId);
         if (targetLength <= 0 || targetLength > TRACE_ID_LENGTH) {
-            throw new IllegalArgumentException("Invalid target length");
+            throw new InvalidTraceContextException("Invalid target length");
         }
         return normalized.substring(TRACE_ID_LENGTH - targetLength);
     }
@@ -278,13 +290,14 @@ public final class TraceContextValidator {
      *
      * @param vendorName  tracestate vendor key
      * @param vendorValue tracestate vendor value
+     * @throws InvalidTraceContextException when vendor key or value is invalid
      */
-    public void upsertVendorEntry(final String vendorName, final String vendorValue) {
+    public void upsertVendorEntry(final String vendorName, final String vendorValue) throws InvalidTraceContextException {
         if (isNotValidTracestateKey(vendorName)) {
-            throw new IllegalArgumentException("Invalid tracestate vendor key");
+            throw new InvalidTraceContextException("Invalid tracestate vendor key");
         }
         if (isNotValidTracestateValue(vendorValue)) {
-            throw new IllegalArgumentException("Invalid tracestate vendor value");
+            throw new InvalidTraceContextException("Invalid tracestate vendor value");
         }
 
         LinkedHashMap<String, String> reordered = new LinkedHashMap<>();
@@ -394,10 +407,10 @@ public final class TraceContextValidator {
             return new ParsedTraceparent(traceId, parentId, traceFlags);
         }
 
-        if (isNotValidHex(traceId, TRACE_ID_LENGTH) || isAllZero(traceId)) {
+        if (isNotValidHex(traceId, TRACE_ID_LENGTH) || isAllZeroes(traceId)) {
             return null;
         }
-        if (isNotValidHex(parentId, PARENT_ID_LENGTH) || isAllZero(parentId)) {
+        if (isNotValidHex(parentId, PARENT_ID_LENGTH) || isAllZeroes(parentId)) {
             return null;
         }
         if (isNotValidHex(traceFlags, TRACE_FLAGS_LENGTH)) {
@@ -445,7 +458,7 @@ public final class TraceContextValidator {
         return new ParsedTraceparent(normalizedTraceId, normalizedParentId, traceFlags);
     }
 
-    private static LinkedHashMap<String, String> parseTracestate(final String tracestate) {
+    private static LinkedHashMap<String, String> parseTracestate(final String tracestate) throws InvalidTraceContextException {
         LinkedHashMap<String, String> entries = new LinkedHashMap<>();
         if (tracestate == null) {
             return entries;
@@ -453,7 +466,7 @@ public final class TraceContextValidator {
 
         String[] members = tracestate.split(",", -1);
         if (members.length > MAX_TRACESTATE_MEMBERS) {
-            throw new IllegalArgumentException("tracestate contains too many list-members");
+            throw new InvalidTraceContextException("tracestate contains too many list-members");
         }
 
         for (String rawMember : members) {
@@ -464,20 +477,20 @@ public final class TraceContextValidator {
 
             int equalsIndex = member.indexOf('=');
             if (equalsIndex <= 0 || equalsIndex != member.lastIndexOf('=')) {
-                throw new IllegalArgumentException("Invalid tracestate list-member");
+                throw new InvalidTraceContextException("Invalid tracestate list-member");
             }
 
             String key = member.substring(0, equalsIndex);
             String value = member.substring(equalsIndex + 1);
 
             if (isNotValidTracestateKey(key)) {
-                throw new IllegalArgumentException("Invalid tracestate key");
+                throw new InvalidTraceContextException("Invalid tracestate key");
             }
             if (isNotValidTracestateValue(value)) {
-                throw new IllegalArgumentException("Invalid tracestate value");
+                throw new InvalidTraceContextException("Invalid tracestate value");
             }
             if (entries.containsKey(key)) {
-                throw new IllegalArgumentException("Duplicate tracestate key");
+                throw new InvalidTraceContextException("Duplicate tracestate key");
             }
 
             entries.put(key, value);
@@ -663,7 +676,7 @@ public final class TraceContextValidator {
     private static LinkedHashMap<String, String> applyTracestateLimits(final LinkedHashMap<String, String> source) {
         LinkedHashMap<String, String> normalized = new LinkedHashMap<>(source);
 
-        removeEntriesLongerThan(normalized);
+        removeEntriesLongerThan128(normalized);
 
         while (normalized.size() > MAX_TRACESTATE_MEMBERS) {
             removeLastEntry(normalized);
@@ -676,7 +689,7 @@ public final class TraceContextValidator {
         return normalized;
     }
 
-    private static void removeEntriesLongerThan(final LinkedHashMap<String, String> entries) {
+    private static void removeEntriesLongerThan128(final LinkedHashMap<String, String> entries) {
         LinkedHashMap<String, String> filtered = new LinkedHashMap<>();
         for (Map.Entry<String, String> entry : entries.entrySet()) {
             if (calculateListMemberLength(entry.getKey(), entry.getValue()) <= TraceContextValidator.TRUNCATION_PRIORITY_MEMBER_LENGTH) {
@@ -710,7 +723,7 @@ public final class TraceContextValidator {
             return null;
         }
         String normalized = leftPadWithZeroes(id, requiredLength);
-        if (isAllZero(normalized)) {
+        if (isAllZeroes(normalized)) {
             return null;
         }
         return normalized;
@@ -738,7 +751,7 @@ public final class TraceContextValidator {
         return true;
     }
 
-    private static boolean isAllZero(final String value) {
+    private static boolean isAllZeroes(final String value) {
         for (int i = 0; i < value.length(); i++) {
             if (value.charAt(i) != '0') {
                 return false;
