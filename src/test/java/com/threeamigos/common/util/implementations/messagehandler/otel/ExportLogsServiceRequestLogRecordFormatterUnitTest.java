@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
+import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.ExportLogsServiceRequestLogRecordFormatter;
+import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.RawJsonRecordFormatter;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
@@ -23,14 +25,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @DisplayName("LogRecordFormatterImpl unit tests")
 @Tag("unit")
 @Tag("messageHandler")
-class LogRecordFormatterImplUnitTest {
+class ExportLogsServiceRequestLogRecordFormatterUnitTest {
 
     private static final Instant FIXED_TS = Instant.parse("2026-04-19T21:30:00.000000123Z");
     private static final Instant FIXED_OBSERVED_TS = Instant.parse("2026-04-19T21:30:01.000000456Z");
     private static final String TRACE_ID = "5b8efff798038103d269b633813fc60c";
     private static final String SPAN_ID = "eee19b7ec3c1b174";
 
-    private final LogRecordFormatterImpl formatter = new LogRecordFormatterImpl();
+    private final ExportLogsServiceRequestLogRecordFormatter formatter = new ExportLogsServiceRequestLogRecordFormatter();
     private final RawJsonRecordFormatter rawFormatter = new RawJsonRecordFormatter();
 
     @Test

@@ -1,7 +1,5 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
-import com.threeamigos.common.util.interfaces.messagehandler.ContextInfo;
-
 import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -55,42 +53,42 @@ public class JULMessageHandler extends AbstractMessageHandler {
     }
 
     @Override
-    protected void handleInfoMessageImpl(final String message, final ContextInfo contextInfo) {
+    protected void handleInfoMessageImpl(final String message) {
         logger.log(Level.INFO, message);
     }
 
     @Override
-    protected void handleWarnMessageImpl(final String message, final ContextInfo contextInfo) {
+    protected void handleWarnMessageImpl(final String message) {
         logger.log(Level.WARNING, message);
     }
 
     @Override
-    protected void handleErrorMessageImpl(final String message, final ContextInfo contextInfo) {
+    protected void handleErrorMessageImpl(final String message) {
         logger.log(Level.SEVERE, message);
     }
 
     @Override
-    protected void handleFatalMessageImpl(final String message, final ContextInfo contextInfo) {
+    protected void handleFatalMessageImpl(final String message) {
         logger.log(Level.SEVERE, message);
     }
 
     @Override
-    protected void handleDebugMessageImpl(final String message, final ContextInfo contextInfo) {
-        logger.log(Level.FINE, message);
-    }
-
-    @Override
-    protected void handleTraceMessageImpl(final String message, final ContextInfo contextInfo) {
+    protected void handleDebugMessageImpl(final String message) {
         logger.log(Level.FINER, message);
     }
 
     @Override
-    protected void handleExceptionImpl(final Exception exception, final ContextInfo contextInfo) {
+    protected void handleTraceMessageImpl(final String message) {
+        logger.log(Level.FINEST, message);
+    }
+
+    @Override
+    protected void handleExceptionImpl(final Exception exception) {
         logger.log(Level.SEVERE, ExceptionMessageFormatter.detail(exception), exception);
     }
 
     @Override
-    protected void handleExceptionImpl(final String message, final Exception exception, final ContextInfo contextInfo) {
+    protected void handleExceptionImpl(final String message, final Exception exception) {
         logger.log(Level.SEVERE, ExceptionMessageFormatter.withPrefix(message, exception), exception);
     }
 }

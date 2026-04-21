@@ -51,8 +51,7 @@ public interface RotationPolicy {
      * @param filePath path of the currently open log file that is about to be rotated; never {@code null}
      * @return the destination path for the rotated (archived) file; never {@code null}
      */
-    @Nonnull
-    Path rotatedFilePath(@Nonnull Path filePath);
+    @Nonnull Path rotatedFilePath(@Nonnull Path filePath);
 
     /**
      * Called by {@code FileMessageHandler} immediately after a rotation has completed and the

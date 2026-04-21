@@ -1,9 +1,11 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
-import com.threeamigos.common.util.interfaces.messagehandler.ContextInfo;
-import com.threeamigos.common.util.interfaces.messagehandler.LogLevelEnum;
 import com.threeamigos.common.util.interfaces.messagehandler.RotationPolicy;
 
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 import jakarta.annotation.Nonnull;
 
 import java.io.IOException;
@@ -54,8 +56,10 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      * @throws IllegalArgumentException if the path is null, blank, points to a directory,
      *                                  is not writable, or cannot be created
      */
-    public FileMessageHandler(final String filename) {
-        this(filename, false, 0, false, null, false);
+    public FileMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
+                              final @Nonnull LogRecordFormatter logRecordFormatter,
+                              final @Nonnull String filename) {
+        this(logRecordFactory, logRecordFormatter, filename, false, 0, false, null, false);
     }
 
     /**
@@ -69,8 +73,11 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      * @param queueCapacity maximum number of queued write tasks when async; {@code 0} or negative means unbounded
      * @throws IllegalArgumentException if the path is invalid or the file cannot be opened for writing
      */
-    public FileMessageHandler(final String filename, final boolean async, final int queueCapacity) {
-        this(filename, async, queueCapacity, false, null, false);
+    public FileMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
+                              final @Nonnull LogRecordFormatter logRecordFormatter,
+                              final @Nonnull String filename,
+                              final boolean async, final int queueCapacity) {
+        this(logRecordFactory, logRecordFormatter, filename, async, queueCapacity, false, null, false);
     }
 
     /**
@@ -87,9 +94,12 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      *                             closes the file when the JVM exits
      * @throws IllegalArgumentException if the path is invalid or the file cannot be opened for writing
      */
-    public FileMessageHandler(final String filename, final boolean async, final int queueCapacity,
+    public FileMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
+                              final @Nonnull LogRecordFormatter logRecordFormatter,
+                              final @Nonnull String filename,
+                              final boolean async, final int queueCapacity,
                               final boolean registerShutdownHook) {
-        this(filename, async, queueCapacity, registerShutdownHook, null, false);
+        this(logRecordFactory, logRecordFormatter, filename, async, queueCapacity, registerShutdownHook, null, false);
     }
 
     // -------------------------------------------------------------------------
@@ -104,8 +114,11 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      *                       {@code null} disables rotation
      * @throws IllegalArgumentException if the path is invalid or the file cannot be opened for writing
      */
-    public FileMessageHandler(final String filename, final RotationPolicy rotationPolicy) {
-        this(filename, false, 0, false, rotationPolicy, false);
+    public FileMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
+                              final @Nonnull LogRecordFormatter logRecordFormatter,
+                              final @Nonnull String filename,
+                              final RotationPolicy rotationPolicy) {
+        this(logRecordFactory, logRecordFormatter, filename, false, 0, false, rotationPolicy, false);
     }
 
     /**
@@ -118,9 +131,12 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      *                       {@code null} disables rotation
      * @throws IllegalArgumentException if the path is invalid or the file cannot be opened for writing
      */
-    public FileMessageHandler(final String filename, final boolean async, final int queueCapacity,
+    public FileMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
+                              final @Nonnull LogRecordFormatter logRecordFormatter,
+                              final @Nonnull String filename,
+                              final boolean async, final int queueCapacity,
                               final RotationPolicy rotationPolicy) {
-        this(filename, async, queueCapacity, false, rotationPolicy, false);
+        this(logRecordFactory, logRecordFormatter, filename, async, queueCapacity, false, rotationPolicy, false);
     }
 
     /**
@@ -136,16 +152,23 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      *                                 been deleted or moved by an external tool (e.g. {@code logrotate})
      * @throws IllegalArgumentException if the path is invalid or the file cannot be opened for writing
      */
-    public FileMessageHandler(final String filename, final boolean async, final int queueCapacity,
+    public FileMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
+                              final @Nonnull LogRecordFormatter logRecordFormatter,
+                              final @Nonnull String filename,
+                              final boolean async, final int queueCapacity,
                               final boolean registerShutdownHook, final RotationPolicy rotationPolicy,
                               final boolean reopenOnExternalRotation) {
-        this(prepareFilePath(filename), async, queueCapacity, registerShutdownHook,
+        this(logRecordFactory, logRecordFormatter,
+                prepareFilePath(filename), async, queueCapacity, registerShutdownHook,
                 rotationPolicy, reopenOnExternalRotation);
     }
 
-    private FileMessageHandler(final Path filePath, final boolean async, final int queueCapacity,
+    private FileMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
+                               final @Nonnull LogRecordFormatter logRecordFormatter,
+                               final @Nonnull Path filePath, final boolean async, final int queueCapacity,
                                final boolean registerShutdownHook, final RotationPolicy rotationPolicy,
                                final boolean reopenOnExternalRotation) {
+        super(logRecordFactory, logRecordFormatter);
         this.filePath = filePath;
         this.rotationPolicy = rotationPolicy;
         this.reopenOnExternalRotation = reopenOnExternalRotation;
@@ -194,43 +217,51 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
     // -------------------------------------------------------------------------
 
     @Override
-    protected void handleInfoMessageImpl(final String message, ContextInfo contextInfo) {
-        writeMessage(getFormatter().format(LogLevelEnum.INFO, message, contextInfo));
+    protected void handleInfoMessageImpl(final String message) {
+        LogRecord logRecord = logRecordFactory.create(SeverityNumber.INFO, message);
+        writeMessage(logRecordFormatter.format(logRecord));
     }
 
     @Override
-    protected void handleWarnMessageImpl(final String message, ContextInfo contextInfo) {
-        writeMessage(getFormatter().format(LogLevelEnum.WARN, message, contextInfo));
+    protected void handleWarnMessageImpl(final String message) {
+        LogRecord logRecord = logRecordFactory.create(SeverityNumber.WARN, message);
+        writeMessage(logRecordFormatter.format(logRecord));
     }
 
     @Override
-    protected void handleErrorMessageImpl(final String message, ContextInfo contextInfo) {
-        writeMessage(getFormatter().format(LogLevelEnum.ERROR, message, contextInfo));
+    protected void handleErrorMessageImpl(final String message) {
+        LogRecord logRecord = logRecordFactory.create(SeverityNumber.ERROR, message);
+        writeMessage(logRecordFormatter.format(logRecord));
     }
 
     @Override
-    protected void handleFatalMessageImpl(final String message, ContextInfo contextInfo) {
-        writeMessage(getFormatter().format(LogLevelEnum.FATAL, message, contextInfo));
+    protected void handleFatalMessageImpl(final String message) {
+        LogRecord logRecord = logRecordFactory.create(SeverityNumber.FATAL, message);
+        writeMessage(logRecordFormatter.format(logRecord));
     }
 
     @Override
-    protected void handleDebugMessageImpl(final String message, ContextInfo contextInfo) {
-        writeMessage(getFormatter().format(LogLevelEnum.DEBUG, message, contextInfo));
+    protected void handleDebugMessageImpl(final String message) {
+        LogRecord logRecord = logRecordFactory.create(SeverityNumber.DEBUG, message);
+        writeMessage(logRecordFormatter.format(logRecord));
     }
 
     @Override
-    protected void handleTraceMessageImpl(final String message, ContextInfo contextInfo) {
-        writeMessage(getFormatter().format(LogLevelEnum.TRACE, message, contextInfo));
+    protected void handleTraceMessageImpl(final String message) {
+        LogRecord logRecord = logRecordFactory.create(SeverityNumber.TRACE, message);
+        writeMessage(logRecordFormatter.format(logRecord));
     }
 
     @Override
-    protected void handleExceptionImpl(final Exception exception, ContextInfo contextInfo) {
-        writeMessage(getFormatter().formatException(exception, contextInfo));
+    protected void handleExceptionImpl(final Exception exception) {
+        LogRecord logRecord = logRecordFactory.create(exception);
+        writeMessage(logRecordFormatter.format(logRecord));
     }
 
     @Override
-    protected void handleExceptionImpl(final String message, final Exception exception, ContextInfo contextInfo) {
-        writeMessage(getFormatter().formatException(message, exception, contextInfo));
+    protected void handleExceptionImpl(final String message, final Exception exception) {
+        LogRecord logRecord = logRecordFactory.create(message, exception);
+        writeMessage(logRecordFormatter.format(logRecord));
     }
 
     // -------------------------------------------------------------------------

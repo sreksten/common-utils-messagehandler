@@ -50,13 +50,13 @@ package com.threeamigos.common.util.interfaces.messagehandler;
  * @author Stefano Reksten
  */
 public interface MessageHandler extends
-        InfoHandler, InfoWithContextHandler, InfoSupplierHandler, InfoSupplierWithContextHandler,
-        WarnHandler, WarnWithContextHandler, WarnSupplierHandler, WarnSupplierWithContextHandler,
-        ErrorHandler, ErrorWithContextHandler, ErrorSupplierHandler, ErrorSupplierWithContextHandler,
-        FatalHandler, FatalWithContextHandler, FatalSupplierHandler, FatalSupplierWithContextHandler,
-        DebugHandler, DebugWithContextHandler, DebugSupplierHandler, DebugSupplierWithContextHandler,
-        TraceHandler, TraceWithContextHandler, TraceSupplierHandler, TraceSupplierWithContextHandler,
-        ExceptionHandler, ExceptionWithContextHandler, ExceptionWithMessageHandler, ExceptionWithMessageAndContextHandler,
+        InfoHandler, InfoSupplierHandler,
+        WarnHandler, WarnSupplierHandler,
+        ErrorHandler, ErrorSupplierHandler,
+        FatalHandler, FatalSupplierHandler,
+        DebugHandler, DebugSupplierHandler,
+        TraceHandler, TraceSupplierHandler,
+        ExceptionHandler, ExceptionWithMessageHandler,
         AutoCloseable {
 
     /**

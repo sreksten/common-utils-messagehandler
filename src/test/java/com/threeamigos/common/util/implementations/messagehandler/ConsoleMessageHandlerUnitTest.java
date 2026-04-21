@@ -256,7 +256,7 @@ class ConsoleMessageHandlerUnitTest {
         PrintStream originalOut = System.out;
         System.setOut(new PrintStream(outContent, true, StandardCharsets.UTF_8.name()));
         try (ConsoleMessageHandler handler = new ConsoleMessageHandler()) {
-            handler.setFormatter(new JsonLogFormatter());
+            handler.setLogRecordFormatter(new JsonLogFormatter());
             handler.info("structured message");
         } finally {
             System.setOut(originalOut);

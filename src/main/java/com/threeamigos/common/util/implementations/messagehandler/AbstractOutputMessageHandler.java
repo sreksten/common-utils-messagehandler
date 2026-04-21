@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
-import com.threeamigos.common.util.interfaces.messagehandler.LogFormatter;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
 import jakarta.annotation.Nonnull;
 
 import java.util.Objects;
@@ -54,7 +55,16 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
     private Thread shutdownHook;
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final Object dispatchLock = new Object();
-    private volatile LogFormatter formatter = new PlainTextLogFormatter();
+    protected final LogRecordFactory logRecordFactory;
+    protected LogRecordFormatter logRecordFormatter;
+
+    public AbstractOutputMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
+                                        final @Nonnull LogRecordFormatter logRecordFormatter) {
+        Objects.requireNonNull(logRecordFactory, MessageHandlerResourceBundle.get("nullLogRecordFactoryProvided"));
+        Objects.requireNonNull(logRecordFormatter, MessageHandlerResourceBundle.get("nullFormatterProvided"));
+        this.logRecordFactory = logRecordFactory;
+        this.logRecordFormatter = logRecordFormatter;
+    }
 
     /**
      * Initializes the optional async dispatch infrastructure.
@@ -200,24 +210,23 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
      * Replaces the log formatter used to render each output line.
      * <p>
      * The formatter is applied to every message before it is handed to the underlying output
-     * (file, console, etc.). Defaults to {@link PlainTextLogFormatter}.
+     * (file, console, etc.).
      *
-     * @param formatter the non-null formatter to use
+     * @param logRecordFormatter the non-null formatter to use
      * @throws NullPointerException if {@code formatter} is {@code null}
      */
-    public final void setFormatter(@Nonnull final LogFormatter formatter) {
-        Objects.requireNonNull(formatter,
-                MessageHandlerResourceBundle.get("nullFormatterProvided"));
-        this.formatter = formatter;
+    public final void setLogRecordFormatter(@Nonnull final LogRecordFormatter logRecordFormatter) {
+        Objects.requireNonNull(logRecordFormatter, MessageHandlerResourceBundle.get("nullFormatterProvided"));
+        this.logRecordFormatter = logRecordFormatter;
     }
 
     /**
-     * Returns the currently active {@link LogFormatter}.
+     * Returns the currently active {@link LogRecordFormatter}.
      *
      * @return the non-null formatter
      */
-    protected final LogFormatter getFormatter() {
-        return formatter;
+    protected final LogRecordFormatter getLogRecordFormatter() {
+        return logRecordFormatter;
     }
 
     /**

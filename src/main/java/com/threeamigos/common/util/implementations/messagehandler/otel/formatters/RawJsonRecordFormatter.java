@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.implementations.messagehandler.otel;
+package com.threeamigos.common.util.implementations.messagehandler.otel.formatters;
 
 import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;

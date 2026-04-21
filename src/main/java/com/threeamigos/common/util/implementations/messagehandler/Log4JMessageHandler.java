@@ -1,6 +1,5 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
-import com.threeamigos.common.util.interfaces.messagehandler.ContextInfo;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -60,42 +59,42 @@ public class Log4JMessageHandler extends AbstractMessageHandler {
     }
 
     @Override
-    protected void handleInfoMessageImpl(final String message, final ContextInfo contextInfo) {
+    protected void handleInfoMessageImpl(final String message) {
         logger.info(message);
     }
 
     @Override
-    protected void handleWarnMessageImpl(final String message, final ContextInfo contextInfo) {
+    protected void handleWarnMessageImpl(final String message) {
         logger.warn(message);
     }
 
     @Override
-    protected void handleErrorMessageImpl(final String message, final ContextInfo contextInfo) {
+    protected void handleErrorMessageImpl(final String message) {
         logger.error(message);
     }
 
     @Override
-    protected void handleFatalMessageImpl(final String message, final ContextInfo contextInfo) {
+    protected void handleFatalMessageImpl(final String message) {
         logger.fatal(message);
     }
 
     @Override
-    protected void handleDebugMessageImpl(final String message, final ContextInfo contextInfo) {
+    protected void handleDebugMessageImpl(final String message) {
         logger.debug(message);
     }
 
     @Override
-    protected void handleTraceMessageImpl(final String message, final ContextInfo contextInfo) {
+    protected void handleTraceMessageImpl(final String message) {
         logger.trace(message);
     }
 
     @Override
-    protected void handleExceptionImpl(final Exception exception, final ContextInfo contextInfo) {
+    protected void handleExceptionImpl(final Exception exception) {
         logger.error(ExceptionMessageFormatter.detail(exception), exception);
     }
 
     @Override
-    protected void handleExceptionImpl(final String message, final Exception exception, final ContextInfo contextInfo) {
+    protected void handleExceptionImpl(final String message, final Exception exception) {
         logger.error(message, exception);
     }
 }

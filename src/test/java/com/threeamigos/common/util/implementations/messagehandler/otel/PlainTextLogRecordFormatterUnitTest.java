@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
+import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.PlainTextLogRecordFormatter;
 import com.threeamigos.common.util.interfaces.messagehandler.ContextInfo;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;

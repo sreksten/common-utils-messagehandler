@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.implementations.messagehandler.otel;
+package com.threeamigos.common.util.implementations.messagehandler.otel.formatters;
 
 import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
@@ -18,7 +18,7 @@ import java.util.Objects;
  *
  * @author Stefano Reksten
  */
-public class LogRecordFormatterImpl implements LogRecordFormatter {
+public class ExportLogsServiceRequestLogRecordFormatter implements LogRecordFormatter {
 
     private static final String F_RESOURCE_LOGS = "resourceLogs";
     private static final String F_RESOURCE = "resource";

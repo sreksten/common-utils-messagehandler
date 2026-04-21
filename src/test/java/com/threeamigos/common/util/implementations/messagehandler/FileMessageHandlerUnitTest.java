@@ -715,7 +715,7 @@ class FileMessageHandlerUnitTest {
         Path file = Files.createTempFile("fmh-json", ".log");
         Files.deleteIfExists(file);
         try (FileMessageHandler handler = new FileMessageHandler(file.toString())) {
-            handler.setFormatter(new JsonLogFormatter());
+            handler.setLogRecordFormatter(new JsonLogFormatter());
             handler.info("structured message");
         }
         List<String> lines = Files.readAllLines(file);

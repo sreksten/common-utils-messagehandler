@@ -183,7 +183,7 @@ class AbstractOutputMessageHandlerUnitTest {
     @DisplayName("setFormatter(null) should throw NullPointerException")
     void setFormatterNullThrowsNpe() {
         ProbeOutputMessageHandler handler = new ProbeOutputMessageHandler(false, 0);
-        assertThrows(NullPointerException.class, () -> handler.setFormatter(null));
+        assertThrows(NullPointerException.class, () -> handler.setLogRecordFormatter(null));
     }
 
     @Test
@@ -207,9 +207,9 @@ class AbstractOutputMessageHandlerUnitTest {
                 return "CUSTOM:EXCEP:" + prefix + ":" + exception.getMessage();
             }
         };
-        handler.setFormatter(custom);
+        handler.setLogRecordFormatter(custom);
         // Verify getFormatter() returns the custom one
-        assertEquals("CUSTOM:INFO:test", handler.getFormatter().format(LogLevelEnum.INFO, "test", new ContextInfoImpl()));
+        assertEquals("CUSTOM:INFO:test", handler.getLogRecordFormatter().format(LogLevelEnum.INFO, "test", new ContextInfoImpl()));
     }
 
     @Test

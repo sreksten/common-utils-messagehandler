@@ -1,6 +1,5 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
-import com.threeamigos.common.util.interfaces.messagehandler.ContextInfo;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import com.threeamigos.common.util.ui.AWTCalls;
 import jakarta.annotation.Nullable;
@@ -77,7 +76,7 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      *
      * @param message the info-level text to display
      */
-    protected void handleInfoMessageImpl(final String message, final ContextInfo contextInfo) {
+    protected void handleInfoMessageImpl(final String message) {
         showOptionPane(message, MessageHandlerResourceBundle.get("info"), JOptionPane.INFORMATION_MESSAGE);
     }
 
@@ -86,7 +85,7 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      *
      * @param message the warn-level text to display
      */
-    protected void handleWarnMessageImpl(final String message, final ContextInfo contextInfo) {
+    protected void handleWarnMessageImpl(final String message) {
         showOptionPane(message, MessageHandlerResourceBundle.get("warning"), JOptionPane.WARNING_MESSAGE);
     }
 
@@ -95,7 +94,7 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      *
      * @param message the error-level text to display
      */
-    protected void handleErrorMessageImpl(final String message, final ContextInfo contextInfo) {
+    protected void handleErrorMessageImpl(final String message) {
         showOptionPane(message, MessageHandlerResourceBundle.get("error"), JOptionPane.ERROR_MESSAGE);
     }
 
@@ -104,8 +103,8 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      *
      * @param message the error-level text to display
      */
-    protected void handleFatalMessageImpl(final String message, final ContextInfo contextInfo) {
-        showOptionPane(message, MessageHandlerResourceBundle.get("error"), JOptionPane.ERROR_MESSAGE);
+    protected void handleFatalMessageImpl(final String message) {
+        showOptionPane(message, MessageHandlerResourceBundle.get("fatal"), JOptionPane.ERROR_MESSAGE);
     }
 
     /**
@@ -116,7 +115,7 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      *
      * @param message the debug-level text to display
      */
-    protected void handleDebugMessageImpl(final String message, final ContextInfo contextInfo) {
+    protected void handleDebugMessageImpl(final String message) {
         showOptionPane(message, MessageHandlerResourceBundle.get("debug"), JOptionPane.INFORMATION_MESSAGE);
     }
 
@@ -128,7 +127,7 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      *
      * @param message the trace-level text to display
      */
-    protected void handleTraceMessageImpl(final String message, final ContextInfo contextInfo) {
+    protected void handleTraceMessageImpl(final String message) {
         showOptionPane(message, MessageHandlerResourceBundle.get("trace"), JOptionPane.INFORMATION_MESSAGE);
     }
 
@@ -140,7 +139,7 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      *
      * @param exception the exception to display
      */
-    protected void handleExceptionImpl(final Exception exception, final ContextInfo contextInfo) {
+    protected void handleExceptionImpl(final Exception exception) {
         showOptionPane(ExceptionMessageFormatter.detail(exception), MessageHandlerResourceBundle.get("exception"), JOptionPane.ERROR_MESSAGE);
     }
 
@@ -153,7 +152,7 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      * @param message   a contextual prefix describing where or why the exception occurred
      * @param exception the exception to display
      */
-    protected void handleExceptionImpl(final String message, final Exception exception, final ContextInfo contextInfo) {
+    protected void handleExceptionImpl(final String message, final Exception exception) {
         showOptionPane(ExceptionMessageFormatter.withPrefix(message, exception), MessageHandlerResourceBundle.get("exception"), JOptionPane.ERROR_MESSAGE);
     }
 }

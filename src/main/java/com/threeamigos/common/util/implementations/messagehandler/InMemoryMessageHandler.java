@@ -1,6 +1,5 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
-import com.threeamigos.common.util.interfaces.messagehandler.ContextInfo;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.annotation.Nullable;
 
@@ -169,99 +168,99 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     }
 
     @Override
-    protected void handleInfoMessageImpl(final String message, final ContextInfo contextInfo) {
+    protected void handleInfoMessageImpl(final String message) {
         lock.lock();
         try {
             addWithLimit(allInfoMessages, message);
-            handleImpl(message, contextInfo);
+            handleImpl(message);
         } finally {
             lock.unlock();
         }
     }
 
     @Override
-    protected void handleWarnMessageImpl(final String message, final ContextInfo contextInfo) {
+    protected void handleWarnMessageImpl(final String message) {
         lock.lock();
         try {
             addWithLimit(allWarnMessages, message);
-            handleImpl(message, contextInfo);
+            handleImpl(message);
         } finally {
             lock.unlock();
         }
     }
 
     @Override
-    protected void handleErrorMessageImpl(final String message, final ContextInfo contextInfo) {
+    protected void handleErrorMessageImpl(final String message) {
         lock.lock();
         try {
             addWithLimit(allErrorMessages, message);
-            handleImpl(message, contextInfo);
+            handleImpl(message);
         } finally {
             lock.unlock();
         }
     }
 
     @Override
-    protected void handleFatalMessageImpl(final String message, final ContextInfo contextInfo) {
+    protected void handleFatalMessageImpl(final String message) {
         lock.lock();
         try {
             addWithLimit(allFatalMessages, message);
-            handleImpl(message, contextInfo);
+            handleImpl(message);
         } finally {
             lock.unlock();
         }
     }
 
     @Override
-    protected void handleDebugMessageImpl(final String message, final ContextInfo contextInfo) {
+    protected void handleDebugMessageImpl(final String message) {
         lock.lock();
         try {
             addWithLimit(allDebugMessages, message);
-            handleImpl(message, contextInfo);
+            handleImpl(message);
         } finally {
             lock.unlock();
         }
     }
 
     @Override
-    protected void handleTraceMessageImpl(final String message, final ContextInfo contextInfo) {
+    protected void handleTraceMessageImpl(final String message) {
         lock.lock();
         try {
             addWithLimit(allTraceMessages, message);
-            handleImpl(message, contextInfo);
+            handleImpl(message);
         } finally {
             lock.unlock();
         }
     }
 
     @Override
-    protected void handleExceptionImpl(final Exception exception, final ContextInfo contextInfo) {
+    protected void handleExceptionImpl(final Exception exception) {
         lock.lock();
         try {
             String detail = ExceptionMessageFormatter.detail(exception);
             addWithLimit(allExceptionMessages, detail);
             addWithLimit(allExceptions, exception);
-            handleImpl(detail, contextInfo);
+            handleImpl(detail);
         } finally {
             lock.unlock();
         }
     }
 
     @Override
-    protected void handleExceptionImpl(final String message, final Exception exception, final ContextInfo contextInfo) {
+    protected void handleExceptionImpl(final String message, final Exception exception) {
         lock.lock();
         try {
             String formatted = ExceptionMessageFormatter.withPrefix(message, exception);
             addWithLimit(allExceptionMessages, formatted);
             addWithLimit(allExceptions, exception);
-            handleImpl(formatted, contextInfo);
+            handleImpl(formatted);
         } finally {
             lock.unlock();
         }
     }
 
     //FIXME ?
-    private void handleImpl(final String message, final ContextInfo contextInfo) {
+    private void handleImpl(final String message) {
         addWithLimit(allMessages, message);
         lastMessage = message;
     }
