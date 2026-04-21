@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.implementations.messagehandler;
+package com.threeamigos.common.util.implementations.messagehandler.file;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;

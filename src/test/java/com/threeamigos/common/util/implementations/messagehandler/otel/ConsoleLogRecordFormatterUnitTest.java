@@ -1,15 +1,23 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
 import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.ConsoleLogRecordFormatter;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("ConcoleLogRecordFormatter unit tests")
 @Tag("unit")
@@ -95,5 +103,222 @@ class ConsoleLogRecordFormatterUnitTest {
         String result = reducedFormatter.format(record);
 
         assertEquals("2026-04-21T08:30:00Z [INFO  ] [c.e.Foo] hello", result);
+    }
+
+    @Test
+    @DisplayName("constructor and setter should control reduceScopeClassName flag")
+    void constructorAndSetterShouldControlReductionFlag() {
+        ConsoleLogRecordFormatter defaultFormatter = new ConsoleLogRecordFormatter();
+        assertFalse(defaultFormatter.isReduceScopeClassName());
+
+        defaultFormatter.setReduceScopeClassName(true);
+        assertTrue(defaultFormatter.isReduceScopeClassName());
+
+        ConsoleLogRecordFormatter configuredFormatter = new ConsoleLogRecordFormatter(true);
+        assertTrue(configuredFormatter.isReduceScopeClassName());
+    }
+
+    @Test
+    @DisplayName("format() should ignore instrumentation scope when name is null or blank")
+    void formatShouldIgnoreInstrumentationScopeWhenNameNullOrBlank() {
+        LogRecordImpl withNullName = new LogRecordImpl();
+        withNullName.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
+        withNullName.setSeverityText("INFO");
+        withNullName.setBody(AnyValueImpl.ofString("hello"));
+        withNullName.setInstrumentationScope(new InstrumentationScopeImpl());
+
+        String nullNameResult = formatter.format(withNullName);
+        assertEquals("2026-04-21T08:30:00Z [INFO  ] hello", nullNameResult);
+
+        LogRecordImpl withBlankName = new LogRecordImpl();
+        withBlankName.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
+        withBlankName.setSeverityText("INFO");
+        withBlankName.setBody(AnyValueImpl.ofString("hello"));
+        InstrumentationScopeImpl blankScope = new InstrumentationScopeImpl();
+        blankScope.setName("   ");
+        withBlankName.setInstrumentationScope(blankScope);
+
+        String blankNameResult = formatter.format(withBlankName);
+        assertEquals("2026-04-21T08:30:00Z [INFO  ] hello", blankNameResult);
+    }
+
+    @Test
+    @DisplayName("format() should use eventName when body is absent and empty when both are absent")
+    void formatShouldUseEventNameFallbacks() {
+        LogRecordImpl withEventName = new LogRecordImpl();
+        withEventName.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
+        withEventName.setSeverityText("INFO");
+        withEventName.setBody(null);
+        withEventName.setEventName("evt");
+        assertEquals("2026-04-21T08:30:00Z [INFO  ] evt", formatter.format(withEventName));
+
+        LogRecordImpl withNoBodyNoEvent = new LogRecordImpl();
+        withNoBodyNoEvent.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
+        withNoBodyNoEvent.setSeverityText("INFO");
+        withNoBodyNoEvent.setBody(null);
+        withNoBodyNoEvent.setEventName(null);
+        assertEquals("2026-04-21T08:30:00Z [INFO  ] ", formatter.format(withNoBodyNoEvent));
+    }
+
+    @Test
+    @DisplayName("format() should fallback to UNSPECIFIED when severity text is null/blank")
+    void formatShouldFallbackToUnspecifiedWhenSeverityMissing() {
+        LogRecordImpl record = new LogRecordImpl();
+        record.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
+        record.setSeverityText(null);
+        record.setSeverityNumber(SeverityNumber.UNSPECIFIED);
+        record.setBody(AnyValueImpl.ofString("hello"));
+
+        assertEquals("2026-04-21T08:30:00Z [UNSPEC] hello", formatter.format(record));
+    }
+
+    @Test
+    @DisplayName("format() should render non-string AnyValue body types")
+    void formatShouldRenderNonStringAnyValueBodyTypes() {
+        LogRecordImpl record = new LogRecordImpl();
+        record.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
+        record.setSeverityText("INFO");
+
+        record.setBody(AnyValueImpl.ofBoolean(true));
+        assertEquals("2026-04-21T08:30:00Z [INFO  ] true", formatter.format(record));
+
+        record.setBody(AnyValueImpl.ofLong(7));
+        assertEquals("2026-04-21T08:30:00Z [INFO  ] 7", formatter.format(record));
+
+        record.setBody(AnyValueImpl.ofDouble(1.5));
+        assertEquals("2026-04-21T08:30:00Z [INFO  ] 1.5", formatter.format(record));
+
+        record.setBody(AnyValueImpl.ofBytes(new byte[]{1, 2, 3}));
+        assertEquals("2026-04-21T08:30:00Z [INFO  ] AQID", formatter.format(record));
+
+        record.setBody(AnyValueImpl.ofArray(Collections.singletonList(AnyValueImpl.ofString("x"))));
+        assertTrue(formatter.format(record).startsWith("2026-04-21T08:30:00Z [INFO  ] ["));
+
+        record.setBody(AnyValueImpl.ofKvList(Collections.singletonList(new KeyValueImpl("k", AnyValueImpl.ofString("v")))));
+        assertTrue(formatter.format(record).startsWith("2026-04-21T08:30:00Z [INFO  ] ["));
+
+        record.setBody(AnyValueImpl.empty());
+        assertEquals("2026-04-21T08:30:00Z [INFO  ] ", formatter.format(record));
+    }
+
+    @Test
+    @DisplayName("format() should handle string AnyValue with null payload and reject null AnyValue type")
+    void formatShouldHandleStringNullPayloadAndRejectNullType() {
+        LogRecordImpl withNullString = new LogRecordImpl();
+        withNullString.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
+        withNullString.setSeverityText("INFO");
+        withNullString.setBody(new AnyValue() {
+            @Override
+            public Type getType() { return Type.STRING; }
+            @Override
+            public String asString() { return null; }
+            @Override
+            public boolean asBoolean() { return false; }
+            @Override
+            public long asLong() { return 0; }
+            @Override
+            public double asDouble() { return 0; }
+            @Override
+            public List<AnyValue> asArray() { return Collections.emptyList(); }
+            @Override
+            public List<KeyValue> asKvList() { return Collections.emptyList(); }
+            @Override
+            public byte[] asBytes() { return new byte[0]; }
+        });
+        assertEquals("2026-04-21T08:30:00Z [INFO  ] ", formatter.format(withNullString));
+
+        LogRecordImpl withNullType = new LogRecordImpl();
+        withNullType.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
+        withNullType.setSeverityText("INFO");
+        withNullType.setBody(new AnyValue() {
+            @Override
+            public Type getType() { return null; }
+            @Override
+            public String asString() { return null; }
+            @Override
+            public boolean asBoolean() { return false; }
+            @Override
+            public long asLong() { return 0; }
+            @Override
+            public double asDouble() { return 0; }
+            @Override
+            public List<AnyValue> asArray() { return Collections.emptyList(); }
+            @Override
+            public List<KeyValue> asKvList() { return Collections.emptyList(); }
+            @Override
+            public byte[] asBytes() { return new byte[0]; }
+        });
+
+        assertThrows(IllegalArgumentException.class, () -> formatter.format(withNullType));
+    }
+
+    @Test
+    @DisplayName("format() should reject null timestamp")
+    void formatShouldRejectNullTimestamp() {
+        LogRecord record = new LogRecord() {
+            @Override
+            public Instant getTimestamp() { return null; }
+            @Override
+            public Instant getObservedTimestamp() { return null; }
+            @Override
+            public String getTraceId() { return null; }
+            @Override
+            public String getSpanId() { return null; }
+            @Override
+            public int getTraceFlags() { return 0; }
+            @Override
+            public String getSeverityText() { return "INFO"; }
+            @Override
+            public SeverityNumber getSeverityNumber() { return SeverityNumber.INFO; }
+            @Override
+            public AnyValue getBody() { return AnyValueImpl.ofString("hello"); }
+            @Override
+            public com.threeamigos.common.util.interfaces.messagehandler.otel.Resource getResource() { return null; }
+            @Override
+            public InstrumentationScope getInstrumentationScope() { return null; }
+            @Override
+            public List<KeyValue> getAttributes() { return Collections.emptyList(); }
+            @Override
+            public int getDroppedAttributesCount() { return 0; }
+            @Override
+            public String getEventName() { return null; }
+        };
+
+        assertThrows(NullPointerException.class, () -> formatter.format(record));
+    }
+
+    @Test
+    @DisplayName("format() should support null severityNumber via custom LogRecord implementation")
+    void formatShouldSupportNullSeverityNumberViaCustomLogRecord() {
+        LogRecord record = new LogRecord() {
+            @Override
+            public Instant getTimestamp() { return Instant.parse("2026-04-21T08:30:00Z"); }
+            @Override
+            public Instant getObservedTimestamp() { return null; }
+            @Override
+            public String getTraceId() { return null; }
+            @Override
+            public String getSpanId() { return null; }
+            @Override
+            public int getTraceFlags() { return 0; }
+            @Override
+            public String getSeverityText() { return "   "; }
+            @Override
+            public SeverityNumber getSeverityNumber() { return null; }
+            @Override
+            public AnyValue getBody() { return AnyValueImpl.ofString("hello"); }
+            @Override
+            public com.threeamigos.common.util.interfaces.messagehandler.otel.Resource getResource() { return null; }
+            @Override
+            public InstrumentationScope getInstrumentationScope() { return null; }
+            @Override
+            public List<KeyValue> getAttributes() { return Collections.emptyList(); }
+            @Override
+            public int getDroppedAttributesCount() { return 0; }
+            @Override
+            public String getEventName() { return null; }
+        };
+
+        assertEquals("2026-04-21T08:30:00Z [UNSPEC] hello", formatter.format(record));
     }
 }

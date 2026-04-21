@@ -80,4 +80,13 @@ class KeyValueImplUnitTest {
         assertEquals("http.response.status_code", kv.getKey());
         assertSame(value, kv.getValue());
     }
+
+    @Test
+    @DisplayName("factory should accept explicit key")
+    void factoryShouldAcceptExplicitKey() {
+        AnyValue value = AnyValueImpl.ofString("value");
+        KeyValue kv = KeyValueImpl.of("custom.key", value);
+        assertEquals("custom.key", kv.getKey());
+        assertSame(value, kv.getValue());
+    }
 }

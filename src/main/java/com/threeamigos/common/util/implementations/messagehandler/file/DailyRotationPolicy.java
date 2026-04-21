@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.implementations.messagehandler;
+package com.threeamigos.common.util.implementations.messagehandler.file;
 
 import com.threeamigos.common.util.interfaces.messagehandler.file.RotationPolicy;
 import jakarta.annotation.Nonnull;
@@ -47,7 +47,7 @@ public class DailyRotationPolicy implements RotationPolicy {
      *
      * @param openDate the date the log file was conceptually opened; must not be {@code null}
      */
-    DailyRotationPolicy(@Nonnull final LocalDate openDate) {
+    public DailyRotationPolicy(@Nonnull final LocalDate openDate) {
         this.openDate = openDate;
     }
 

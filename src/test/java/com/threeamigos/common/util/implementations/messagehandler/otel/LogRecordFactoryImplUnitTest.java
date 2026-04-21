@@ -24,6 +24,30 @@ class LogRecordFactoryImplUnitTest {
     private final LogRecordFactoryImpl factory = new LogRecordFactoryImpl();
 
     @Test
+    @DisplayName("create() should return an empty LogRecord instance")
+    void createShouldReturnEmptyLogRecord() {
+        LogRecord record = factory.create();
+        assertNotNull(record);
+        assertEquals(SeverityNumber.UNSPECIFIED, record.getSeverityNumber());
+    }
+
+    @Test
+    @DisplayName("create(SeverityNumber, String) should set severity and body")
+    void createSeverityMessageShouldSetSeverityAndBody() {
+        LogRecord record = factory.create(SeverityNumber.WARN, "warn message");
+        assertEquals(SeverityNumber.WARN, record.getSeverityNumber());
+        assertEquals(SeverityNumber.WARN.name(), record.getSeverityText());
+        assertEquals("warn message", record.getBody().asString());
+    }
+
+    @Test
+    @DisplayName("create(SeverityNumber, String) should reject null inputs")
+    void createSeverityMessageShouldRejectNullInputs() {
+        assertThrows(NullPointerException.class, () -> factory.create(null, "x"));
+        assertThrows(NullPointerException.class, () -> factory.create(SeverityNumber.INFO, null));
+    }
+
+    @Test
     @DisplayName("create(Throwable) should populate ERROR severity and exception attributes")
     void createThrowableShouldPopulateErrorSeverityAndExceptionAttributes() {
         RuntimeException throwable = new RuntimeException("boom");

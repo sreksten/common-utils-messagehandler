@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.implementations.messagehandler;
+package com.threeamigos.common.util.implementations.messagehandler.file;
 
 import com.threeamigos.common.util.interfaces.messagehandler.file.RotationPolicy;
 import jakarta.annotation.Nonnull;

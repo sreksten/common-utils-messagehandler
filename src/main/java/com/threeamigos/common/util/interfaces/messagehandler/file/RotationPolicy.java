@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.interfaces.messagehandler.file;
 
+import com.threeamigos.common.util.implementations.messagehandler.file.DailyRotationPolicy;
+import com.threeamigos.common.util.implementations.messagehandler.file.SizeRotationPolicy;
 import jakarta.annotation.Nonnull;
 
 import java.nio.file.Path;
@@ -16,10 +18,10 @@ import java.nio.file.Path;
  * <p>
  * Ready-made implementations:
  * <ul>
- *   <li>{@link com.threeamigos.common.util.implementations.messagehandler.SizeRotationPolicy}
+ *   <li>{@link SizeRotationPolicy}
  *       — rotates when the estimated bytes written since the last open exceed a configurable
  *       threshold.</li>
- *   <li>{@link com.threeamigos.common.util.implementations.messagehandler.DailyRotationPolicy}
+ *   <li>{@link DailyRotationPolicy}
  *       — rotates once per calendar day, naming the archived file with the date it was opened.</li>
  * </ul>
  *
@@ -57,7 +59,7 @@ public interface RotationPolicy {
      * Called by {@code FileMessageHandler} immediately after a rotation has completed and the
      * new log file has been opened.
      * <p>
-     * Stateful policies (e.g. {@link com.threeamigos.common.util.implementations.messagehandler.DailyRotationPolicy})
+     * Stateful policies (e.g. {@link DailyRotationPolicy})
      * override this method to reset internal state so that the next call to
      * {@link #shouldRotate(Path, long)} uses the new file's baseline. The default implementation
      * is a no-op.

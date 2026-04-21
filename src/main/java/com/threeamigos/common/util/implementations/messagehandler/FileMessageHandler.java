@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
+import com.threeamigos.common.util.implementations.messagehandler.file.DailyRotationPolicy;
+import com.threeamigos.common.util.implementations.messagehandler.file.SizeRotationPolicy;
 import com.threeamigos.common.util.interfaces.messagehandler.file.RotationPolicy;
 
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;

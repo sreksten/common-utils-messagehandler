@@ -18,7 +18,19 @@ import java.util.Objects;
  * A {@link LogRecordFormatter} for console-oriented plain text output.
  * <p>
  * Output format:
- * {@code <iso-instant> [<severity-6>] <message>}.
+ * <ul>
+ *   <li>Without instrumentation scope name:
+ *   {@code <iso-instant> [<severity-6>] <message>}</li>
+ *   <li>With instrumentation scope name:
+ *   {@code <iso-instant> [<severity-6>] [<scope-name>] <message>}</li>
+ * </ul>
+ * <p>
+ * When {@code LogRecord.getInstrumentationScope().getName()} is present and not blank, it is emitted
+ * immediately after the severity token.
+ * <p>
+ * If {@link #isReduceScopeClassName()} is enabled, the scope name is reduced with
+ * {@link com.threeamigos.common.util.implementations.messagehandler.ClassNameReducer#reduce(String)}
+ * before rendering. This is useful when the scope name is a fully qualified Java class name.
  *
  * @author Stefano Reksten
  */
