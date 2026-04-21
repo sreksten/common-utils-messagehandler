@@ -26,9 +26,6 @@ import java.util.StringJoiner;
  * <pre>
  * [timestamp] [className] [LEVEL] message {k=v, ...}
  * </pre>
- * <p>
- * {@link #format(LogRecord)} and {@link #formatRecord(LogRecord)} intentionally return the same
- * plain-text line.
  *
  * @author Stefano Reksten
  */
@@ -55,7 +52,7 @@ public class PlainTextLogRecordFormatter implements LogRecordFormatter {
 
     @Nonnull
     @Override
-    public String formatRecord(@Nonnull final LogRecord logRecord) {
+    public String format(@Nonnull final LogRecord logRecord) {
         Objects.requireNonNull(logRecord, MessageHandlerResourceBundle.get("logRecordMustNotBeNull"));
         String date = formatTimestamp(logRecord.getTimestamp());
         String classNameSegment = formatClassNameSegment(logRecord.getAttributes());
@@ -63,12 +60,6 @@ public class PlainTextLogRecordFormatter implements LogRecordFormatter {
         String message = resolveMessage(logRecord);
         String ctx = formatContext(logRecord.getAttributes());
         return String.format("[%s]%s [%-5s] %s%s", date, classNameSegment, level, message, ctx);
-    }
-
-    @Nonnull
-    @Override
-    public String format(@Nonnull final LogRecord logRecord) {
-        return formatRecord(logRecord);
     }
 
     private static String formatTimestamp(final Instant timestamp) {
@@ -228,7 +219,7 @@ public class PlainTextLogRecordFormatter implements LogRecordFormatter {
     }
 
     /**
-     * Abbreviates a fully-qualified class name using Logback-style package abbreviation.
+     * Abbreviates a fully qualified class name using a Logback-style package abbreviation.
      *
      * @param className fully qualified class name
      * @return abbreviated class name

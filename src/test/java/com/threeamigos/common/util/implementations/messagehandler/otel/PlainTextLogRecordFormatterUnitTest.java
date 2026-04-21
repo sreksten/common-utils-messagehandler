@@ -34,24 +34,25 @@ class PlainTextLogRecordFormatterUnitTest {
     private final PlainTextLogRecordFormatter formatter = new PlainTextLogRecordFormatter();
 
     @Test
-    @DisplayName("formatRecord() should reject null log records")
+    @DisplayName("format() should reject null log records")
     void formatRecordShouldRejectNull() {
-        assertThrows(NullPointerException.class, () -> formatter.formatRecord(null));
+        assertThrows(NullPointerException.class, () -> formatter.format(null));
     }
 
     @Test
-    @DisplayName("format() should delegate to formatRecord()")
-    void formatShouldDelegateToFormatRecord() {
+    @DisplayName("format() should serialize plain-text records")
+    void formatShouldSerializePlainTextRecord() {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(FIXED_TS);
         record.setSeverityText("INFO");
         record.setBody(AnyValueImpl.ofString("hello"));
 
-        assertEquals(formatter.formatRecord(record), formatter.format(record));
+        String result = formatter.format(record);
+        assertTrue(result.contains("[INFO ] hello"));
     }
 
     @Test
-    @DisplayName("formatRecord() should mirror plain-text layout with class name and context")
+    @DisplayName("format() should mirror plain-text layout with class name and context")
     void formatRecordShouldMirrorPlainTextLayoutWithClassNameAndContext() {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(FIXED_TS);
@@ -66,11 +67,11 @@ class PlainTextLogRecordFormatterUnitTest {
                 .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
         String expected = String.format("[%s] [com.example.Foo] [INFO ] hello {userId=42}", expectedTs);
 
-        assertEquals(expected, formatter.formatRecord(record));
+        assertEquals(expected, formatter.format(record));
     }
 
     @Test
-    @DisplayName("formatRecord() should not emit context suffix when CLASS_NAME is the only attribute")
+    @DisplayName("format() should not emit context suffix when CLASS_NAME is the only attribute")
     void formatRecordShouldNotEmitContextSuffixWhenOnlyClassName() {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(FIXED_TS);
@@ -80,7 +81,7 @@ class PlainTextLogRecordFormatterUnitTest {
                 new KeyValueImpl(ContextInfo.CLASS_NAME, AnyValueImpl.ofString("com.example.Foo"))
         ));
 
-        String result = formatter.formatRecord(record);
+        String result = formatter.format(record);
         assertTrue(result.contains("[com.example.Foo]"));
         assertFalse(result.contains("{"));
     }
@@ -100,13 +101,13 @@ class PlainTextLogRecordFormatterUnitTest {
                 new KeyValueImpl(ContextInfo.CLASS_NAME, AnyValueImpl.ofString("com.example.Foo"))
         ));
 
-        String result = formatter.formatRecord(record);
+        String result = formatter.format(record);
         assertTrue(result.contains("[c.e.Foo]"));
         assertFalse(result.contains("[com.example.Foo]"));
     }
 
     @Test
-    @DisplayName("formatRecord() should fall back to severityNumber and eventName")
+    @DisplayName("format() should fall back to severityNumber and eventName")
     void formatRecordShouldFallbackToSeverityNumberAndEventName() {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(FIXED_TS);
@@ -115,12 +116,12 @@ class PlainTextLogRecordFormatterUnitTest {
         record.setBody(AnyValueImpl.empty());
         record.setEventName("evt");
 
-        String result = formatter.formatRecord(record);
+        String result = formatter.format(record);
         assertTrue(result.contains("[WARN2] evt"));
     }
 
     @Test
-    @DisplayName("formatRecord() should use UNSPECIFIED when severityText and severityNumber are absent")
+    @DisplayName("format() should use UNSPECIFIED when severityText and severityNumber are absent")
     void formatRecordShouldUseUnspecifiedWhenNoSeverityProvided() {
         StubLogRecord record = new StubLogRecord();
         record.timestamp = FIXED_TS;
@@ -128,12 +129,12 @@ class PlainTextLogRecordFormatterUnitTest {
         record.severityNumber = SeverityNumber.UNSPECIFIED;
         record.body = AnyValueImpl.ofString("msg");
 
-        String result = formatter.formatRecord(record);
+        String result = formatter.format(record);
         assertTrue(result.contains("[UNSPECIFIED] msg"));
     }
 
     @Test
-    @DisplayName("formatRecord() should use UNSPECIFIED when severityText is blank and severityNumber is null")
+    @DisplayName("format() should use UNSPECIFIED when severityText is blank and severityNumber is null")
     void formatRecordShouldUseUnspecifiedWhenSeverityTextBlankAndSeverityNumberNull() {
         StubLogRecord record = new StubLogRecord();
         record.timestamp = FIXED_TS;
@@ -141,12 +142,12 @@ class PlainTextLogRecordFormatterUnitTest {
         record.severityNumber = null;
         record.body = AnyValueImpl.ofString("msg");
 
-        String result = formatter.formatRecord(record);
+        String result = formatter.format(record);
         assertTrue(result.contains("[UNSPECIFIED] msg"));
     }
 
     @Test
-    @DisplayName("formatRecord() should support null timestamp and null attributes")
+    @DisplayName("format() should support null timestamp and null attributes")
     void formatRecordShouldSupportNullTimestampAndNullAttributes() {
         StubLogRecord record = new StubLogRecord();
         record.timestamp = null;
@@ -154,12 +155,12 @@ class PlainTextLogRecordFormatterUnitTest {
         record.severityText = "INFO";
         record.body = AnyValueImpl.ofString("msg");
 
-        String result = formatter.formatRecord(record);
+        String result = formatter.format(record);
         assertTrue(result.matches("^\\[[^\\]]+\\] \\[INFO \\] msg$"));
     }
 
     @Test
-    @DisplayName("formatRecord() should return empty message when body and eventName are both absent")
+    @DisplayName("format() should return empty message when body and eventName are both absent")
     void formatRecordShouldReturnEmptyMessageWhenBodyAndEventNameAreAbsent() {
         StubLogRecord record = new StubLogRecord();
         record.timestamp = FIXED_TS;
@@ -167,43 +168,43 @@ class PlainTextLogRecordFormatterUnitTest {
         record.body = null;
         record.eventName = null;
 
-        String result = formatter.formatRecord(record);
+        String result = formatter.format(record);
         assertTrue(result.endsWith("] "));
     }
 
     @Test
-    @DisplayName("formatRecord() should stringify all AnyValue body variants")
+    @DisplayName("format() should stringify all AnyValue body variants")
     void formatRecordShouldStringifyAllAnyValueVariants() {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(FIXED_TS);
         record.setSeverityText("INFO");
 
         record.setBody(AnyValueImpl.ofBoolean(true));
-        assertTrue(formatter.formatRecord(record).contains("] true"));
+        assertTrue(formatter.format(record).contains("] true"));
 
         record.setBody(AnyValueImpl.ofLong(7));
-        assertTrue(formatter.formatRecord(record).contains("] 7"));
+        assertTrue(formatter.format(record).contains("] 7"));
 
         record.setBody(AnyValueImpl.ofDouble(1.5));
-        assertTrue(formatter.formatRecord(record).contains("] 1.5"));
+        assertTrue(formatter.format(record).contains("] 1.5"));
 
         record.setBody(AnyValueImpl.ofBytes(new byte[] {1, 2, 3}));
-        assertTrue(formatter.formatRecord(record).contains("] AQID"));
+        assertTrue(formatter.format(record).contains("] AQID"));
 
         record.setBody(AnyValueImpl.ofArray(Arrays.asList(
                 AnyValueImpl.ofString("x"),
                 AnyValueImpl.ofLong(3)
         )));
-        assertTrue(formatter.formatRecord(record).contains("] [x, 3]"));
+        assertTrue(formatter.format(record).contains("] [x, 3]"));
 
         record.setBody(AnyValueImpl.ofKvList(Collections.singletonList(
                 new KeyValueImpl("k", AnyValueImpl.ofString("v"))
         )));
-        assertTrue(formatter.formatRecord(record).contains("] {k=v}"));
+        assertTrue(formatter.format(record).contains("] {k=v}"));
     }
 
     @Test
-    @DisplayName("formatRecord() should support non-string CLASS_NAME attributes")
+    @DisplayName("format() should support non-string CLASS_NAME attributes")
     void formatRecordShouldSupportNonStringClassNameAttributes() {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(FIXED_TS);
@@ -213,12 +214,12 @@ class PlainTextLogRecordFormatterUnitTest {
                 new KeyValueImpl(ContextInfo.CLASS_NAME, AnyValueImpl.ofLong(7))
         ));
 
-        String result = formatter.formatRecord(record);
+        String result = formatter.format(record);
         assertTrue(result.contains("[7]"));
     }
 
     @Test
-    @DisplayName("formatRecord() should tolerate null attributes and non-class entries while extracting className/context")
+    @DisplayName("format() should tolerate null attributes and non-class entries while extracting className/context")
     void formatRecordShouldTolerateNullAndNonClassAttributes() {
         StubLogRecord record = new StubLogRecord();
         record.timestamp = FIXED_TS;
@@ -231,14 +232,14 @@ class PlainTextLogRecordFormatterUnitTest {
                 new NullableKeyValue(ContextInfo.CLASS_NAME, null)
         );
 
-        String result = formatter.formatRecord(record);
+        String result = formatter.format(record);
         assertFalse(result.contains("[" + ContextInfo.CLASS_NAME + "]"));
         assertTrue(result.contains("other=v"));
         assertTrue(result.contains("nullable=null"));
     }
 
     @Test
-    @DisplayName("formatRecord() should handle context path where no entries are emitted after pre-scan")
+    @DisplayName("format() should handle context path where no entries are emitted after pre-scan")
     void formatRecordShouldHandleNoContextEntriesAfterPrescan() {
         StubLogRecord record = new StubLogRecord();
         record.timestamp = FIXED_TS;
@@ -246,51 +247,51 @@ class PlainTextLogRecordFormatterUnitTest {
         record.body = AnyValueImpl.ofString("msg");
         record.attributes = Collections.<KeyValue>singletonList(new PreScanNoEntriesKeyValue());
 
-        String result = formatter.formatRecord(record);
+        String result = formatter.format(record);
         assertFalse(result.contains("{"));
     }
 
     @Test
-    @DisplayName("formatRecord() should reject AnyValue with null type")
+    @DisplayName("format() should reject AnyValue with null type")
     void formatRecordShouldRejectAnyValueWithNullType() {
         StubLogRecord record = new StubLogRecord();
         record.timestamp = FIXED_TS;
         record.severityText = "INFO";
         record.body = new NullTypeAnyValue();
 
-        assertThrows(IllegalArgumentException.class, () -> formatter.formatRecord(record));
+        assertThrows(IllegalArgumentException.class, () -> formatter.format(record));
     }
 
     @Test
-    @DisplayName("formatRecord() should handle custom ARRAY/KVLIST AnyValue with null list payloads")
+    @DisplayName("format() should handle custom ARRAY/KVLIST AnyValue with null list payloads")
     void formatRecordShouldHandleNullArrayAndKvListPayloads() {
         StubLogRecord arrayRecord = new StubLogRecord();
         arrayRecord.timestamp = FIXED_TS;
         arrayRecord.severityText = "INFO";
         arrayRecord.body = new NullArrayAnyValue();
-        assertTrue(formatter.formatRecord(arrayRecord).contains("] []"));
+        assertTrue(formatter.format(arrayRecord).contains("] []"));
 
         StubLogRecord kvRecord = new StubLogRecord();
         kvRecord.timestamp = FIXED_TS;
         kvRecord.severityText = "INFO";
         kvRecord.body = new NullKvListAnyValue();
-        assertTrue(formatter.formatRecord(kvRecord).contains("] {}"));
+        assertTrue(formatter.format(kvRecord).contains("] {}"));
     }
 
     @Test
-    @DisplayName("formatRecord() should render null elements in custom ARRAY/KVLIST payloads")
+    @DisplayName("format() should render null elements in custom ARRAY/KVLIST payloads")
     void formatRecordShouldRenderNullElementsInCustomArrayAndKvListPayloads() {
         StubLogRecord arrayRecord = new StubLogRecord();
         arrayRecord.timestamp = FIXED_TS;
         arrayRecord.severityText = "INFO";
         arrayRecord.body = new NullElementArrayAnyValue();
-        assertTrue(formatter.formatRecord(arrayRecord).contains("] [null, x]"));
+        assertTrue(formatter.format(arrayRecord).contains("] [null, x]"));
 
         StubLogRecord kvRecord = new StubLogRecord();
         kvRecord.timestamp = FIXED_TS;
         kvRecord.severityText = "INFO";
         kvRecord.body = new NullElementKvListAnyValue();
-        String result = formatter.formatRecord(kvRecord);
+        String result = formatter.format(kvRecord);
         assertTrue(result.contains("null"));
         assertTrue(result.contains("k=null"));
     }

@@ -31,11 +31,12 @@ class LogRecordFormatterImplUnitTest {
     private static final String SPAN_ID = "eee19b7ec3c1b174";
 
     private final LogRecordFormatterImpl formatter = new LogRecordFormatterImpl();
+    private final RawJsonRecordFormatter rawFormatter = new RawJsonRecordFormatter();
 
     @Test
-    @DisplayName("formatRecord() should reject null log records")
+    @DisplayName("format() should reject null log records")
     void formatRecordShouldRejectNull() {
-        assertThrows(NullPointerException.class, () -> formatter.formatRecord(null));
+        assertThrows(NullPointerException.class, () -> rawFormatter.format(null));
     }
 
     @Test
@@ -45,13 +46,13 @@ class LogRecordFormatterImplUnitTest {
     }
 
     @Test
-    @DisplayName("formatRecord() should serialize eventName when it is the first emitted field")
+    @DisplayName("format() should serialize eventName when it is the first emitted field")
     void formatRecordShouldSerializeEventNameAsFirstField() {
         StubLogRecord record = new StubLogRecord();
         record.timestamp = null;
         record.eventName = "evt";
 
-        assertEquals("{\"eventName\":\"evt\"}", formatter.formatRecord(record));
+        assertEquals("{\"eventName\":\"evt\"}", rawFormatter.format(record));
     }
 
     @Test
@@ -172,7 +173,7 @@ class LogRecordFormatterImplUnitTest {
     }
 
     @Test
-    @DisplayName("formatRecord() should serialize scalar fields and omit default-valued fields")
+    @DisplayName("format() should serialize scalar fields and omit default-valued fields")
     void formatRecordShouldSerializeScalarFieldsAndOmitDefaults() {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(FIXED_TS);
@@ -189,7 +190,7 @@ class LogRecordFormatterImplUnitTest {
         record.setDroppedAttributesCount(3);
         record.setEventName("evt");
 
-        String result = formatter.formatRecord(record);
+        String result = rawFormatter.format(record);
         assertTrue(result.contains("\"timeUnixNano\":\"1776634200000000123\""));
         assertTrue(result.contains("\"observedTimeUnixNano\":\"1776634201000000456\""));
         assertTrue(result.contains("\"traceId\":\"" + TRACE_ID + "\""));
@@ -204,7 +205,7 @@ class LogRecordFormatterImplUnitTest {
     }
 
     @Test
-    @DisplayName("formatRecord() should handle null severityNumber and null attributes")
+    @DisplayName("format() should handle null severityNumber and null attributes")
     void formatRecordShouldHandleNullSeverityNumberAndNullAttributes() {
         StubLogRecord record = new StubLogRecord();
         record.timestamp = FIXED_TS;
@@ -212,7 +213,7 @@ class LogRecordFormatterImplUnitTest {
         record.severityText = null;
         record.attributes = null;
 
-        String result = formatter.formatRecord(record);
+        String result = rawFormatter.format(record);
         assertTrue(result.contains("\"timeUnixNano\":\"1776634200000000123\""));
         assertFalse(result.contains("\"severityNumber\""));
         assertFalse(result.contains("\"severityText\""));
@@ -220,16 +221,16 @@ class LogRecordFormatterImplUnitTest {
     }
 
     @Test
-    @DisplayName("formatRecord() should encode EMPTY AnyValue as empty object")
+    @DisplayName("format() should encode EMPTY AnyValue as empty object")
     void formatRecordShouldEncodeEmptyAnyValue() {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(FIXED_TS);
         record.setBody(AnyValueImpl.empty());
-        assertTrue(formatter.formatRecord(record).contains("\"body\":{}"));
+        assertTrue(rawFormatter.format(record).contains("\"body\":{}"));
     }
 
     @Test
-    @DisplayName("formatRecord() should encode primitive and complex AnyValue types")
+    @DisplayName("format() should encode primitive and complex AnyValue types")
     void formatRecordShouldEncodeAllAnyValueTypes() {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(FIXED_TS);
@@ -245,7 +246,7 @@ class LogRecordFormatterImplUnitTest {
                 ))
         )));
 
-        String result = formatter.formatRecord(record);
+        String result = rawFormatter.format(record);
         assertTrue(result.contains("\"stringValue\":\"s\""));
         assertTrue(result.contains("\"boolValue\":true"));
         assertTrue(result.contains("\"intValue\":\"9\""));
@@ -255,66 +256,66 @@ class LogRecordFormatterImplUnitTest {
     }
 
     @Test
-    @DisplayName("formatRecord() should encode finite and special double values per proto3 JSON")
+    @DisplayName("format() should encode finite and special double values per proto3 JSON")
     void formatRecordShouldEncodeSpecialDoubleValues() {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(FIXED_TS);
 
         record.setBody(AnyValueImpl.ofDouble(Double.NaN));
-        assertTrue(formatter.formatRecord(record).contains("\"doubleValue\":\"NaN\""));
+        assertTrue(rawFormatter.format(record).contains("\"doubleValue\":\"NaN\""));
 
         record.setBody(AnyValueImpl.ofDouble(Double.POSITIVE_INFINITY));
-        assertTrue(formatter.formatRecord(record).contains("\"doubleValue\":\"Infinity\""));
+        assertTrue(rawFormatter.format(record).contains("\"doubleValue\":\"Infinity\""));
 
         record.setBody(AnyValueImpl.ofDouble(Double.NEGATIVE_INFINITY));
-        assertTrue(formatter.formatRecord(record).contains("\"doubleValue\":\"-Infinity\""));
+        assertTrue(rawFormatter.format(record).contains("\"doubleValue\":\"-Infinity\""));
     }
 
     @Test
-    @DisplayName("formatRecord() should handle empty array/kvlist AnyValue values")
+    @DisplayName("format() should handle empty array/kvlist AnyValue values")
     void formatRecordShouldHandleEmptyArrayAndKvList() {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(FIXED_TS);
 
         record.setBody(AnyValueImpl.ofArray(Collections.emptyList()));
-        assertTrue(formatter.formatRecord(record).contains("\"arrayValue\":{\"values\":[]}"));
+        assertTrue(rawFormatter.format(record).contains("\"arrayValue\":{\"values\":[]}"));
 
         record.setBody(AnyValueImpl.ofKvList(Collections.emptyList()));
-        assertTrue(formatter.formatRecord(record).contains("\"kvlistValue\":{\"values\":[]}"));
+        assertTrue(rawFormatter.format(record).contains("\"kvlistValue\":{\"values\":[]}"));
     }
 
     @Test
-    @DisplayName("formatRecord() should JSON-escape strings, keys and control characters")
+    @DisplayName("format() should JSON-escape strings, keys and control characters")
     void formatRecordShouldEscapeStringsAndControlCharacters() {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(FIXED_TS);
         record.setBody(AnyValueImpl.ofString("q\" b\\ n\n r\r t\t c\u0001"));
         record.setAttributes(Collections.singletonList(new KeyValueImpl("k\"\\\n", AnyValueImpl.ofString("v\"\\\u0002"))));
 
-        String result = formatter.formatRecord(record);
+        String result = rawFormatter.format(record);
         assertTrue(result.contains("q\\\" b\\\\ n\\n r\\r t\\t c\\u0001"));
         assertTrue(result.contains("\"key\":\"k\\\"\\\\\\n\""));
         assertTrue(result.contains("\"stringValue\":\"v\\\"\\\\\\u0002\""));
     }
 
     @Test
-    @DisplayName("formatRecord() should reject negative timestamps")
+    @DisplayName("format() should reject negative timestamps")
     void formatRecordShouldRejectNegativeTimestamps() {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(Instant.parse("1969-12-31T23:59:59.999999999Z"));
-        assertThrows(IllegalArgumentException.class, () -> formatter.formatRecord(record));
+        assertThrows(IllegalArgumentException.class, () -> rawFormatter.format(record));
     }
 
     @Test
-    @DisplayName("formatRecord() should reject timestamps that overflow uint64 nanoseconds")
+    @DisplayName("format() should reject timestamps that overflow uint64 nanoseconds")
     void formatRecordShouldRejectTimestampsBeyondUint64() {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(Instant.ofEpochSecond(18_446_744_074L));
-        assertThrows(IllegalArgumentException.class, () -> formatter.formatRecord(record));
+        assertThrows(IllegalArgumentException.class, () -> rawFormatter.format(record));
     }
 
     @Test
-    @DisplayName("formatRecord() should fail fast when AnyValue type is null")
+    @DisplayName("format() should fail fast when AnyValue type is null")
     void formatRecordShouldFailFastOnNullAnyValueType() {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(FIXED_TS);
@@ -360,15 +361,15 @@ class LogRecordFormatterImplUnitTest {
             }
         });
 
-        assertThrows(IllegalArgumentException.class, () -> formatter.formatRecord(record));
+        assertThrows(IllegalArgumentException.class, () -> rawFormatter.format(record));
     }
 
     @Test
-    @DisplayName("formatRecord() should allow maximum uint64 nanoseconds timestamp")
+    @DisplayName("format() should allow maximum uint64 nanoseconds timestamp")
     void formatRecordShouldAllowMaxUint64NanosTimestamp() {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(Instant.ofEpochSecond(18_446_744_073L, 709_551_615));
-        String result = formatter.formatRecord(record);
+        String result = rawFormatter.format(record);
         assertTrue(result.contains("\"timeUnixNano\":\"18446744073709551615\""));
     }
 
