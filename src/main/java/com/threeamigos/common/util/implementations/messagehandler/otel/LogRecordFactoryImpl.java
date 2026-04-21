@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
+ * An implementation of {@link LogRecordFactory} that creates {@link LogRecord} instances.
  *
  * @author Stefano Reksten
  */
