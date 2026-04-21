@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.interfaces.messagehandler;
+package com.threeamigos.common.util.interfaces.messagehandler.file;
 
 import jakarta.annotation.Nonnull;
 

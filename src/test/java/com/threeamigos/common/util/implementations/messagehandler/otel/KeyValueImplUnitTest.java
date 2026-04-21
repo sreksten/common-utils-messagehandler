@@ -46,7 +46,7 @@ class KeyValueImplUnitTest {
     @DisplayName("constructor should accept Names key")
     void constructorShouldAcceptNamesKey() {
         AnyValue value = AnyValueImpl.ofString("service-a");
-        KeyValue kv = new KeyValueImpl(Names.RES_SERVICE_NAME, value);
+        KeyValue kv = new KeyValueImpl(Names.ATTR_SERVICE_NAME, value);
         assertEquals("service.name", kv.getKey());
         assertSame(value, kv.getValue());
     }

@@ -3,10 +3,10 @@ package com.threeamigos.common.util.interfaces.messagehandler.otel;
 import jakarta.annotation.Nonnull;
 
 /**
- * Formats a {@link LogRecord} into a JSON string.
+ * Formats a {@link LogRecord} into a string.
  * <p>
  * Implementations decide the output representation for {@link #format(LogRecord)},
- * e.g. a raw log-record JSON object or a full OTLP envelope.
+ * e.g., a raw log-record JSON object or a full OTLP envelope.
  *
  * @author Stefano Reksten
  */

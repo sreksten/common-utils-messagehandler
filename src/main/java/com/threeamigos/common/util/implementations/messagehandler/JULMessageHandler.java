@@ -13,8 +13,8 @@ import java.util.logging.Logger;
  *   <li>info → {@link java.util.logging.Level#INFO}</li>
  *   <li>warn → {@link java.util.logging.Level#WARNING}</li>
  *   <li>error, fatal → {@link java.util.logging.Level#SEVERE}</li>
- *   <li>debug → {@link java.util.logging.Level#FINE}</li>
- *   <li>trace → {@link java.util.logging.Level#FINER}</li>
+ *   <li>debug → {@link java.util.logging.Level#FINER}</li>
+ *   <li>trace → {@link java.util.logging.Level#FINEST}</li>
  *   <li>exception → {@link java.util.logging.Level#SEVERE} (with the exception attached as a {@link Throwable})</li>
  * </ul>
  *

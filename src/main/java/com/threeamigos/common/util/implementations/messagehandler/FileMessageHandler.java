@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
-import com.threeamigos.common.util.interfaces.messagehandler.RotationPolicy;
+import com.threeamigos.common.util.interfaces.messagehandler.file.RotationPolicy;
 
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;

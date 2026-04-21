@@ -1,5 +1,10 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
+import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordFactoryImpl;
+import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.RawJsonRecordFormatter;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
@@ -27,9 +32,30 @@ import static org.mockito.Mockito.*;
 @Execution(ExecutionMode.SAME_THREAD)
 class ConsoleMessageHandlerUnitTest {
 
+    private static final LogRecordFactory FACTORY = new LogRecordFactoryImpl();
+    private static final LogRecordFormatter DEFAULT_FORMATTER = logRecord -> {
+        String severity = logRecord.getSeverityText() == null ? "UNSPEC" : logRecord.getSeverityText();
+        if (severity.length() < 5) {
+            severity = String.format("%-5s", severity);
+        } else if (severity.length() > 5) {
+            severity = severity.substring(0, 5);
+        }
+        return "[" + logRecord.getTimestamp() + "] [" + severity + "] " + stringifyBody(logRecord.getBody());
+    };
+
+    private static String stringifyBody(final AnyValue body) {
+        if (body == null || body.getType() == null) {
+            return "";
+        }
+        if (body.getType() == AnyValue.Type.STRING) {
+            return body.asString() == null ? "" : body.asString();
+        }
+        return String.valueOf(body.asString());
+    }
+
     private static class ThrowingAwaitTerminationConsoleMessageHandler extends ConsoleMessageHandler {
         private ThrowingAwaitTerminationConsoleMessageHandler() {
-            super(true, 1, false);
+            super(FACTORY, DEFAULT_FORMATTER, true, 1, false);
         }
 
         @Override
@@ -40,7 +66,7 @@ class ConsoleMessageHandlerUnitTest {
 
     private static class ThrowingRemoveHookConsoleMessageHandler extends ConsoleMessageHandler {
         private ThrowingRemoveHookConsoleMessageHandler() {
-            super(true, 1, true);
+            super(FACTORY, DEFAULT_FORMATTER, true, 1, true);
         }
 
         @Override
@@ -79,7 +105,7 @@ class ConsoleMessageHandlerUnitTest {
     @DisplayName("Should throw an exception if a null info message is provided")
     void shouldThrowAnExceptionIfANullInfoMessageIsProvided() {
         // Given
-        ConsoleMessageHandler sut = new ConsoleMessageHandler();
+        ConsoleMessageHandler sut = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
         // When
         String infoMessage = null;
         // Then
@@ -90,7 +116,7 @@ class ConsoleMessageHandlerUnitTest {
     @DisplayName("Should handle info message")
     void shouldHandleInfoMessage() {
         // Given
-        ConsoleMessageHandler sut = new ConsoleMessageHandler();
+        ConsoleMessageHandler sut = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
         // When
         sut.info("INFO");
         // Then
@@ -101,7 +127,7 @@ class ConsoleMessageHandlerUnitTest {
     @DisplayName("Should throw an exception if a null warn message is provided")
     void shouldThrowAnExceptionIfANullWarnMessageIsProvided() {
         // Given
-        ConsoleMessageHandler sut = new ConsoleMessageHandler();
+        ConsoleMessageHandler sut = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
         // When
         String warnMessage = null;
         // Then
@@ -112,7 +138,7 @@ class ConsoleMessageHandlerUnitTest {
     @DisplayName("Should handle warn message")
     void shouldHandleWarnMessage() {
         // Given
-        ConsoleMessageHandler sut = new ConsoleMessageHandler();
+        ConsoleMessageHandler sut = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
         // When
         sut.warn("WARN");
         // Then
@@ -123,7 +149,7 @@ class ConsoleMessageHandlerUnitTest {
     @DisplayName("Should throw an exception if a null error message is provided")
     void shouldThrowAnExceptionIfANullErrorMessageIsProvided() {
         // Given
-        ConsoleMessageHandler sut = new ConsoleMessageHandler();
+        ConsoleMessageHandler sut = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
         // When
         String errorMessage = null;
         // Then
@@ -134,7 +160,7 @@ class ConsoleMessageHandlerUnitTest {
     @DisplayName("Should handle error message")
     void shouldHandleErrorMessage() {
         // Given
-        ConsoleMessageHandler sut = new ConsoleMessageHandler();
+        ConsoleMessageHandler sut = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
         // When
         sut.error("ERROR");
         // Then
@@ -145,7 +171,7 @@ class ConsoleMessageHandlerUnitTest {
     @DisplayName("Should throw an exception if a null debug message is provided")
     void shouldThrowAnExceptionIfANullDebugMessageIsProvided() {
         // Given
-        ConsoleMessageHandler sut = new ConsoleMessageHandler();
+        ConsoleMessageHandler sut = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
         // When
         String debugMessage = null;
         // Then
@@ -156,7 +182,7 @@ class ConsoleMessageHandlerUnitTest {
     @DisplayName("Should handle debug message")
     void shouldHandleDebugMessage() {
         // Given
-        ConsoleMessageHandler sut = new ConsoleMessageHandler();
+        ConsoleMessageHandler sut = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
         // When
         sut.debug("DEBUG");
         // Then
@@ -167,7 +193,7 @@ class ConsoleMessageHandlerUnitTest {
     @DisplayName("Should throw an exception if a null trace message is provided")
     void shouldThrowAnExceptionIfANullTraceMessageIsProvided() {
         // Given
-        ConsoleMessageHandler sut = new ConsoleMessageHandler();
+        ConsoleMessageHandler sut = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
         // When
         String traceMessage = null;
         // Then
@@ -178,7 +204,7 @@ class ConsoleMessageHandlerUnitTest {
     @DisplayName("Should handle trace message")
     void shouldHandleTraceMessage() {
         // Given
-        ConsoleMessageHandler sut = new ConsoleMessageHandler();
+        ConsoleMessageHandler sut = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
         // When
         sut.trace("TRACE");
         // Then
@@ -189,7 +215,7 @@ class ConsoleMessageHandlerUnitTest {
     @DisplayName("Should throw an exception if a null fatal message is provided")
     void shouldThrowAnExceptionIfANullFatalMessageIsProvided() {
         // Given
-        ConsoleMessageHandler sut = new ConsoleMessageHandler();
+        ConsoleMessageHandler sut = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
         // When
         String fatalMessage = null;
         // Then
@@ -200,7 +226,7 @@ class ConsoleMessageHandlerUnitTest {
     @DisplayName("Should handle fatal message")
     void shouldHandleFatalMessage() {
         // Given
-        ConsoleMessageHandler sut = new ConsoleMessageHandler();
+        ConsoleMessageHandler sut = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
         // When
         sut.fatal("FATAL");
         // Then
@@ -211,7 +237,7 @@ class ConsoleMessageHandlerUnitTest {
     @DisplayName("Should throw an exception if a null exception is provided")
     void shouldThrowAnExceptionIfANullExceptionIsProvided() {
         // Given
-        ConsoleMessageHandler sut = new ConsoleMessageHandler();
+        ConsoleMessageHandler sut = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
         // When
         Exception exception = null;
         // Then
@@ -222,7 +248,7 @@ class ConsoleMessageHandlerUnitTest {
     @DisplayName("Should handle exception")
     void shouldHandleExceptionMessage() {
         // Given
-        ConsoleMessageHandler sut = new ConsoleMessageHandler();
+        ConsoleMessageHandler sut = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
         Exception exception = mock(IllegalArgumentException.class);
         when(exception.getMessage()).thenReturn("Boom");
         // When
@@ -231,14 +257,14 @@ class ConsoleMessageHandlerUnitTest {
         ArgumentCaptor<String> captor = forClass(String.class);
         verify(err, times(1)).println(captor.capture());
         String actual = captor.getValue();
-        assertTrue(actual.contains("[EXCEP]"), "Output should contain [EXCEP]");
+        assertTrue(actual.contains("[ERROR]"), "Output should contain [ERROR]");
         assertTrue(actual.contains("Boom"), "Output should contain the exception message");
     }
 
     @Test
     @DisplayName("Should handle exception with custom message")
     void shouldHandleExceptionWithCustomMessage() {
-        ConsoleMessageHandler sut = new ConsoleMessageHandler();
+        ConsoleMessageHandler sut = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
         Exception exception = mock(IllegalArgumentException.class);
         when(exception.getMessage()).thenReturn("Boom");
 
@@ -246,25 +272,25 @@ class ConsoleMessageHandlerUnitTest {
 
         ArgumentCaptor<String> captor = forClass(String.class);
         verify(err, times(1)).println(captor.capture());
-        assertTrue(captor.getValue().contains("[EXCEP] prefix: Boom"));
+        assertTrue(captor.getValue().contains("[ERROR] prefix"));
     }
 
     @Test
-    @DisplayName("JsonLogFormatter should produce NDJSON output to System.out")
+    @DisplayName("RawJsonRecordFormatter should produce NDJSON output to System.out")
     void jsonFormatterShouldProduceNdjsonOutput() throws Exception {
         ByteArrayOutputStream outContent = new ByteArrayOutputStream();
         PrintStream originalOut = System.out;
         System.setOut(new PrintStream(outContent, true, StandardCharsets.UTF_8.name()));
-        try (ConsoleMessageHandler handler = new ConsoleMessageHandler()) {
-            handler.setLogRecordFormatter(new JsonLogFormatter());
+        try (ConsoleMessageHandler handler = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER)) {
+            handler.setLogRecordFormatter(new RawJsonRecordFormatter());
             handler.info("structured message");
         } finally {
             System.setOut(originalOut);
         }
         String output = outContent.toString(StandardCharsets.UTF_8.name());
         assertTrue(output.startsWith("{"), "Output should be a JSON object");
-        assertTrue(output.contains("\"level\":\"INFO\""), "Output should contain level INFO");
-        assertTrue(output.contains("\"message\":\"structured message\""), "Output should contain the message");
+        assertTrue(output.contains("\"severityText\":\"INFO\""), "Output should contain severity INFO");
+        assertTrue(output.contains("\"stringValue\":\"structured message\""), "Output should contain the message");
     }
 
     @Test
@@ -290,7 +316,7 @@ class ConsoleMessageHandlerUnitTest {
             }
         };
         System.setOut(blockingOut);
-        try (ConsoleMessageHandler handler = new ConsoleMessageHandler(true, 1)) {
+        try (ConsoleMessageHandler handler = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER, true, 1)) {
             handler.info("first");
             assertTrue(firstPrintEntered.await(500, TimeUnit.MILLISECONDS));
             handler.info("queued");
@@ -329,7 +355,7 @@ class ConsoleMessageHandlerUnitTest {
             }
         };
         System.setOut(blockingOut);
-        try (ConsoleMessageHandler handler = new ConsoleMessageHandler(true, 1)) {
+        try (ConsoleMessageHandler handler = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER, true, 1)) {
             handler.info("blocking");
             assertTrue(firstPrintEntered.await(500, TimeUnit.MILLISECONDS));
             handler.info("queued-drain");
@@ -369,7 +395,7 @@ class ConsoleMessageHandlerUnitTest {
         ByteArrayOutputStream outContent = new ByteArrayOutputStream();
         PrintStream originalOut = System.out;
         System.setOut(new PrintStream(outContent, true, StandardCharsets.UTF_8.name()));
-        try (ConsoleMessageHandler handler = new ConsoleMessageHandler(true, 1)) {
+        try (ConsoleMessageHandler handler = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER, true, 1)) {
             CountDownLatch latch = new CountDownLatch(1);
             handler.info(() -> {
                 try {
@@ -392,7 +418,7 @@ class ConsoleMessageHandlerUnitTest {
     @Test
     @DisplayName("Should register shutdown hook when requested")
     void shouldRegisterShutdownHook() throws Exception {
-        ConsoleMessageHandler handler = new ConsoleMessageHandler(true, 1, true);
+        ConsoleMessageHandler handler = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER, true, 1, true);
         Thread hook = getShutdownHook(handler);
         assertNotNull(hook);
         handler.close();
@@ -401,7 +427,7 @@ class ConsoleMessageHandlerUnitTest {
     @Test
     @DisplayName("Should not register shutdown hook when not requested")
     void shouldNotRegisterShutdownHook() throws Exception {
-        ConsoleMessageHandler handler = new ConsoleMessageHandler(true, 1, false);
+        ConsoleMessageHandler handler = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER, true, 1, false);
         Thread hook = getShutdownHook(handler);
         assertNull(hook);
         handler.close();
@@ -411,7 +437,7 @@ class ConsoleMessageHandlerUnitTest {
     @DisplayName("Async with non-positive capacity should behave as unbounded")
     void asyncWithNonPositiveCapacityBehavesUnbounded() {
         assertDoesNotThrow(() -> {
-            try (ConsoleMessageHandler handler = new ConsoleMessageHandler(true, 0, false)) {
+            try (ConsoleMessageHandler handler = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER, true, 0, false)) {
                 handler.info("msg1");
                 handler.info("msg2");
                 Thread.sleep(100);
@@ -422,7 +448,7 @@ class ConsoleMessageHandlerUnitTest {
     @Test
     @DisplayName("Close on synchronous handler should be a no-op")
     void closeOnSynchronousHandlerShouldBeNoOp() {
-        ConsoleMessageHandler handler = new ConsoleMessageHandler();
+        ConsoleMessageHandler handler = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
         assertDoesNotThrow(handler::close);
     }
 
@@ -451,7 +477,7 @@ class ConsoleMessageHandlerUnitTest {
         PrintStream originalOut = System.out;
         ByteArrayOutputStream outContent = new ByteArrayOutputStream();
         System.setOut(new PrintStream(outContent, true, StandardCharsets.UTF_8.name()));
-        try (ConsoleMessageHandler handler = new ConsoleMessageHandler(true, 2048, false)) {
+        try (ConsoleMessageHandler handler = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER, true, 2048, false)) {
             ExecutorService producerPool = Executors.newFixedThreadPool(threadCount);
             CountDownLatch start = new CountDownLatch(1);
             List<Future<?>> futures = new ArrayList<>();

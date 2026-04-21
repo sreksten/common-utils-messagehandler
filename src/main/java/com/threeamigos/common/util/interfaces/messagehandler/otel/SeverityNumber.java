@@ -5,7 +5,7 @@ package com.threeamigos.common.util.interfaces.messagehandler.otel;
  * <a href="https://opentelemetry.io/docs/specs/otel/logs/data-model/#field-severitynumber">
  * OTel Log Data Model §SeverityNumber</a>.
  * <p>
- * The range 1–24 is divided into four severity levels with four sub-ranges each.
+ * The range 1–24 is divided into six severity levels with four sub-ranges each.
  * {@link #UNSPECIFIED} (value 0) indicates that no severity was set.
  *
  * @author Stefano Reksten

@@ -1,9 +1,11 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
-import com.threeamigos.common.util.interfaces.messagehandler.ContextInfo;
-import com.threeamigos.common.util.interfaces.messagehandler.LogFormatter;
-import com.threeamigos.common.util.interfaces.messagehandler.LogLevelEnum;
-import jakarta.annotation.Nonnull;
+import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordFactoryImpl;
+import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.RawJsonRecordFormatter;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -17,54 +19,65 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @DisplayName("AbstractOutputMessageHandler unit tests")
 @Tag("unit")
 @Tag("messageHandler")
 class AbstractOutputMessageHandlerUnitTest {
 
+    private static final LogRecordFactory FACTORY = new LogRecordFactoryImpl();
+    private static final LogRecordFormatter FORMATTER = new RawJsonRecordFormatter();
+
     private static final class ProbeOutputMessageHandler extends AbstractOutputMessageHandler {
-        private ProbeOutputMessageHandler(boolean async, int queueCapacity) {
+        private ProbeOutputMessageHandler(final boolean async, final int queueCapacity) {
+            super(FACTORY, FORMATTER);
             initializeOutputDispatch(async, queueCapacity, false,
                     "ProbeOutputMessageHandler-async", "ProbeOutputMessageHandler-shutdown");
         }
 
-        private void submit(Runnable runnable) {
+        private void submit(final Runnable runnable) {
             dispatch(runnable);
         }
 
         @Override
-        protected void handleInfoMessageImpl(String message, ContextInfo context) {
+        protected void handleInfoMessageImpl(final String message) {
         }
 
         @Override
-        protected void handleWarnMessageImpl(String message, ContextInfo context) {
+        protected void handleWarnMessageImpl(final String message) {
         }
 
         @Override
-        protected void handleErrorMessageImpl(String message, ContextInfo context) {
+        protected void handleErrorMessageImpl(final String message) {
         }
 
         @Override
-        protected void handleFatalMessageImpl(String message, ContextInfo context) {
+        protected void handleFatalMessageImpl(final String message) {
         }
 
         @Override
-        protected void handleDebugMessageImpl(String message, ContextInfo context) {
+        protected void handleDebugMessageImpl(final String message) {
         }
 
         @Override
-        protected void handleTraceMessageImpl(String message, ContextInfo context) {
+        protected void handleTraceMessageImpl(final String message) {
         }
 
         @Override
-        protected void handleExceptionImpl(Exception exception, ContextInfo context) {
+        protected void handleExceptionImpl(final Exception exception) {
         }
 
         @Override
-        protected void handleExceptionImpl(String message, Exception exception, ContextInfo context) {
+        protected void handleExceptionImpl(final String message, final Exception exception) {
         }
     }
 
@@ -78,7 +91,6 @@ class AbstractOutputMessageHandlerUnitTest {
         handler.submit(() -> {
             firstTaskStarted.countDown();
             try {
-                // Interrupted by close(), which routes execution to drain-loop finally.
                 Thread.sleep(TimeUnit.SECONDS.toMillis(30));
             } catch (InterruptedException ignored) {
                 Thread.currentThread().interrupt();
@@ -86,7 +98,6 @@ class AbstractOutputMessageHandlerUnitTest {
         });
         assertTrue(firstTaskStarted.await(1, TimeUnit.SECONDS));
 
-        // This task stays queued while the first task is running.
         handler.submit(queuedTaskExecuted::countDown);
 
         handler.close();
@@ -104,9 +115,7 @@ class AbstractOutputMessageHandlerUnitTest {
         Field queueField = AbstractOutputMessageHandler.class.getDeclaredField("queue");
         queueField.setAccessible(true);
         BlockingQueue<Runnable> queue = new LinkedBlockingQueue<>();
-        // First task runs in try-loop and interrupts current thread to exit while.
         queue.offer(() -> Thread.currentThread().interrupt());
-        // Second task remains queued and is executed by finally-loop (line 65 true branch).
         queue.offer(drainedTaskExecuted::countDown);
         queueField.set(handler, queue);
 
@@ -116,12 +125,9 @@ class AbstractOutputMessageHandlerUnitTest {
         assertFalse(Thread.currentThread().isInterrupted());
         try {
             drainLoop.invoke(handler);
-            assertEquals(0L, drainedTaskExecuted.getCount(),
-                    "Finally-loop should execute queued task");
-            assertTrue(Thread.currentThread().isInterrupted(),
-                    "Interrupt flag should be set by the first task");
+            assertEquals(0L, drainedTaskExecuted.getCount());
+            assertTrue(Thread.currentThread().isInterrupted());
         } finally {
-            // Avoid leaking interrupt state to other tests.
             Thread.interrupted();
         }
     }
@@ -144,23 +150,17 @@ class AbstractOutputMessageHandlerUnitTest {
         CountDownLatch closeStarted = new CountDownLatch(1);
 
         synchronized (dispatchLock) {
-            // Simulate a dispatch() call that has already passed the closed check and is
-            // about to offer its task. close() must not complete its drain before we offer.
             Thread closeThread = new Thread(() -> {
                 closeStarted.countDown();
                 handler.close();
             });
             closeThread.start();
-            assertTrue(closeStarted.await(1, TimeUnit.SECONDS), "close() thread should start");
-            // Give close() time to reach the synchronized (dispatchLock) barrier.
+            assertTrue(closeStarted.await(1, TimeUnit.SECONDS));
             Thread.sleep(50);
 
-            // Offer the task while holding the lock (simulates dispatch() completing its offer).
             queue.offer(() -> taskExecuted.set(true));
-            // Releasing the lock allows close() to proceed through its barrier and drain.
         }
 
-        // Allow close() to finish draining and closing.
         Thread.sleep(200);
 
         assertTrue(taskExecuted.get(),
@@ -172,44 +172,33 @@ class AbstractOutputMessageHandlerUnitTest {
     void dispatchShouldThrowIllegalStateExceptionAfterClose() {
         ProbeOutputMessageHandler syncHandler = new ProbeOutputMessageHandler(false, 0);
         syncHandler.close();
-        assertThrows(IllegalStateException.class, () -> syncHandler.submit(() -> {}));
+        assertThrows(IllegalStateException.class, () -> syncHandler.submit(() -> {
+        }));
 
         ProbeOutputMessageHandler asyncHandler = new ProbeOutputMessageHandler(true, 100);
         asyncHandler.close();
-        assertThrows(IllegalStateException.class, () -> asyncHandler.submit(() -> {}));
+        assertThrows(IllegalStateException.class, () -> asyncHandler.submit(() -> {
+        }));
     }
 
     @Test
-    @DisplayName("setFormatter(null) should throw NullPointerException")
+    @DisplayName("setLogRecordFormatter(null) should throw NullPointerException")
     void setFormatterNullThrowsNpe() {
         ProbeOutputMessageHandler handler = new ProbeOutputMessageHandler(false, 0);
         assertThrows(NullPointerException.class, () -> handler.setLogRecordFormatter(null));
     }
 
     @Test
-    @DisplayName("setFormatter with a custom formatter should route output through it")
+    @DisplayName("setLogRecordFormatter with a custom formatter should route output through it")
     void setFormatterCustomFormatterIsUsed() {
         ProbeOutputMessageHandler handler = new ProbeOutputMessageHandler(false, 0);
-        LogFormatter custom = new LogFormatter() {
-            @Nonnull
-            @Override
-            public String format(@Nonnull LogLevelEnum level, @Nonnull String message, @Nonnull ContextInfo context) {
-                return "CUSTOM:" + level + ":" + message;
-            }
-            @Nonnull
-            @Override
-            public String formatException(@Nonnull Exception exception, @Nonnull ContextInfo contextInfo) {
-                return "CUSTOM:EXCEP:" + exception.getMessage();
-            }
-            @Nonnull
-            @Override
-            public String formatException(@Nonnull String prefix, @Nonnull Exception exception, @Nonnull ContextInfo contextInfo) {
-                return "CUSTOM:EXCEP:" + prefix + ":" + exception.getMessage();
-            }
-        };
+        LogRecordFormatter custom = logRecord -> "CUSTOM:" + logRecord.getSeverityText() + ":"
+                + (logRecord.getBody() == null ? "" : logRecord.getBody().asString());
+
         handler.setLogRecordFormatter(custom);
-        // Verify getFormatter() returns the custom one
-        assertEquals("CUSTOM:INFO:test", handler.getLogRecordFormatter().format(LogLevelEnum.INFO, "test", new ContextInfoImpl()));
+
+        LogRecord record = FACTORY.create(SeverityNumber.INFO, "test");
+        assertEquals("CUSTOM:INFO:test", handler.getLogRecordFormatter().format(record));
     }
 
     @Test
@@ -238,7 +227,6 @@ class AbstractOutputMessageHandlerUnitTest {
                 .getDeclaredMethod("drainQueueInCallerThread");
         drainQueueInCallerThread.setAccessible(true);
 
-        // queue == null branch (sync mode leaves queue null)
         assertDoesNotThrow(() -> drainQueueInCallerThread.invoke(handler));
 
         Field queueField = AbstractOutputMessageHandler.class.getDeclaredField("queue");
@@ -250,7 +238,6 @@ class AbstractOutputMessageHandlerUnitTest {
         queue.offer(() -> secondExecuted.set(true));
         queueField.set(handler, queue);
 
-        // queue != null branch: execute until poll() returns null
         drainQueueInCallerThread.invoke(handler);
 
         assertTrue(firstExecuted.get(), "First queued task should be executed");

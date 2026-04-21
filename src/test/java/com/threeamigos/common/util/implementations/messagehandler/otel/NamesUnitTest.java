@@ -20,11 +20,24 @@ class NamesUnitTest {
     @Test
     @DisplayName("enum should expose expected sample values")
     void enumShouldExposeExpectedSampleValues() {
+        assertEquals("error.type", Names.ATTR_ERROR_TYPE.getValue());
+        assertEquals("server.address", Names.ATTR_SERVER_ADDRESS.getValue());
+        assertEquals("server.port", Names.ATTR_SERVER_PORT.getValue());
+        assertEquals("url.scheme", Names.ATTR_URL_SCHEME.getValue());
+        assertEquals("exception", Names.EVENT_EXCEPTION.getValue());
         assertEquals("syslog.facility", Names.ATTR_SYSLOG_FACILITY.getValue());
         assertEquals("host.name", Names.RES_HOST_NAME.getValue());
         assertEquals("http.response.status_code", Names.ATTR_HTTP_RESPONSE_STATUS_CODE.getValue());
         assertEquals("cloud.region", Names.RES_CLOUD_REGION.getValue());
-        assertEquals("service.instance.id", Names.RES_SERVICE_INSTANCE_ID.getValue());
+        assertEquals("service.instance.id", Names.ATTR_SERVICE_INSTANCE_ID.getValue());
+        assertEquals("exception.type", Names.ATTR_EXCEPTION_TYPE.getValue());
+        assertEquals("exception.message", Names.ATTR_EXCEPTION_MESSAGE.getValue());
+        assertEquals("exception.stacktrace", Names.ATTR_EXCEPTION_STACKTRACE.getValue());
+        assertEquals("code.function.name", Names.ATTR_CODE_FUNCTION_NAME.getValue());
+        assertEquals("code.file.path", Names.ATTR_CODE_FILE_PATH.getValue());
+        assertEquals("code.line.number", Names.ATTR_CODE_LINE_NUMBER.getValue());
+        assertEquals("code.stacktrace", Names.ATTR_CODE_STACKTRACE.getValue());
+        assertEquals("code.namespace", Names.ATTR_CODE_NAMESPACE.getValue());
     }
 
     @Test

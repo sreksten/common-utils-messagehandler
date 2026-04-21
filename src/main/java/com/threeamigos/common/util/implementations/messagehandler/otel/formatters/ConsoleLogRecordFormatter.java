@@ -1,0 +1,133 @@
+package com.threeamigos.common.util.implementations.messagehandler.otel.formatters;
+
+import com.threeamigos.common.util.implementations.messagehandler.ClassNameReducer;
+import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
+import jakarta.annotation.Nonnull;
+
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
+import java.util.Base64;
+import java.util.Objects;
+
+/**
+ * A {@link LogRecordFormatter} for console-oriented plain text output.
+ * <p>
+ * Output format:
+ * {@code <iso-instant> [<severity-6>] <message>}.
+ *
+ * @author Stefano Reksten
+ */
+public class ConsoleLogRecordFormatter implements LogRecordFormatter {
+
+    private static final int SEVERITY_WIDTH = 6;
+    private volatile boolean reduceScopeClassName;
+
+    public ConsoleLogRecordFormatter() {
+        this(false);
+    }
+
+    public ConsoleLogRecordFormatter(final boolean reduceScopeClassName) {
+        this.reduceScopeClassName = reduceScopeClassName;
+    }
+
+    public boolean isReduceScopeClassName() {
+        return reduceScopeClassName;
+    }
+
+    public void setReduceScopeClassName(final boolean reduceScopeClassName) {
+        this.reduceScopeClassName = reduceScopeClassName;
+    }
+
+    @Nonnull
+    @Override
+    public String format(@Nonnull final LogRecord logRecord) {
+        Objects.requireNonNull(logRecord, MessageHandlerResourceBundle.get("logRecordMustNotBeNull"));
+        Instant timestamp = Objects.requireNonNull(logRecord.getTimestamp(),
+                MessageHandlerResourceBundle.get("timestampMustNotBeNull"));
+        String isoTimestamp = DateTimeFormatter.ISO_INSTANT.format(timestamp);
+        String severity = normalizeSeverity(logRecord.getSeverityText(), logRecord.getSeverityNumber());
+        String scopeName = resolveScopeName(logRecord);
+        String message = resolveMessage(logRecord);
+        StringBuilder out = new StringBuilder(isoTimestamp).append(" [").append(severity).append("]");
+        if (!scopeName.isEmpty()) {
+            out.append(" [").append(scopeName).append("]");
+        }
+        out.append(' ').append(message);
+        return out.toString();
+    }
+
+    private String resolveScopeName(final LogRecord logRecord) {
+        InstrumentationScope instrumentationScope = logRecord.getInstrumentationScope();
+        if (instrumentationScope == null || instrumentationScope.getName() == null) {
+            return "";
+        }
+        String scopeName = instrumentationScope.getName().trim();
+        if (scopeName.isEmpty()) {
+            return "";
+        }
+        if (reduceScopeClassName) {
+            return ClassNameReducer.reduce(scopeName);
+        }
+        return scopeName;
+    }
+
+    private static String normalizeSeverity(final String severityText, final SeverityNumber severityNumber) {
+        String raw;
+        if (severityText != null && !severityText.trim().isEmpty()) {
+            raw = severityText.trim();
+        } else if (severityNumber != null && severityNumber != SeverityNumber.UNSPECIFIED) {
+            raw = severityNumber.name();
+        } else {
+            raw = SeverityNumber.UNSPECIFIED.name();
+        }
+
+        if (raw.length() > SEVERITY_WIDTH) {
+            return raw.substring(0, SEVERITY_WIDTH);
+        }
+        return String.format("%-" + SEVERITY_WIDTH + "s", raw);
+    }
+
+    private static String resolveMessage(final LogRecord logRecord) {
+        AnyValue body = logRecord.getBody();
+        if (body != null) {
+            return anyValueToString(body);
+        }
+        String eventName = logRecord.getEventName();
+        return eventName == null ? "" : eventName;
+    }
+
+    private static String anyValueToString(final AnyValue value) {
+        AnyValue.Type type = value.getType();
+        if (type == null) {
+            throw new IllegalArgumentException(MessageHandlerResourceBundle.get("anyValueTypeMustNotBeNull"));
+        }
+        if (type == AnyValue.Type.EMPTY) {
+            return "";
+        }
+        if (type == AnyValue.Type.STRING) {
+            String v = value.asString();
+            return v == null ? "" : v;
+        }
+        if (type == AnyValue.Type.BOOL) {
+            return String.valueOf(value.asBoolean());
+        }
+        if (type == AnyValue.Type.INT) {
+            return String.valueOf(value.asLong());
+        }
+        if (type == AnyValue.Type.DOUBLE) {
+            return String.valueOf(value.asDouble());
+        }
+        if (type == AnyValue.Type.BYTES) {
+            return Base64.getEncoder().encodeToString(value.asBytes());
+        }
+        if (type == AnyValue.Type.ARRAY) {
+            return String.valueOf(value.asArray());
+        }
+        return String.valueOf(value.asKvList());
+    }
+}

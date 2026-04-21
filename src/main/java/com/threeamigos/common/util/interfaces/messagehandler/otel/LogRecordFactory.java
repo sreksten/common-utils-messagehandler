@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.interfaces.messagehandler.otel;
 
 /**
+ * A factory for creating {@link LogRecord} instances.
  *
  * @author Stefano Reksten
  */

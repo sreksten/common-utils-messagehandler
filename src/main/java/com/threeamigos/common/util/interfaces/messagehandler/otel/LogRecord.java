@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * A representation of an OpenTelemetry Log Record, as defined by their
+ * A representation of an OpenTelemetry Log Record, as defined by the
  * <a href="https://opentelemetry.io/docs/specs/otel/logs/data-model/">Log Data Model</a>.
  * <p>
  * All fields are optional: implementations may return {@code null} for absent string/object fields,

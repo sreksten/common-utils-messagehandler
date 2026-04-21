@@ -147,7 +147,7 @@ class SwingMessageHandlerUnitTest {
         sut.fatal("fatal-message");
         assertEquals(4, sut.calls);
         assertEquals("fatal-message", sut.lastMessage);
-        assertEquals("Error", sut.lastTitle);
+        assertEquals("Fatal", sut.lastTitle);
         assertEquals(JOptionPane.ERROR_MESSAGE, sut.lastIcon);
 
         sut.debug("debug-message");

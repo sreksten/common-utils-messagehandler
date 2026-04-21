@@ -1,6 +1,5 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
-import com.threeamigos.common.util.interfaces.messagehandler.ContextInfo;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -200,11 +199,11 @@ class CompositeMessageHandlerUnitTest {
             sut.info("after-readd");
         });
 
-        verify(firstMessageHandler, times(1)).info(eq("after-first-add"), any(ContextInfo.class));
-        verify(firstMessageHandler, times(1)).info(eq("after-second-add"), any(ContextInfo.class));
-        verify(firstMessageHandler, times(1)).info(eq("after-readd"), any(ContextInfo.class));
-        verify(secondMessageHandler, times(1)).info(eq("after-second-add"), any(ContextInfo.class));
-        verify(secondMessageHandler, times(1)).info(eq("after-first-remove"), any(ContextInfo.class));
+        verify(firstMessageHandler, times(1)).info(eq("after-first-add"));
+        verify(firstMessageHandler, times(1)).info(eq("after-second-add"));
+        verify(firstMessageHandler, times(1)).info(eq("after-readd"));
+        verify(secondMessageHandler, times(1)).info(eq("after-second-add"));
+        verify(secondMessageHandler, times(1)).info(eq("after-first-remove"));
         verifyNoMoreInteractions(firstMessageHandler, secondMessageHandler);
     }
 
@@ -254,8 +253,8 @@ class CompositeMessageHandlerUnitTest {
         sut.info(secondInfoMessageSupplier);
         // Then
         for (MessageHandler messageHandler : sut.getMessageHandlers()) {
-            verify(messageHandler, times(1)).info(eq(FIRST_MESSAGE), any(ContextInfo.class));
-            verify(messageHandler, times(1)).info(eq(SECOND_MESSAGE), any(ContextInfo.class));
+            verify(messageHandler, times(1)).info(eq(FIRST_MESSAGE));
+            verify(messageHandler, times(1)).info(eq(SECOND_MESSAGE));
         }
     }
 
@@ -269,8 +268,8 @@ class CompositeMessageHandlerUnitTest {
         sut.info(SECOND_MESSAGE);
         // Then
         for (MessageHandler messageHandler : sut.getMessageHandlers()) {
-            verify(messageHandler, times(1)).info(eq(FIRST_MESSAGE), any(ContextInfo.class));
-            verify(messageHandler, times(1)).info(eq(SECOND_MESSAGE), any(ContextInfo.class));
+            verify(messageHandler, times(1)).info(eq(FIRST_MESSAGE));
+            verify(messageHandler, times(1)).info(eq(SECOND_MESSAGE));
         }
     }
 
@@ -285,8 +284,8 @@ class CompositeMessageHandlerUnitTest {
         sut.info(SECOND_MESSAGE);
         // Then
         for (MessageHandler messageHandler : sut.getMessageHandlers()) {
-            verify(messageHandler, times(0)).info(eq(FIRST_MESSAGE), any(ContextInfo.class));
-            verify(messageHandler, times(0)).info(eq(SECOND_MESSAGE), any(ContextInfo.class));
+            verify(messageHandler, times(0)).info(eq(FIRST_MESSAGE));
+            verify(messageHandler, times(0)).info(eq(SECOND_MESSAGE));
         }
     }
 
@@ -311,12 +310,12 @@ class CompositeMessageHandlerUnitTest {
             // While executing delegate, attempt to add another handler; should not deadlock
             sut.addMessageHandler(firstMessageHandler);
             return null;
-        }).when(slowHandler).info(anyString(), any(ContextInfo.class));
+        }).when(slowHandler).info(anyString());
         sut.addMessageHandler(slowHandler);
 
         sut.info("msg");
 
-        verify(slowHandler, times(1)).info(eq("msg"), any(ContextInfo.class));
+        verify(slowHandler, times(1)).info(eq("msg"));
         assertEquals(2, sut.getMessageHandlers().size());
     }
 
@@ -366,8 +365,8 @@ class CompositeMessageHandlerUnitTest {
         sut.warn(secondWarnMessageSupplier);
         // Then
         for (MessageHandler messageHandler : sut.getMessageHandlers()) {
-            verify(messageHandler, times(1)).warn(eq(FIRST_MESSAGE), any(ContextInfo.class));
-            verify(messageHandler, times(1)).warn(eq(SECOND_MESSAGE), any(ContextInfo.class));
+            verify(messageHandler, times(1)).warn(eq(FIRST_MESSAGE));
+            verify(messageHandler, times(1)).warn(eq(SECOND_MESSAGE));
         }
     }
 
@@ -381,8 +380,8 @@ class CompositeMessageHandlerUnitTest {
         sut.warn(SECOND_MESSAGE);
         // Then
         for (MessageHandler messageHandler : sut.getMessageHandlers()) {
-            verify(messageHandler, times(1)).warn(eq(FIRST_MESSAGE), any(ContextInfo.class));
-            verify(messageHandler, times(1)).warn(eq(SECOND_MESSAGE), any(ContextInfo.class));
+            verify(messageHandler, times(1)).warn(eq(FIRST_MESSAGE));
+            verify(messageHandler, times(1)).warn(eq(SECOND_MESSAGE));
         }
     }
 
@@ -397,8 +396,8 @@ class CompositeMessageHandlerUnitTest {
         sut.warn(SECOND_MESSAGE);
         // Then
         for (MessageHandler messageHandler : sut.getMessageHandlers()) {
-            verify(messageHandler, times(0)).warn(eq(FIRST_MESSAGE), any(ContextInfo.class));
-            verify(messageHandler, times(0)).warn(eq(SECOND_MESSAGE), any(ContextInfo.class));
+            verify(messageHandler, times(0)).warn(eq(FIRST_MESSAGE));
+            verify(messageHandler, times(0)).warn(eq(SECOND_MESSAGE));
         }
     }
 
@@ -448,8 +447,8 @@ class CompositeMessageHandlerUnitTest {
         sut.fatal(secondFatalMessageSupplier);
         // Then
         for (MessageHandler messageHandler : sut.getMessageHandlers()) {
-            verify(messageHandler, times(1)).fatal(eq(FIRST_MESSAGE), any(ContextInfo.class));
-            verify(messageHandler, times(1)).fatal(eq(SECOND_MESSAGE), any(ContextInfo.class));
+            verify(messageHandler, times(1)).fatal(eq(FIRST_MESSAGE));
+            verify(messageHandler, times(1)).fatal(eq(SECOND_MESSAGE));
         }
     }
 
@@ -463,8 +462,8 @@ class CompositeMessageHandlerUnitTest {
         sut.fatal(SECOND_MESSAGE);
         // Then
         for (MessageHandler messageHandler : sut.getMessageHandlers()) {
-            verify(messageHandler, times(1)).fatal(eq(FIRST_MESSAGE), any(ContextInfo.class));
-            verify(messageHandler, times(1)).fatal(eq(SECOND_MESSAGE), any(ContextInfo.class));
+            verify(messageHandler, times(1)).fatal(eq(FIRST_MESSAGE));
+            verify(messageHandler, times(1)).fatal(eq(SECOND_MESSAGE));
         }
     }
 
@@ -479,8 +478,8 @@ class CompositeMessageHandlerUnitTest {
         sut.fatal(SECOND_MESSAGE);
         // Then
         for (MessageHandler messageHandler : sut.getMessageHandlers()) {
-            verify(messageHandler, times(0)).fatal(eq(FIRST_MESSAGE), any(ContextInfo.class));
-            verify(messageHandler, times(0)).fatal(eq(SECOND_MESSAGE), any(ContextInfo.class));
+            verify(messageHandler, times(0)).fatal(eq(FIRST_MESSAGE));
+            verify(messageHandler, times(0)).fatal(eq(SECOND_MESSAGE));
         }
     }
 
@@ -542,8 +541,8 @@ class CompositeMessageHandlerUnitTest {
         sut.error(secondErrorMessageSupplier);
         // Then
         for (MessageHandler messageHandler : sut.getMessageHandlers()) {
-            verify(messageHandler, times(1)).error(eq(FIRST_MESSAGE), any(ContextInfo.class));
-            verify(messageHandler, times(1)).error(eq(SECOND_MESSAGE), any(ContextInfo.class));
+            verify(messageHandler, times(1)).error(eq(FIRST_MESSAGE));
+            verify(messageHandler, times(1)).error(eq(SECOND_MESSAGE));
         }
     }
 
@@ -557,8 +556,8 @@ class CompositeMessageHandlerUnitTest {
         sut.error(SECOND_MESSAGE);
         // Then
         for (MessageHandler messageHandler : sut.getMessageHandlers()) {
-            verify(messageHandler, times(1)).error(eq(FIRST_MESSAGE), any(ContextInfo.class));
-            verify(messageHandler, times(1)).error(eq(SECOND_MESSAGE), any(ContextInfo.class));
+            verify(messageHandler, times(1)).error(eq(FIRST_MESSAGE));
+            verify(messageHandler, times(1)).error(eq(SECOND_MESSAGE));
         }
     }
 
@@ -573,8 +572,8 @@ class CompositeMessageHandlerUnitTest {
         sut.error(SECOND_MESSAGE);
         // Then
         for (MessageHandler messageHandler : sut.getMessageHandlers()) {
-            verify(messageHandler, times(0)).error(eq(FIRST_MESSAGE), any(ContextInfo.class));
-            verify(messageHandler, times(0)).error(eq(SECOND_MESSAGE), any(ContextInfo.class));
+            verify(messageHandler, times(0)).error(eq(FIRST_MESSAGE));
+            verify(messageHandler, times(0)).error(eq(SECOND_MESSAGE));
         }
     }
 
@@ -624,8 +623,8 @@ class CompositeMessageHandlerUnitTest {
         sut.debug(secondDebugMessageSupplier);
         // Then
         for (MessageHandler messageHandler : sut.getMessageHandlers()) {
-            verify(messageHandler, times(1)).debug(eq(FIRST_MESSAGE), any(ContextInfo.class));
-            verify(messageHandler, times(1)).debug(eq(SECOND_MESSAGE), any(ContextInfo.class));
+            verify(messageHandler, times(1)).debug(eq(FIRST_MESSAGE));
+            verify(messageHandler, times(1)).debug(eq(SECOND_MESSAGE));
         }
     }
 
@@ -639,8 +638,8 @@ class CompositeMessageHandlerUnitTest {
         sut.debug(SECOND_MESSAGE);
         // Then
         for (MessageHandler messageHandler : sut.getMessageHandlers()) {
-            verify(messageHandler, times(1)).debug(eq(FIRST_MESSAGE), any(ContextInfo.class));
-            verify(messageHandler, times(1)).debug(eq(SECOND_MESSAGE), any(ContextInfo.class));
+            verify(messageHandler, times(1)).debug(eq(FIRST_MESSAGE));
+            verify(messageHandler, times(1)).debug(eq(SECOND_MESSAGE));
         }
     }
 
@@ -655,8 +654,8 @@ class CompositeMessageHandlerUnitTest {
         sut.debug(SECOND_MESSAGE);
         // Then
         for (MessageHandler messageHandler : sut.getMessageHandlers()) {
-            verify(messageHandler, times(0)).debug(eq(FIRST_MESSAGE), any(ContextInfo.class));
-            verify(messageHandler, times(0)).debug(eq(SECOND_MESSAGE), any(ContextInfo.class));
+            verify(messageHandler, times(0)).debug(eq(FIRST_MESSAGE));
+            verify(messageHandler, times(0)).debug(eq(SECOND_MESSAGE));
         }
     }
 
@@ -706,8 +705,8 @@ class CompositeMessageHandlerUnitTest {
         sut.trace(secondTraceMessageSupplier);
         // Then
         for (MessageHandler messageHandler : sut.getMessageHandlers()) {
-            verify(messageHandler, times(1)).trace(eq(FIRST_MESSAGE), any(ContextInfo.class));
-            verify(messageHandler, times(1)).trace(eq(SECOND_MESSAGE), any(ContextInfo.class));
+            verify(messageHandler, times(1)).trace(eq(FIRST_MESSAGE));
+            verify(messageHandler, times(1)).trace(eq(SECOND_MESSAGE));
         }
     }
 
@@ -721,8 +720,8 @@ class CompositeMessageHandlerUnitTest {
         sut.trace(SECOND_MESSAGE);
         // Then
         for (MessageHandler messageHandler : sut.getMessageHandlers()) {
-            verify(messageHandler, times(1)).trace(eq(FIRST_MESSAGE), any(ContextInfo.class));
-            verify(messageHandler, times(1)).trace(eq(SECOND_MESSAGE), any(ContextInfo.class));
+            verify(messageHandler, times(1)).trace(eq(FIRST_MESSAGE));
+            verify(messageHandler, times(1)).trace(eq(SECOND_MESSAGE));
         }
     }
 
@@ -737,8 +736,8 @@ class CompositeMessageHandlerUnitTest {
         sut.trace(SECOND_MESSAGE);
         // Then
         for (MessageHandler messageHandler : sut.getMessageHandlers()) {
-            verify(messageHandler, times(0)).trace(eq(FIRST_MESSAGE), any(ContextInfo.class));
-            verify(messageHandler, times(0)).trace(eq(SECOND_MESSAGE), any(ContextInfo.class));
+            verify(messageHandler, times(0)).trace(eq(FIRST_MESSAGE));
+            verify(messageHandler, times(0)).trace(eq(SECOND_MESSAGE));
         }
     }
 
@@ -777,8 +776,8 @@ class CompositeMessageHandlerUnitTest {
         sut.exception(classCastException);
         // Then
         for (MessageHandler messageHandler : sut.getMessageHandlers()) {
-            verify(messageHandler, times(1)).exception(eq(illegalArgumentException), any(ContextInfo.class));
-            verify(messageHandler, times(1)).exception(eq(classCastException), any(ContextInfo.class));
+            verify(messageHandler, times(1)).exception(eq(illegalArgumentException));
+            verify(messageHandler, times(1)).exception(eq(classCastException));
         }
     }
 
@@ -796,8 +795,8 @@ class CompositeMessageHandlerUnitTest {
         sut.exception(classCastException);
         // Then
         for (MessageHandler messageHandler : sut.getMessageHandlers()) {
-            verify(messageHandler, times(0)).exception(eq(illegalArgumentException), any(ContextInfo.class));
-            verify(messageHandler, times(0)).exception(eq(classCastException), any(ContextInfo.class));
+            verify(messageHandler, times(0)).exception(eq(illegalArgumentException));
+            verify(messageHandler, times(0)).exception(eq(classCastException));
         }
     }
 
@@ -810,7 +809,7 @@ class CompositeMessageHandlerUnitTest {
         sut.exception("prefix", exception);
 
         for (MessageHandler messageHandler : sut.getMessageHandlers()) {
-            verify(messageHandler, times(1)).exception(eq("prefix"), eq(exception), any(ContextInfo.class));
+            verify(messageHandler, times(1)).exception(eq("prefix"), eq(exception));
         }
     }
 
@@ -818,13 +817,13 @@ class CompositeMessageHandlerUnitTest {
     @DisplayName("forEachHandler should catch Throwable from a child handler and continue to subsequent handlers")
     void forEachHandlerShouldCatchThrowableAndContinueToSubsequentHandlers() {
         List<String> errors = new ArrayList<>();
-        doThrow(new Error("forced error")).when(firstMessageHandler).info(eq("msg"), any(ContextInfo.class));
+        doThrow(new Error("forced error")).when(firstMessageHandler).info(eq("msg"));
         CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
         sut.setErrorConsumer(errors::add);
 
         sut.info("msg");
 
-        verify(secondMessageHandler, times(1)).info(eq("msg"), any(ContextInfo.class));
+        verify(secondMessageHandler, times(1)).info(eq("msg"));
         assertFalse(errors.isEmpty(), "errorConsumer should have received the dispatch error");
         assertTrue(errors.get(0).contains("forced error"), "Error notification should include the throwable message");
     }

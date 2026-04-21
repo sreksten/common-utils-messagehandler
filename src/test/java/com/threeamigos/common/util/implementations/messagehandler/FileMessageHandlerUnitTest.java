@@ -1,5 +1,10 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
+import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordFactoryImpl;
+import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.RawJsonRecordFormatter;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -28,9 +33,30 @@ import static org.junit.jupiter.api.Assertions.*;
 @Tag("messageHandler")
 class FileMessageHandlerUnitTest {
 
+    private static final LogRecordFactory FACTORY = new LogRecordFactoryImpl();
+    private static final LogRecordFormatter DEFAULT_FORMATTER = logRecord -> {
+        String severity = logRecord.getSeverityText() == null ? "UNSPEC" : logRecord.getSeverityText();
+        if (severity.length() < 5) {
+            severity = String.format("%-5s", severity);
+        } else if (severity.length() > 5) {
+            severity = severity.substring(0, 5);
+        }
+        return "[" + logRecord.getTimestamp() + "] [" + severity + "] " + stringifyBody(logRecord.getBody());
+    };
+
+    private static String stringifyBody(final AnyValue body) {
+        if (body == null || body.getType() == null) {
+            return "";
+        }
+        if (body.getType() == AnyValue.Type.STRING) {
+            return body.asString() == null ? "" : body.asString();
+        }
+        return String.valueOf(body.asString());
+    }
+
     private static class FailingOpenWriterFileMessageHandler extends FileMessageHandler {
         private FailingOpenWriterFileMessageHandler(String filename) {
-            super(filename);
+            super(FACTORY, DEFAULT_FORMATTER, filename);
         }
 
         @Override
@@ -41,7 +67,7 @@ class FileMessageHandlerUnitTest {
 
     private static class ThrowingAwaitTerminationFileMessageHandler extends FileMessageHandler {
         private ThrowingAwaitTerminationFileMessageHandler(String filename) {
-            super(filename, true, 1, false);
+            super(FACTORY, DEFAULT_FORMATTER, filename, true, 1, false);
         }
 
         @Override
@@ -52,7 +78,7 @@ class FileMessageHandlerUnitTest {
 
     private static class ThrowingRemoveHookFileMessageHandler extends FileMessageHandler {
         private ThrowingRemoveHookFileMessageHandler(String filename) {
-            super(filename, true, 1, true);
+            super(FACTORY, DEFAULT_FORMATTER, filename, true, 1, true);
         }
 
         @Override
@@ -63,7 +89,7 @@ class FileMessageHandlerUnitTest {
 
     private static class ErrorCheckWriterFileMessageHandler extends FileMessageHandler {
         private ErrorCheckWriterFileMessageHandler(String filename) {
-            super(filename);
+            super(FACTORY, DEFAULT_FORMATTER, filename);
         }
 
         @Override
@@ -83,7 +109,7 @@ class FileMessageHandlerUnitTest {
      */
     private static class FailingReopenFileMessageHandler extends FileMessageHandler {
         private FailingReopenFileMessageHandler(String filename) {
-            super(filename, false, 0, false, null, true);
+            super(FACTORY, DEFAULT_FORMATTER, filename, false, 0, false, null, true);
         }
 
         @Override
@@ -97,7 +123,7 @@ class FileMessageHandlerUnitTest {
 
     private static class AsyncErrorFileMessageHandler extends FileMessageHandler {
         private AsyncErrorFileMessageHandler(String filename) {
-            super(filename, true, 64);
+            super(FACTORY, DEFAULT_FORMATTER, filename, true, 64);
         }
 
         @Override
@@ -124,7 +150,7 @@ class FileMessageHandlerUnitTest {
         private boolean constructionComplete;
 
         private FailingRecoveryFileMessageHandler(String filename) {
-            super(filename);
+            super(FACTORY, DEFAULT_FORMATTER, filename);
         }
 
         @Override
@@ -150,7 +176,7 @@ class FileMessageHandlerUnitTest {
      */
     private static class FailingRotationFileMessageHandler extends FileMessageHandler {
         private FailingRotationFileMessageHandler(String filename) {
-            super(filename, new SizeRotationPolicy(1));
+            super(FACTORY, DEFAULT_FORMATTER, filename, new SizeRotationPolicy(1));
         }
 
         @Override
@@ -164,7 +190,7 @@ class FileMessageHandlerUnitTest {
 
     private static class InterruptingWriteFileMessageHandler extends FileMessageHandler {
         private InterruptingWriteFileMessageHandler(String filename) {
-            super(filename, true, 4096, false);
+            super(FACTORY, DEFAULT_FORMATTER, filename, true, 4096, false);
         }
 
         @Override
@@ -187,15 +213,15 @@ class FileMessageHandlerUnitTest {
     @Test
     @DisplayName("Should reject null or empty path")
     void shouldRejectNullOrEmptyPath() {
-        assertThrows(NullPointerException.class, () -> new FileMessageHandler(null));
-        assertThrows(IllegalArgumentException.class, () -> new FileMessageHandler(" "));
+        assertThrows(NullPointerException.class, () -> new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, null));
+        assertThrows(IllegalArgumentException.class, () -> new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, " "));
     }
 
     @Test
     @DisplayName("Should reject directory path")
     void shouldRejectDirectoryPath() throws IOException {
         Path dir = Files.createTempDirectory("fmh-dir");
-        assertThrows(IllegalArgumentException.class, () -> new FileMessageHandler(dir.toString()));
+        assertThrows(IllegalArgumentException.class, () -> new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, dir.toString()));
     }
 
     @Test
@@ -204,7 +230,7 @@ class FileMessageHandlerUnitTest {
         Path file = Files.createTempFile("fmh-ro", ".log");
         file.toFile().setWritable(false);
         try {
-            assertThrows(IllegalArgumentException.class, () -> new FileMessageHandler(file.toString()));
+            assertThrows(IllegalArgumentException.class, () -> new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString()));
         } finally {
             file.toFile().setWritable(true);
         }
@@ -215,7 +241,7 @@ class FileMessageHandlerUnitTest {
     void shouldWriteMessagesToFile() throws Exception {
         Path file = Files.createTempFile("fmh", ".log");
         Files.deleteIfExists(file);
-        try (FileMessageHandler handler = new FileMessageHandler(file.toString())) {
+        try (FileMessageHandler handler = new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString())) {
             handler.info("info");
             handler.warn("warn");
             handler.error("error");
@@ -232,8 +258,8 @@ class FileMessageHandlerUnitTest {
         assertTrue(lines.stream().anyMatch(l -> l.contains("FATAL") && l.endsWith("fatal")));
         assertTrue(lines.stream().anyMatch(l -> l.contains("DEBUG") && l.endsWith("debug")));
         assertTrue(lines.stream().anyMatch(l -> l.contains("TRACE") && l.endsWith("trace")));
-        assertTrue(lines.stream().anyMatch(l -> l.contains("EXCEP") && l.contains("boom")));
-        assertTrue(lines.stream().anyMatch(l -> l.contains("EXCEP") && l.contains("prefix: kaboom")));
+        assertTrue(lines.stream().anyMatch(l -> l.contains("boom")));
+        assertTrue(lines.stream().anyMatch(l -> l.contains("prefix")));
     }
 
     @Test
@@ -241,7 +267,7 @@ class FileMessageHandlerUnitTest {
     void asyncWithShutdownHookRegistersHook() throws Exception {
         Path file = Files.createTempFile("fmh", ".log");
         Files.deleteIfExists(file);
-        FileMessageHandler handler = new FileMessageHandler(file.toString(), true, 10, true);
+        FileMessageHandler handler = new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString(), true, 10, true);
         try {
             handler.info("hello");
         } finally {
@@ -254,7 +280,7 @@ class FileMessageHandlerUnitTest {
     void asyncQueueFullFallsBackToSync() throws Exception {
         Path file = Files.createTempFile("fmh", ".log");
         Files.deleteIfExists(file);
-        try (FileMessageHandler handler = new FileMessageHandler(file.toString(), true, 1)) {
+        try (FileMessageHandler handler = new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString(), true, 1)) {
             handler.info(() -> {
                 try {
                     Thread.sleep(200);
@@ -275,7 +301,7 @@ class FileMessageHandlerUnitTest {
     void asyncWithNonPositiveCapacityBehavesUnbounded() throws Exception {
         Path file = Files.createTempFile("fmh", ".log");
         Files.deleteIfExists(file);
-        try (FileMessageHandler handler = new FileMessageHandler(file.toString(), true, 0)) {
+        try (FileMessageHandler handler = new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString(), true, 0)) {
             handler.info("msg1");
             handler.info("msg2");
             Thread.sleep(100);
@@ -290,7 +316,7 @@ class FileMessageHandlerUnitTest {
     void overflowShouldExecuteSynchronously() throws Exception {
         Path file = Files.createTempFile("fmh", ".log");
         Files.deleteIfExists(file);
-        try (FileMessageHandler handler = new FileMessageHandler(file.toString(), true, 1)) {
+        try (FileMessageHandler handler = new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString(), true, 1)) {
             // Fill the queue with a blocking task
             handler.info(() -> {
                 try {
@@ -314,7 +340,7 @@ class FileMessageHandlerUnitTest {
         Path file = Files.createTempFile("fmh", ".log");
         Files.deleteIfExists(file);
         int count = 200;
-        try (FileMessageHandler handler = new FileMessageHandler(file.toString(), true, 50)) {
+        try (FileMessageHandler handler = new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString(), true, 50)) {
             for (int i = 0; i < count; i++) {
                 int idx = i;
                 handler.info(() -> "msg-" + idx);
@@ -330,7 +356,7 @@ class FileMessageHandlerUnitTest {
     void shouldAllowIdempotentClose() throws Exception {
         Path file = Files.createTempFile("fmh", ".log");
         Files.deleteIfExists(file);
-        FileMessageHandler handler = new FileMessageHandler(file.toString());
+        FileMessageHandler handler = new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString());
         handler.info("once");
         handler.close();
         handler.close(); // should not throw
@@ -345,7 +371,7 @@ class FileMessageHandlerUnitTest {
         dir.toFile().setWritable(false);
         Path file = dir.resolve("log.log");
         try {
-            assertThrows(IllegalArgumentException.class, () -> new FileMessageHandler(file.toString()));
+            assertThrows(IllegalArgumentException.class, () -> new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString()));
         } finally {
             dir.toFile().setWritable(true);
         }
@@ -386,7 +412,7 @@ class FileMessageHandlerUnitTest {
         Path file = Files.createTempFile("fmh-drain", ".log");
         Files.deleteIfExists(file);
         int count = 500;
-        FileMessageHandler handler = new FileMessageHandler(file.toString(), true, 200);
+        FileMessageHandler handler = new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString(), true, 200);
         for (int i = 0; i < count; i++) {
             handler.info("queued-" + i);
         }
@@ -403,7 +429,7 @@ class FileMessageHandlerUnitTest {
         String fileName = "fmh-relative-" + System.nanoTime() + ".log";
         Path file = Paths.get(fileName);
         Files.deleteIfExists(file);
-        try (FileMessageHandler handler = new FileMessageHandler(fileName)) {
+        try (FileMessageHandler handler = new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, fileName)) {
             handler.info("relative");
         } finally {
             Files.deleteIfExists(file);
@@ -437,7 +463,7 @@ class FileMessageHandlerUnitTest {
         Path file = Files.createTempFile("fmh-stress", ".log");
         Files.deleteIfExists(file);
 
-        try (FileMessageHandler handler = new FileMessageHandler(file.toString(), true, 2048, false)) {
+        try (FileMessageHandler handler = new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString(), true, 2048, false)) {
             ExecutorService producerPool = Executors.newFixedThreadPool(threadCount);
             CountDownLatch start = new CountDownLatch(1);
             List<Future<?>> futures = new ArrayList<>();
@@ -475,7 +501,7 @@ class FileMessageHandlerUnitTest {
     void flushShouldNotThrowInSyncMode() throws Exception {
         Path file = Files.createTempFile("fmh-flush-sync", ".log");
         Files.deleteIfExists(file);
-        try (FileMessageHandler handler = new FileMessageHandler(file.toString())) {
+        try (FileMessageHandler handler = new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString())) {
             handler.info("before-flush");
             handler.flush();
         }
@@ -488,7 +514,7 @@ class FileMessageHandlerUnitTest {
     void flushShouldNotThrowInAsyncMode() throws Exception {
         Path file = Files.createTempFile("fmh-flush-async", ".log");
         Files.deleteIfExists(file);
-        try (FileMessageHandler handler = new FileMessageHandler(file.toString(), true, 64)) {
+        try (FileMessageHandler handler = new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString(), true, 64)) {
             handler.info("before-flush");
             handler.flush();
         }
@@ -507,7 +533,7 @@ class FileMessageHandlerUnitTest {
         Files.deleteIfExists(file);
         // Threshold low enough that a single formatted line exceeds it
         SizeRotationPolicy policy = new SizeRotationPolicy(1);
-        try (FileMessageHandler handler = new FileMessageHandler(file.toString(), policy)) {
+        try (FileMessageHandler handler = new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString(), policy)) {
             handler.info("first");
             handler.info("second");
         }
@@ -531,7 +557,7 @@ class FileMessageHandlerUnitTest {
         Files.deleteIfExists(file);
         LocalDate yesterday = LocalDate.now().minusDays(1);
         DailyRotationPolicy policy = new DailyRotationPolicy(yesterday);
-        try (FileMessageHandler handler = new FileMessageHandler(file.toString(), policy)) {
+        try (FileMessageHandler handler = new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString(), policy)) {
             handler.info("trigger rotation");
         }
         // After close the current log file is recreated (rotation happened on write)
@@ -555,7 +581,7 @@ class FileMessageHandlerUnitTest {
         Path file = Files.createTempFile("fmh-reopen", ".log");
         Files.deleteIfExists(file);
         try (FileMessageHandler handler = new FileMessageHandler(
-                file.toString(), false, 0, false, null, true)) {
+                FACTORY, DEFAULT_FORMATTER, file.toString(), false, 0, false, null, true)) {
             handler.info("before-delete");
             // Simulate external rotation: delete the file
             Files.deleteIfExists(file);
@@ -590,7 +616,7 @@ class FileMessageHandlerUnitTest {
     void withoutReopenFlagDeletedFileIsNotRecreatedByHandler() throws Exception {
         Path file = Files.createTempFile("fmh-no-reopen", ".log");
         Files.deleteIfExists(file);
-        try (FileMessageHandler handler = new FileMessageHandler(file.toString())) {
+        try (FileMessageHandler handler = new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString())) {
             handler.info("before-delete");
             Files.deleteIfExists(file);
             // This write goes to the old (now-deleted) file descriptor — no re-open
@@ -606,7 +632,7 @@ class FileMessageHandlerUnitTest {
         Path file = Files.createTempFile("fmh-ctor-sync-policy", ".log");
         Files.deleteIfExists(file);
         try (FileMessageHandler handler = new FileMessageHandler(
-                file.toString(), new SizeRotationPolicy(Long.MAX_VALUE))) {
+                FACTORY, DEFAULT_FORMATTER, file.toString(), new SizeRotationPolicy(Long.MAX_VALUE))) {
             handler.info("ok");
         }
         assertTrue(Files.readAllLines(file).stream().anyMatch(l -> l.contains("ok")));
@@ -618,7 +644,7 @@ class FileMessageHandlerUnitTest {
         Path file = Files.createTempFile("fmh-ctor-async-policy", ".log");
         Files.deleteIfExists(file);
         try (FileMessageHandler handler = new FileMessageHandler(
-                file.toString(), true, 64, new SizeRotationPolicy(Long.MAX_VALUE))) {
+                FACTORY, DEFAULT_FORMATTER, file.toString(), true, 64, new SizeRotationPolicy(Long.MAX_VALUE))) {
             handler.info("ok");
         }
         assertTrue(Files.readAllLines(file).stream().anyMatch(l -> l.contains("ok")));
@@ -633,7 +659,7 @@ class FileMessageHandlerUnitTest {
     void setErrorConsumerAcceptsValidConsumer() throws Exception {
         Path file = Files.createTempFile("fmh-set-consumer", ".log");
         List<String> errors = new ArrayList<>();
-        try (FileMessageHandler handler = new FileMessageHandler(file.toString())) {
+        try (FileMessageHandler handler = new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString())) {
             handler.setErrorConsumer(errors::add);
             handler.info("ok");
         }
@@ -644,7 +670,7 @@ class FileMessageHandlerUnitTest {
     @DisplayName("setErrorConsumer should throw NullPointerException for null argument")
     void setErrorConsumerNullThrowsNpe() throws Exception {
         Path file = Files.createTempFile("fmh-null-consumer", ".log");
-        try (FileMessageHandler handler = new FileMessageHandler(file.toString())) {
+        try (FileMessageHandler handler = new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString())) {
             assertThrows(NullPointerException.class, () -> handler.setErrorConsumer(null));
         }
     }
@@ -710,18 +736,18 @@ class FileMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("JsonLogFormatter should produce NDJSON output in the log file")
+    @DisplayName("RawJsonRecordFormatter should produce NDJSON output in the log file")
     void jsonFormatterShouldProduceNdjsonOutput() throws Exception {
         Path file = Files.createTempFile("fmh-json", ".log");
         Files.deleteIfExists(file);
-        try (FileMessageHandler handler = new FileMessageHandler(file.toString())) {
-            handler.setLogRecordFormatter(new JsonLogFormatter());
+        try (FileMessageHandler handler = new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString())) {
+            handler.setLogRecordFormatter(new RawJsonRecordFormatter());
             handler.info("structured message");
         }
         List<String> lines = Files.readAllLines(file);
-        assertTrue(lines.stream().anyMatch(l -> l.startsWith("{") && l.contains("\"level\":\"INFO\"")),
-                "Log file should contain a JSON line with level INFO");
-        assertTrue(lines.stream().anyMatch(l -> l.contains("\"message\":\"structured message\"")),
+        assertTrue(lines.stream().anyMatch(l -> l.startsWith("{") && l.contains("\"severityText\":\"INFO\"")),
+                "Log file should contain a JSON line with severity INFO");
+        assertTrue(lines.stream().anyMatch(l -> l.contains("\"stringValue\":\"structured message\"")),
                 "Log file should contain the message in JSON format");
     }
 

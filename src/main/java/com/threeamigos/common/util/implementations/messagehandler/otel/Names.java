@@ -1,15 +1,47 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
 /**
- * Known resource and attribute names referenced in OpenTelemetry Logs Data Model
- * Appendix A example mappings.
+ * Known resource and attribute names referenced in OpenTelemetry Logs Data Model,
+ * taken from
+ * <a href="https://opentelemetry.io/docs/specs/otel/semantic-conventions/">Semantic Conventions</a>
+ * and
+ * <a href="https://opentelemetry.io/docs/specs/otel/logs/data-model-appendix/">Data Model Appendix</a>
  * <p>
- * Source:
- * https://opentelemetry.io/docs/specs/otel/logs/data-model-appendix/
+ * The complete list can be found at
+ * <a href="https://opentelemetry.io/docs/specs/semconv/registry/attributes/">OpenTelemetry Attribute Registry</a>
  *
  * @author Stefano Reksten
  */
 public enum Names {
+
+    // ---------------------------------------------------------------------
+    // Semantic Conventions (Reserved)
+    // ---------------------------------------------------------------------
+    ATTR_ERROR_TYPE("error.type"),
+    ATTR_EXCEPTION_MESSAGE("exception.message"),
+    ATTR_EXCEPTION_STACKTRACE("exception.stacktrace"),
+    ATTR_EXCEPTION_TYPE("exception.type"),
+    ATTR_SERVER_ADDRESS("server.address"),
+    ATTR_SERVER_PORT("server.port"),
+    ATTR_SERVICE_NAME("service.name"),
+    ATTR_TELEMETRY_SDK_LANGUAGE("telemetry.sdk.language"),
+    ATTR_TELEMETRY_SDK_NAME("telemetry.sdk.name"),
+    ATTR_TELEMETRY_SDK_VERSION("telemetry.sdk.version"),
+    ATTR_URL_SCHEME("url.scheme"),
+
+    EVENT_EXCEPTION("exception"),
+
+    ATTR_SERVICE_INSTANCE_ID("service.instance.id"),
+
+    // ---------------------------------------------------------------------
+    // Code
+    // ---------------------------------------------------------------------
+    ATTR_CODE_COLUMN_NUMBER("code.column.number"),
+    ATTR_CODE_FILE_PATH("code.file.path"),
+    ATTR_CODE_FUNCTION_NAME("code.function.name"),
+    ATTR_CODE_LINE_NUMBER("code.line.number"),
+    ATTR_CODE_STACKTRACE("code.stacktrace"),
+    ATTR_CODE_NAMESPACE("code.namespace"),
 
     // ---------------------------------------------------------------------
     // RFC5424 Syslog
@@ -17,7 +49,6 @@ public enum Names {
     ATTR_SYSLOG_FACILITY("syslog.facility"),
     ATTR_SYSLOG_VERSION("syslog.version"),
     RES_HOST_NAME("host.name"),
-    RES_SERVICE_NAME("service.name"),
     ATTR_SYSLOG_PROCID("syslog.procid"),
     ATTR_SYSLOG_MSGID("syslog.msgid"),
     RES_SERVICE_VERSION("service.version"),
@@ -77,9 +108,6 @@ public enum Names {
     // ---------------------------------------------------------------------
     RES_AGENT_EPHEMERAL_ID("agent.ephemeral_id"),
     RES_AGENT_ID("agent.id"),
-    RES_TELEMETRY_SDK_NAME("telemetry.sdk.name"),
-    RES_TELEMETRY_SDK_LANGUAGE("telemetry.sdk.language"),
-    RES_TELEMETRY_SDK_VERSION("telemetry.sdk.version"),
     RES_CLOUD_ACCOUNT_ID("cloud.account.id"),
     RES_CLOUD_ZONE("cloud.zone"),
     RES_CLOUD_INSTANCE_ID("cloud.instance.id"),
@@ -105,7 +133,6 @@ public enum Names {
     RES_HOST_TYPE("host.type"),
     RES_SERVICE_EPHEMERAL_ID("service.ephemeral_id"),
     RES_SERVICE_ID("service.id"),
-    RES_SERVICE_INSTANCE_ID("service.instance.id"),
     ATTR_SERVICE_STATE("service.state"),
     RES_SERVICE_TYPE("service.type");
 

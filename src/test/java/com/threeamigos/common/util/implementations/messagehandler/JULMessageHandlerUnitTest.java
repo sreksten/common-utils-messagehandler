@@ -55,7 +55,7 @@ class JULMessageHandlerUnitTest {
         logger.setUseParentHandlers(false);
         CapturingHandler capturingHandler = new CapturingHandler();
         logger.addHandler(capturingHandler);
-        logger.setLevel(Level.FINER);
+        logger.setLevel(Level.ALL);
 
         JULMessageHandler handler = new JULMessageHandler(logger);
         handler.info("info");
@@ -72,10 +72,10 @@ class JULMessageHandlerUnitTest {
         assertEquals(Level.SEVERE, capturingHandler.last.getLevel());
 
         handler.debug("debug");
-        assertEquals(Level.FINE, capturingHandler.last.getLevel());
+        assertEquals(Level.FINER, capturingHandler.last.getLevel());
 
         handler.trace("trace");
-        assertEquals(Level.FINER, capturingHandler.last.getLevel());
+        assertEquals(Level.FINEST, capturingHandler.last.getLevel());
 
         handler.exception(new RuntimeException("boom"));
         assertEquals(Level.SEVERE, capturingHandler.last.getLevel());
