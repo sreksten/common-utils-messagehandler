@@ -1,6 +1,5 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
-import com.threeamigos.common.util.interfaces.messagehandler.LogLevelEnum;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
@@ -29,7 +28,7 @@ public class LogRecordFactoryImpl implements LogRecordFactory {
     public LogRecord create(String message, Throwable throwable) {
         LogRecordImpl logRecord = new LogRecordImpl();
         logRecord.setSeverityNumber(SeverityNumber.ERROR);
-        logRecord.setSeverityText(LogLevelEnum.ERROR.name());
+        logRecord.setSeverityText(SeverityNumber.ERROR.name());
         logRecord.setBody(AnyValueImpl.ofString(message));
         return logRecord;
     }
@@ -38,7 +37,7 @@ public class LogRecordFactoryImpl implements LogRecordFactory {
     public LogRecord create(Throwable throwable) {
         LogRecordImpl logRecord = new LogRecordImpl();
         logRecord.setSeverityNumber(SeverityNumber.ERROR);
-        logRecord.setSeverityText(LogLevelEnum.ERROR.name());
+        logRecord.setSeverityText(SeverityNumber.ERROR.name());
         logRecord.setBody(AnyValueImpl.ofString(throwable.getMessage()));
         return logRecord;
     }

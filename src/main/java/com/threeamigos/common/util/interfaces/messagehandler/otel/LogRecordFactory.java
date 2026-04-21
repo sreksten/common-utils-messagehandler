@@ -1,7 +1,5 @@
 package com.threeamigos.common.util.interfaces.messagehandler.otel;
 
-import com.threeamigos.common.util.interfaces.messagehandler.LogLevelEnum;
-
 /**
  *
  * @author Stefano Reksten
