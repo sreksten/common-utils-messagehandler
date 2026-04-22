@@ -218,51 +218,16 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
     // MessageHandler implementation
     // -------------------------------------------------------------------------
 
+
     @Override
-    protected void handleInfoMessageImpl(final String message) {
-        LogRecord logRecord = logRecordFactory.create(SeverityNumber.INFO, message);
+    public void handleMessage(@Nonnull SeverityNumber level, @Nonnull String message) {
+        LogRecord logRecord = logRecordFactory.create(level, message);
         writeMessage(logRecordFormatter.format(logRecord));
     }
 
     @Override
-    protected void handleWarnMessageImpl(final String message) {
-        LogRecord logRecord = logRecordFactory.create(SeverityNumber.WARN, message);
-        writeMessage(logRecordFormatter.format(logRecord));
-    }
-
-    @Override
-    protected void handleErrorMessageImpl(final String message) {
-        LogRecord logRecord = logRecordFactory.create(SeverityNumber.ERROR, message);
-        writeMessage(logRecordFormatter.format(logRecord));
-    }
-
-    @Override
-    protected void handleFatalMessageImpl(final String message) {
-        LogRecord logRecord = logRecordFactory.create(SeverityNumber.FATAL, message);
-        writeMessage(logRecordFormatter.format(logRecord));
-    }
-
-    @Override
-    protected void handleDebugMessageImpl(final String message) {
-        LogRecord logRecord = logRecordFactory.create(SeverityNumber.DEBUG, message);
-        writeMessage(logRecordFormatter.format(logRecord));
-    }
-
-    @Override
-    protected void handleTraceMessageImpl(final String message) {
-        LogRecord logRecord = logRecordFactory.create(SeverityNumber.TRACE, message);
-        writeMessage(logRecordFormatter.format(logRecord));
-    }
-
-    @Override
-    protected void handleExceptionImpl(final Exception exception) {
-        LogRecord logRecord = logRecordFactory.create(exception);
-        writeMessage(logRecordFormatter.format(logRecord));
-    }
-
-    @Override
-    protected void handleExceptionImpl(final String message, final Exception exception) {
-        LogRecord logRecord = logRecordFactory.create(message, exception);
+    public void handleThrowable(@Nonnull String message, @Nonnull Throwable throwable) {
+        LogRecord logRecord = logRecordFactory.create(message, throwable);
         writeMessage(logRecordFormatter.format(logRecord));
     }
 

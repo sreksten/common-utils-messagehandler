@@ -1,10 +1,13 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
+import jakarta.annotation.Nonnull;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.Objects;
+import java.util.logging.Level;
 
 /**
  * A {@link MessageHandler} implementation that bridges to
@@ -59,42 +62,52 @@ public class Log4JMessageHandler extends AbstractMessageHandler {
     }
 
     @Override
-    protected void handleInfoMessageImpl(final String message) {
-        logger.info(message);
+    public void handleMessage(@Nonnull SeverityNumber level, @Nonnull String message) {
+        switch (level) {
+            case INFO:
+            case INFO2:
+            case INFO3:
+            case INFO4:
+                logger.info(message);
+                break;
+            case WARN:
+            case WARN2:
+            case WARN3:
+            case WARN4:
+                logger.warn(message);
+                break;
+            case ERROR:
+            case ERROR2:
+            case ERROR3:
+            case ERROR4:
+                logger.error(message);
+                break;
+            case FATAL:
+            case FATAL2:
+            case FATAL3:
+            case FATAL4:
+                logger.fatal(message);
+                break;
+            case DEBUG:
+            case DEBUG2:
+            case DEBUG3:
+            case DEBUG4:
+                logger.debug(message);
+                break;
+            case TRACE:
+            case TRACE2:
+            case TRACE3:
+            case TRACE4:
+                logger.trace(message);
+                break;
+            default:
+                logger.info("Unknown severity level: {}. Logging as INFO. {}", level, message);
+                break;
+        }
     }
 
     @Override
-    protected void handleWarnMessageImpl(final String message) {
-        logger.warn(message);
-    }
-
-    @Override
-    protected void handleErrorMessageImpl(final String message) {
-        logger.error(message);
-    }
-
-    @Override
-    protected void handleFatalMessageImpl(final String message) {
-        logger.fatal(message);
-    }
-
-    @Override
-    protected void handleDebugMessageImpl(final String message) {
-        logger.debug(message);
-    }
-
-    @Override
-    protected void handleTraceMessageImpl(final String message) {
-        logger.trace(message);
-    }
-
-    @Override
-    protected void handleExceptionImpl(final Exception exception) {
-        logger.error(ExceptionMessageFormatter.detail(exception), exception);
-    }
-
-    @Override
-    protected void handleExceptionImpl(final String message, final Exception exception) {
-        logger.error(message, exception);
+    public void handleThrowable(@Nonnull String message, @Nonnull Throwable throwable) {
+        logger.error(ThrowableMessageFormatter.withPrefix(message, throwable), throwable);
     }
 }

@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
+import jakarta.annotation.Nonnull;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -20,10 +22,10 @@ class AbstractMessageHandlerUnitTest {
     private static final class ProbeMessageHandler extends AbstractMessageHandler {
         String lastLevel;
         String lastMessage;
-        Exception lastException;
+        Throwable lastException;
         int callCount;
 
-        private void record(final String level, final String message, final Exception exception) {
+        private void record(final String level, final String message, final Throwable exception) {
             this.lastLevel = level;
             this.lastMessage = message;
             this.lastException = exception;
@@ -31,43 +33,13 @@ class AbstractMessageHandlerUnitTest {
         }
 
         @Override
-        protected void handleInfoMessageImpl(final String message) {
+        public void handleMessage(@Nonnull SeverityNumber level, @Nonnull String message) {
             record("INFO", message, null);
         }
 
         @Override
-        protected void handleWarnMessageImpl(final String message) {
-            record("WARN", message, null);
-        }
-
-        @Override
-        protected void handleErrorMessageImpl(final String message) {
-            record("ERROR", message, null);
-        }
-
-        @Override
-        protected void handleFatalMessageImpl(final String message) {
-            record("FATAL", message, null);
-        }
-
-        @Override
-        protected void handleDebugMessageImpl(final String message) {
-            record("DEBUG", message, null);
-        }
-
-        @Override
-        protected void handleTraceMessageImpl(final String message) {
-            record("TRACE", message, null);
-        }
-
-        @Override
-        protected void handleExceptionImpl(final Exception exception) {
-            record("EXCEPTION", null, exception);
-        }
-
-        @Override
-        protected void handleExceptionImpl(final String message, final Exception exception) {
-            record("EXCEPTION_WITH_MESSAGE", message, exception);
+        public void handleThrowable(@Nonnull String message, @Nonnull Throwable throwable) {
+            record("EXCEPTION", message, throwable);
         }
     }
 
@@ -193,7 +165,6 @@ class AbstractMessageHandlerUnitTest {
         assertEquals("prefix", sut.lastMessage);
         assertEquals(ex, sut.lastException);
 
-        sut.setExceptionEnabled(false);
         sut.exception(new RuntimeException("dropped"));
         assertEquals(1, sut.callCount);
         assertTrue(sut.lastException == ex);

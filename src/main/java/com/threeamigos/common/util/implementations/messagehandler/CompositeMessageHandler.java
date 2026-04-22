@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 import jakarta.annotation.Nonnull;
 
 import java.io.PrintWriter;
@@ -145,43 +146,13 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
     }
 
     @Override
-    protected void handleInfoMessageImpl(final String message) {
-        forEachHandler(mh -> mh.info(message));
+    public void handleMessage(@Nonnull SeverityNumber level, @Nonnull String message) {
+        forEachHandler(mh -> mh.handleMessage(level, message));
     }
 
     @Override
-    protected void handleWarnMessageImpl(final String message) {
-        forEachHandler(mh -> mh.warn(message));
-    }
-
-    @Override
-    protected void handleErrorMessageImpl(final String message) {
-        forEachHandler(mh -> mh.error(message));
-    }
-
-    @Override
-    protected void handleFatalMessageImpl(final String message) {
-        forEachHandler(mh -> mh.fatal(message));
-    }
-
-    @Override
-    protected void handleDebugMessageImpl(final String message) {
-        forEachHandler(mh -> mh.debug(message));
-    }
-
-    @Override
-    protected void handleTraceMessageImpl(final String message) {
-        forEachHandler(mh -> mh.trace(message));
-    }
-
-    @Override
-    protected void handleExceptionImpl(final Exception exception) {
-        forEachHandler(mh -> mh.exception(exception));
-    }
-
-    @Override
-    protected void handleExceptionImpl(final String message, final Exception exception) {
-        forEachHandler(mh -> mh.exception(message, exception));
+    public void handleThrowable(@Nonnull String message, @Nonnull Throwable throwable) {
+        forEachHandler(mh -> mh.handleThrowable(message, throwable));
     }
 
     private void forEachHandler(java.util.function.Consumer<MessageHandler> consumer) {
@@ -204,4 +175,5 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
             }
         }
     }
+
 }

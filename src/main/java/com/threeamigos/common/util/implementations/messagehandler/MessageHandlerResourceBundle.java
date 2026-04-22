@@ -16,7 +16,7 @@ import java.util.ResourceBundle;
  * The shared {@link #BUNDLE} constant provides a single point of access to all localized
  * strings used across the handler package, loaded once at class-initialization time.
  * <p>
- * This class is public so sibling implementation packages can share the same bundle.
+ * This class is public, so sibling implementation packages can share the same bundle.
  */
 public final class MessageHandlerResourceBundle {
 

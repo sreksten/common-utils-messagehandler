@@ -49,7 +49,7 @@ class InMemoryMessageHandlerUnitTest {
         assertEquals(0, sut.getAllDebugMessages().size(), "Wrong debug messages size");
         assertEquals(0, sut.getAllTraceMessages().size(), "Wrong trace messages size");
         assertEquals(0, sut.getAllExceptionMessages().size(), "Wrong exception messages size");
-        assertEquals(0, sut.getAllExceptions().size(), "Wrong exceptions size");
+        assertEquals(0, sut.getAllThrowables().size(), "Wrong exceptions size");
         assertEquals(SECOND_MESSAGE, sut.getLastMessage(), "Wrong last message");
     }
 
@@ -81,7 +81,7 @@ class InMemoryMessageHandlerUnitTest {
         assertEquals(0, sut.getAllDebugMessages().size(), "Wrong debug messages size");
         assertEquals(0, sut.getAllTraceMessages().size(), "Wrong trace messages size");
         assertEquals(0, sut.getAllExceptionMessages().size(), "Wrong exception messages size");
-        assertEquals(0, sut.getAllExceptions().size(), "Wrong exceptions size");
+        assertEquals(0, sut.getAllThrowables().size(), "Wrong exceptions size");
         assertEquals(SECOND_MESSAGE, sut.getLastMessage(), "Wrong last message");
     }
 
@@ -113,7 +113,7 @@ class InMemoryMessageHandlerUnitTest {
         assertEquals(0, sut.getAllDebugMessages().size(), "Wrong debug messages size");
         assertEquals(0, sut.getAllTraceMessages().size(), "Wrong trace messages size");
         assertEquals(0, sut.getAllExceptionMessages().size(), "Wrong exception messages size");
-        assertEquals(0, sut.getAllExceptions().size(), "Wrong exceptions size");
+        assertEquals(0, sut.getAllThrowables().size(), "Wrong exceptions size");
         assertEquals(SECOND_MESSAGE, sut.getLastMessage(), "Wrong last message");
     }
 
@@ -145,7 +145,7 @@ class InMemoryMessageHandlerUnitTest {
         assertEquals(0, sut.getAllDebugMessages().size(), "Wrong debug messages size");
         assertEquals(0, sut.getAllTraceMessages().size(), "Wrong trace messages size");
         assertEquals(0, sut.getAllExceptionMessages().size(), "Wrong exception messages size");
-        assertEquals(0, sut.getAllExceptions().size(), "Wrong exceptions size");
+        assertEquals(0, sut.getAllThrowables().size(), "Wrong exceptions size");
         assertEquals(SECOND_MESSAGE, sut.getLastMessage(), "Wrong last message");
     }
 
@@ -177,7 +177,7 @@ class InMemoryMessageHandlerUnitTest {
         assertEquals(2, sut.getAllDebugMessages().size(), "Wrong debug messages size");
         assertEquals(0, sut.getAllTraceMessages().size(), "Wrong trace messages size");
         assertEquals(0, sut.getAllExceptionMessages().size(), "Wrong exception messages size");
-        assertEquals(0, sut.getAllExceptions().size(), "Wrong exceptions size");
+        assertEquals(0, sut.getAllThrowables().size(), "Wrong exceptions size");
         assertEquals(SECOND_MESSAGE, sut.getLastMessage(), "Wrong last message");
     }
 
@@ -209,7 +209,7 @@ class InMemoryMessageHandlerUnitTest {
         assertEquals(0, sut.getAllDebugMessages().size(), "Wrong debug messages size");
         assertEquals(2, sut.getAllTraceMessages().size(), "Wrong trace messages size");
         assertEquals(0, sut.getAllExceptionMessages().size(), "Wrong exception messages size");
-        assertEquals(0, sut.getAllExceptions().size(), "Wrong exceptions size");
+        assertEquals(0, sut.getAllThrowables().size(), "Wrong exceptions size");
         assertEquals(SECOND_MESSAGE, sut.getLastMessage(), "Wrong last message");
     }
 
@@ -243,7 +243,7 @@ class InMemoryMessageHandlerUnitTest {
         assertEquals(0, sut.getAllDebugMessages().size(), "Wrong debug messages size");
         assertEquals(0, sut.getAllTraceMessages().size(), "Wrong trace messages size");
         assertEquals(2, sut.getAllExceptionMessages().size(), "Wrong exception messages size");
-        assertEquals(2, sut.getAllExceptions().size(), "Wrong exceptions size");
+        assertEquals(2, sut.getAllThrowables().size(), "Wrong exceptions size");
         assertEquals("My ClassNotFoundException", sut.getLastMessage(), "Wrong last message");
     }
 
@@ -257,7 +257,7 @@ class InMemoryMessageHandlerUnitTest {
 
         assertEquals(1, sut.getAllExceptionMessages().size());
         assertEquals(ex.toString(), sut.getAllExceptionMessages().get(0));
-        assertEquals(ex, sut.getAllExceptions().get(0));
+        assertEquals(ex, sut.getAllThrowables().get(0));
     }
 
     @Test
@@ -331,7 +331,7 @@ class InMemoryMessageHandlerUnitTest {
         assertEquals(0, sut.getAllDebugMessages().size());
         assertEquals(0, sut.getAllTraceMessages().size());
         assertEquals(0, sut.getAllExceptionMessages().size());
-        assertEquals(0, sut.getAllExceptions().size());
+        assertEquals(0, sut.getAllThrowables().size());
     }
 
     @Test
@@ -344,8 +344,8 @@ class InMemoryMessageHandlerUnitTest {
 
         assertEquals(1, sut.getAllExceptionMessages().size());
         assertEquals("prefix: boom", sut.getAllExceptionMessages().get(0));
-        assertEquals(1, sut.getAllExceptions().size());
-        assertEquals(exception, sut.getAllExceptions().get(0));
+        assertEquals(1, sut.getAllThrowables().size());
+        assertEquals(exception, sut.getAllThrowables().get(0));
         assertEquals("prefix: boom", sut.getLastMessage());
     }
 
@@ -385,11 +385,11 @@ class InMemoryMessageHandlerUnitTest {
         assertEquals(1, snapshot.getAllDebugMessages().size());
         assertEquals(1, snapshot.getAllTraceMessages().size());
         assertEquals(1, snapshot.getAllExceptionMessages().size());
-        assertEquals(1, snapshot.getAllExceptions().size());
+        assertEquals(1, snapshot.getAllThrowables().size());
         assertEquals("prefix: boom", snapshot.getLastMessage());
 
         assertThrows(UnsupportedOperationException.class, () -> snapshot.getAllMessages().add("new"));
-        assertThrows(UnsupportedOperationException.class, () -> snapshot.getAllExceptions().add(new RuntimeException("x")));
+        assertThrows(UnsupportedOperationException.class, () -> snapshot.getAllThrowables().add(new RuntimeException("x")));
     }
 
     @Test
@@ -415,7 +415,7 @@ class InMemoryMessageHandlerUnitTest {
         assertEquals(0, sut.getAllDebugMessages().size());
         assertEquals(0, sut.getAllTraceMessages().size());
         assertEquals(0, sut.getAllExceptionMessages().size());
-        assertEquals(0, sut.getAllExceptions().size());
+        assertEquals(0, sut.getAllThrowables().size());
         assertEquals(null, sut.getLastMessage());
     }
 

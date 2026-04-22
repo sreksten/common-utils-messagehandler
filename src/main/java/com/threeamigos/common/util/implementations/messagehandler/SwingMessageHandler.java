@@ -1,7 +1,9 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 import com.threeamigos.common.util.ui.AWTCalls;
+import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
 
 import javax.swing.*;
@@ -71,88 +73,47 @@ public class SwingMessageHandler extends AbstractMessageHandler {
         AWTCalls.showOptionPane(parentComponent, message, title, icon);
     }
 
-    /**
-     * Displays the message in an information dialog with a localized title.
-     *
-     * @param message the info-level text to display
-     */
-    protected void handleInfoMessageImpl(final String message) {
-        showOptionPane(message, MessageHandlerResourceBundle.get("info"), JOptionPane.INFORMATION_MESSAGE);
+    @Override
+    public void handleMessage(@Nonnull SeverityNumber level, @Nonnull String message) {
+        switch (level) {
+            case WARN:
+            case WARN2:
+            case WARN3:
+            case WARN4:
+                showOptionPane(message, MessageHandlerResourceBundle.get("warning"), JOptionPane.WARNING_MESSAGE);
+                break;
+            case ERROR:
+            case ERROR2:
+            case ERROR3:
+            case ERROR4:
+                showOptionPane(message, MessageHandlerResourceBundle.get("error"), JOptionPane.ERROR_MESSAGE);
+                break;
+            case FATAL:
+            case FATAL2:
+            case FATAL3:
+            case FATAL4:
+                showOptionPane(message, MessageHandlerResourceBundle.get("fatal"), JOptionPane.ERROR_MESSAGE);
+                break;
+            case DEBUG:
+            case DEBUG2:
+            case DEBUG3:
+            case DEBUG4:
+                showOptionPane(message, MessageHandlerResourceBundle.get("debug"), JOptionPane.INFORMATION_MESSAGE);
+                break;
+            case TRACE:
+            case TRACE2:
+            case TRACE3:
+            case TRACE4:
+                showOptionPane(message, MessageHandlerResourceBundle.get("trace"), JOptionPane.INFORMATION_MESSAGE);
+                break;
+            default:
+                showOptionPane(message, MessageHandlerResourceBundle.get("info"), JOptionPane.INFORMATION_MESSAGE);
+                break;
+        }
     }
 
-    /**
-     * Displays the message in a warning dialog with a localized title.
-     *
-     * @param message the warn-level text to display
-     */
-    protected void handleWarnMessageImpl(final String message) {
-        showOptionPane(message, MessageHandlerResourceBundle.get("warning"), JOptionPane.WARNING_MESSAGE);
-    }
-
-    /**
-     * Displays the message in an error dialog with a localized title.
-     *
-     * @param message the error-level text to display
-     */
-    protected void handleErrorMessageImpl(final String message) {
-        showOptionPane(message, MessageHandlerResourceBundle.get("error"), JOptionPane.ERROR_MESSAGE);
-    }
-
-    /**
-     * Displays the message in an error dialog with a localized title.
-     *
-     * @param message the error-level text to display
-     */
-    protected void handleFatalMessageImpl(final String message) {
-        showOptionPane(message, MessageHandlerResourceBundle.get("fatal"), JOptionPane.ERROR_MESSAGE);
-    }
-
-    /**
-     * Displays the message in an information dialog with a localized title.
-     * <p>
-     * Debug output uses {@link JOptionPane#INFORMATION_MESSAGE} rather than a dedicated
-     * icon because Swing provides no built-in debug icon type.
-     *
-     * @param message the debug-level text to display
-     */
-    protected void handleDebugMessageImpl(final String message) {
-        showOptionPane(message, MessageHandlerResourceBundle.get("debug"), JOptionPane.INFORMATION_MESSAGE);
-    }
-
-    /**
-     * Displays the message in an information dialog with a localized title.
-     * <p>
-     * Trace output uses {@link JOptionPane#INFORMATION_MESSAGE} rather than a dedicated
-     * icon because Swing provides no built-in trace icon type.
-     *
-     * @param message the trace-level text to display
-     */
-    protected void handleTraceMessageImpl(final String message) {
-        showOptionPane(message, MessageHandlerResourceBundle.get("trace"), JOptionPane.INFORMATION_MESSAGE);
-    }
-
-    /**
-     * Displays the exception detail in an error dialog with a localized title.
-     * <p>
-     * The displayed text is produced by {@link ExceptionMessageFormatter#detail(Exception)}:
-     * {@link Exception#getMessage()} when non-null, otherwise {@link Exception#toString()}.
-     *
-     * @param exception the exception to display
-     */
-    protected void handleExceptionImpl(final Exception exception) {
-        showOptionPane(ExceptionMessageFormatter.detail(exception), MessageHandlerResourceBundle.get("exception"), JOptionPane.ERROR_MESSAGE);
-    }
-
-    /**
-     * Displays the contextual message and exception detail in an error dialog with a localized title.
-     * <p>
-     * The displayed text is produced by {@link ExceptionMessageFormatter#withPrefix(String, Exception)},
-     * yielding {@code "<message>: <detail>"}.
-     *
-     * @param message   a contextual prefix describing where or why the exception occurred
-     * @param exception the exception to display
-     */
-    protected void handleExceptionImpl(final String message, final Exception exception) {
-        showOptionPane(ExceptionMessageFormatter.withPrefix(message, exception), MessageHandlerResourceBundle.get("exception"), JOptionPane.ERROR_MESSAGE);
+    @Override
+    public void handleThrowable(@Nonnull String message, @Nonnull Throwable throwable) {
+        showOptionPane(ThrowableMessageFormatter.withPrefix(message, throwable), MessageHandlerResourceBundle.get("exception"), JOptionPane.ERROR_MESSAGE);
     }
 }

@@ -741,18 +741,6 @@ class CompositeMessageHandlerUnitTest {
         }
     }
 
-    @ParameterizedTest
-    @DisplayName("Should remember if exception level is active")
-    @CsvSource({"true, true", "false, false"})
-    void shouldRememberIfExceptionLevelIsActive(boolean isActive, boolean expectedResult) {
-        // Given
-        CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
-        // When
-        sut.setExceptionEnabled(isActive);
-        // Then
-        assertEquals(expectedResult, sut.isExceptionEnabled(), "Exception level does not match expected result");
-    }
-
     @Test
     @DisplayName("Should throw an exception if a null exception is provided")
     void shouldThrowAnExceptionIfANullExceptionIsProvided() {
@@ -778,25 +766,6 @@ class CompositeMessageHandlerUnitTest {
         for (MessageHandler messageHandler : sut.getMessageHandlers()) {
             verify(messageHandler, times(1)).exception(eq(illegalArgumentException));
             verify(messageHandler, times(1)).exception(eq(classCastException));
-        }
-    }
-
-
-    @Test
-    @DisplayName("Should not propagate exceptions to all handlers if exception level is not active")
-    void shouldNotPropagateExceptionsToAllHandlersIfNotActive() {
-        // Given
-        IllegalArgumentException illegalArgumentException = new IllegalArgumentException("My IllegalArgumentException");
-        ClassCastException classCastException = new ClassCastException("My ClassCastException");
-        CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
-        // When
-        sut.setExceptionEnabled(false);
-        sut.exception(illegalArgumentException);
-        sut.exception(classCastException);
-        // Then
-        for (MessageHandler messageHandler : sut.getMessageHandlers()) {
-            verify(messageHandler, times(0)).exception(eq(illegalArgumentException));
-            verify(messageHandler, times(0)).exception(eq(classCastException));
         }
     }
 

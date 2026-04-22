@@ -52,55 +52,15 @@ public class ConsoleMessageHandler extends AbstractOutputMessageHandler {
     }
 
     @Override
-    protected void handleInfoMessageImpl(final String message) {
-        LogRecord logRecord = logRecordFactory.create(SeverityNumber.INFO, message);
-        print(System.out, logRecordFormatter.format(logRecord));
+    public void handleMessage(@Nonnull SeverityNumber level, @Nonnull String message) {
+        LogRecord logRecord = logRecordFactory.create(level, message);
+        PrintStream stream = level.compareTo(SeverityNumber.ERROR) >= 0 ? System.err : System.out;
+        print(stream, logRecordFormatter.format(logRecord));
     }
 
     @Override
-    protected void handleWarnMessageImpl(final String message) {
-        LogRecord logRecord = logRecordFactory.create(SeverityNumber.WARN, message);
-        print(System.out, logRecordFormatter.format(logRecord));
-    }
-
-    @Override
-    protected void handleErrorMessageImpl(final String message) {
-        LogRecord logRecord = logRecordFactory.create(SeverityNumber.ERROR, message);
-        print(System.err, logRecordFormatter.format(logRecord));
-    }
-
-    @Override
-    protected void handleFatalMessageImpl(final String message) {
-        LogRecord logRecord = logRecordFactory.create(SeverityNumber.FATAL, message);
-        print(System.err, logRecordFormatter.format(logRecord));
-    }
-
-    @Override
-    protected void handleDebugMessageImpl(final String message) {
-        LogRecord logRecord = logRecordFactory.create(SeverityNumber.DEBUG, message);
-        print(System.out, logRecordFormatter.format(logRecord));
-    }
-
-    @Override
-    protected void handleTraceMessageImpl(final String message) {
-        LogRecord logRecord = logRecordFactory.create(SeverityNumber.TRACE, message);
-        print(System.out, logRecordFormatter.format(logRecord));
-    }
-
-    @Override
-    protected void handleExceptionImpl(final Exception exception) {
-        LogRecord logRecord = logRecordFactory.create(exception);
-        String formatted = logRecordFormatter.format(logRecord);
-        dispatch(() -> {
-            synchronized (PRINT_LOCK) {
-                System.err.println(formatted);
-            }
-        });
-    }
-
-    @Override
-    protected void handleExceptionImpl(final String message, final Exception exception) {
-        LogRecord logRecord = logRecordFactory.create(message, exception);
+    public void handleThrowable(@Nonnull String message, @Nonnull Throwable throwable) {
+        LogRecord logRecord = logRecordFactory.create(message, throwable);
         String formatted = logRecordFormatter.format(logRecord);
         dispatch(() -> {
             synchronized (PRINT_LOCK) {

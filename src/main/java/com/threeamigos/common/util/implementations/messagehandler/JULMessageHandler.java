@@ -1,5 +1,8 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
+import jakarta.annotation.Nonnull;
+
 import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -53,42 +56,50 @@ public class JULMessageHandler extends AbstractMessageHandler {
     }
 
     @Override
-    protected void handleInfoMessageImpl(final String message) {
-        logger.log(Level.INFO, message);
+    public void handleMessage(@Nonnull SeverityNumber level, @Nonnull String message) {
+        switch (level) {
+            case INFO:
+            case INFO2:
+            case INFO3:
+            case INFO4:
+                logger.log(Level.INFO, message);
+                break;
+            case WARN:
+            case WARN2:
+            case WARN3:
+            case WARN4:
+                logger.log(Level.WARNING, message);
+                break;
+            case ERROR:
+            case ERROR2:
+            case ERROR3:
+            case ERROR4:
+            case FATAL:
+            case FATAL2:
+            case FATAL3:
+            case FATAL4:
+                logger.log(Level.SEVERE, message);
+                break;
+            case DEBUG:
+            case DEBUG2:
+            case DEBUG3:
+            case DEBUG4:
+                logger.log(Level.FINER, message);
+                break;
+            case TRACE:
+            case TRACE2:
+            case TRACE3:
+            case TRACE4:
+                logger.log(Level.FINEST, message);
+                break;
+            default:
+                logger.log(Level.INFO, "Unknown severity level: " + level + ". Logging as INFO. " + message);
+                break;
+        }
     }
 
     @Override
-    protected void handleWarnMessageImpl(final String message) {
-        logger.log(Level.WARNING, message);
-    }
-
-    @Override
-    protected void handleErrorMessageImpl(final String message) {
-        logger.log(Level.SEVERE, message);
-    }
-
-    @Override
-    protected void handleFatalMessageImpl(final String message) {
-        logger.log(Level.SEVERE, message);
-    }
-
-    @Override
-    protected void handleDebugMessageImpl(final String message) {
-        logger.log(Level.FINER, message);
-    }
-
-    @Override
-    protected void handleTraceMessageImpl(final String message) {
-        logger.log(Level.FINEST, message);
-    }
-
-    @Override
-    protected void handleExceptionImpl(final Exception exception) {
-        logger.log(Level.SEVERE, ExceptionMessageFormatter.detail(exception), exception);
-    }
-
-    @Override
-    protected void handleExceptionImpl(final String message, final Exception exception) {
-        logger.log(Level.SEVERE, ExceptionMessageFormatter.withPrefix(message, exception), exception);
+    public void handleThrowable(@Nonnull String message, @Nonnull Throwable throwable) {
+        logger.log(Level.SEVERE, ThrowableMessageFormatter.withPrefix(message, throwable), throwable);
     }
 }

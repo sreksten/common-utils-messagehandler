@@ -215,7 +215,6 @@ class SwingMessageHandlerUnitTest {
         sut.setFatalEnabled(false);
         sut.setDebugEnabled(false);
         sut.setTraceEnabled(false);
-        sut.setExceptionEnabled(false);
 
         sut.info("info");
         sut.warn("warn");

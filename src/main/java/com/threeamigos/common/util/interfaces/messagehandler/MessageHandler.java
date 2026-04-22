@@ -1,5 +1,8 @@
 package com.threeamigos.common.util.interfaces.messagehandler;
 
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
+import jakarta.annotation.Nonnull;
+
 /**
  * Master interface for application-level message and exception handling.
  * <p>
@@ -11,8 +14,8 @@ package com.threeamigos.common.util.interfaces.messagehandler;
  *   <li>{@link FatalHandler} / {@link FatalSupplierHandler} — fatal errors</li>
  *   <li>{@link DebugHandler} / {@link DebugSupplierHandler} — debug output</li>
  *   <li>{@link TraceHandler} / {@link TraceSupplierHandler} — fine-grained trace output</li>
- *   <li>{@link ExceptionHandler} — exceptions without a contextual message</li>
- *   <li>{@link ExceptionWithMessageHandler} — exceptions paired with a contextual message</li>
+ *   <li>{@link ThrowableHandler} — exceptions without a contextual message</li>
+ *   <li>{@link ThrowableWithMessageHandler} — exceptions paired with a contextual message</li>
  * </ul>
  * <p>
  * The {@code Supplier}-based variants allow callers to defer the construction of expensive
@@ -56,8 +59,28 @@ public interface MessageHandler extends
         FatalHandler, FatalSupplierHandler,
         DebugHandler, DebugSupplierHandler,
         TraceHandler, TraceSupplierHandler,
-        ExceptionHandler, ExceptionWithMessageHandler,
+        ThrowableHandler, ThrowableWithMessageHandler,
         AutoCloseable {
+
+    /**
+     * Performs the actual message dispatch.
+     * <p>
+     * Called only when level handling is enabled
+     * and the message has been validated as non-null.
+     *
+     * @param message the validated, non-null info message to handle
+     */
+    void handleMessage(final @Nonnull SeverityNumber level, final @Nonnull String message);
+
+    /**
+     * Performs the actual error handling.
+     * <p>
+     * Called only when level handling is enabled
+     * and the message has been validated as non-null.
+     *
+     * @param message the validated, non-null info message to handle
+     */
+    void handleThrowable(final @Nonnull String message, final @Nonnull Throwable throwable);
 
     /**
      * Releases any resources held by this handler.

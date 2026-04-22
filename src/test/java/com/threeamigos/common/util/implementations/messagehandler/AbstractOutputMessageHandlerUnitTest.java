@@ -6,6 +6,7 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
+import jakarta.annotation.Nonnull;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -49,35 +50,11 @@ class AbstractOutputMessageHandlerUnitTest {
         }
 
         @Override
-        protected void handleInfoMessageImpl(final String message) {
+        public void handleMessage(@Nonnull SeverityNumber level, @Nonnull String message) {
         }
 
         @Override
-        protected void handleWarnMessageImpl(final String message) {
-        }
-
-        @Override
-        protected void handleErrorMessageImpl(final String message) {
-        }
-
-        @Override
-        protected void handleFatalMessageImpl(final String message) {
-        }
-
-        @Override
-        protected void handleDebugMessageImpl(final String message) {
-        }
-
-        @Override
-        protected void handleTraceMessageImpl(final String message) {
-        }
-
-        @Override
-        protected void handleExceptionImpl(final Exception exception) {
-        }
-
-        @Override
-        protected void handleExceptionImpl(final String message, final Exception exception) {
+        public void handleThrowable(@Nonnull String message, @Nonnull Throwable throwable) {
         }
     }
 

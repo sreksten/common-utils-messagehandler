@@ -73,7 +73,6 @@ class SLF4JMessageHandlerUnitTest {
         handler.setFatalEnabled(false);
         handler.setDebugEnabled(false);
         handler.setTraceEnabled(false);
-        handler.setExceptionEnabled(false);
 
         handler.info("info");
         handler.warn("warn");
