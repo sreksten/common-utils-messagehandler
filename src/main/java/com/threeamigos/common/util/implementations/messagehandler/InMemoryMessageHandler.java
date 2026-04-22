@@ -7,6 +7,7 @@ import jakarta.annotation.Nullable;
 
 import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -21,7 +22,6 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     private final int maxEntries;
 
     private final ArrayDeque<Holder> allMessages = new ArrayDeque<>();
-    private final ArrayDeque<Throwable> allThrowables = new ArrayDeque<>();
     private final ReentrantLock lock = new ReentrantLock();
     private String lastMessage;
 
@@ -52,7 +52,8 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     public void handleMessage(@Nonnull SeverityNumber level, @Nonnull String message) {
         lock.lock();
         try {
-            addWithLimit(allMessages, new Holder(level, message));
+            addWithLimit(allMessages, new Holder(level, message, null));
+            lastMessage = message;
         } finally {
             lock.unlock();
         }
@@ -62,11 +63,20 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     public void handleThrowable(@Nonnull String message, @Nonnull Throwable throwable) {
         lock.lock();
         try {
-            addWithLimit(allMessages, new Holder(SeverityNumber.ERROR, message));
-            addWithLimit(allThrowables, throwable);
+            String rendered = renderThrowableMessage(message, throwable);
+            addWithLimit(allMessages, new Holder(SeverityNumber.UNSPECIFIED, rendered, throwable));
+            lastMessage = rendered;
         } finally {
             lock.unlock();
         }
+    }
+
+    private static String renderThrowableMessage(final String message, final Throwable throwable) {
+        String detail = ThrowableMessageFormatter.detail(throwable);
+        if (message == null || message.isEmpty() || message.equals(throwable.getMessage()) || message.equals(detail)) {
+            return detail;
+        }
+        return message + ": " + detail;
     }
 
     private <E> void addWithLimit(ArrayDeque<E> messages, E value) {
@@ -101,7 +111,7 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     public List<String> getAllInfoMessages() {
         lock.lock();
         try {
-            return filterMessages(Arrays.asList(SeverityNumber.INFO, SeverityNumber.INFO2, SeverityNumber.INFO3, SeverityNumber.INFO4));
+            return filterMessages(SeverityNumber::isInfo);
         } finally {
             lock.unlock();
         }
@@ -113,7 +123,7 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     public List<String> getAllWarnMessages() {
         lock.lock();
         try {
-            return filterMessages(Arrays.asList(SeverityNumber.WARN, SeverityNumber.WARN2, SeverityNumber.WARN3, SeverityNumber.WARN4));
+            return filterMessages(SeverityNumber::isWarn);
         } finally {
             lock.unlock();
         }
@@ -125,7 +135,7 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     public List<String> getAllErrorMessages() {
         lock.lock();
         try {
-            return filterMessages(Arrays.asList(SeverityNumber.ERROR, SeverityNumber.ERROR2, SeverityNumber.ERROR3, SeverityNumber.ERROR4));
+            return filterMessages(SeverityNumber::isError);
         } finally {
             lock.unlock();
         }
@@ -137,7 +147,7 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     public List<String> getAllFatalMessages() {
         lock.lock();
         try {
-            return filterMessages(Arrays.asList(SeverityNumber.FATAL, SeverityNumber.FATAL2, SeverityNumber.FATAL3, SeverityNumber.FATAL4));
+            return filterMessages(SeverityNumber::isFatal);
         } finally {
             lock.unlock();
         }
@@ -149,7 +159,7 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     public List<String> getAllDebugMessages() {
         lock.lock();
         try {
-            return filterMessages(Arrays.asList(SeverityNumber.DEBUG, SeverityNumber.DEBUG2, SeverityNumber.DEBUG3, SeverityNumber.DEBUG4));
+            return filterMessages(SeverityNumber::isDebug);
         } finally {
             lock.unlock();
         }
@@ -161,7 +171,7 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     public List<String> getAllTraceMessages() {
         lock.lock();
         try {
-            return filterMessages(Arrays.asList(SeverityNumber.TRACE, SeverityNumber.TRACE2, SeverityNumber.TRACE3, SeverityNumber.TRACE4));
+            return filterMessages(SeverityNumber::isTrace);
         } finally {
             lock.unlock();
         }
@@ -173,14 +183,14 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     public List<String> getAllExceptionMessages() {
         lock.lock();
         try {
-            return Collections.unmodifiableList(new ArrayList<>(allThrowables.stream().map(Throwable::getMessage).collect(Collectors.toList())));
+            return Collections.unmodifiableList(new ArrayList<>(allMessages.stream().filter(h -> h.getSeverity() == SeverityNumber.UNSPECIFIED).map(Holder::getMessage).collect(Collectors.toList())));
         } finally {
             lock.unlock();
         }
     }
 
-    private List<String> filterMessages(List<SeverityNumber> severities) {
-        return Collections.unmodifiableList(allMessages.stream().filter(h -> severities.contains(h.getSeverity())).map(Holder::getMessage).collect(Collectors.toList()));
+    private List<String> filterMessages(Function<SeverityNumber, Boolean> severityFilter) {
+        return Collections.unmodifiableList(allMessages.stream().filter(h -> severityFilter.apply(h.getSeverity())).map(Holder::getMessage).collect(Collectors.toList()));
     }
 
 
@@ -190,7 +200,7 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     public List<Throwable> getAllThrowables() {
         lock.lock();
         try {
-            return Collections.unmodifiableList(new ArrayList<>(allThrowables));
+            return Collections.unmodifiableList(new ArrayList<>(allMessages.stream().map(Holder::getThrowable).filter(Objects::nonNull).collect(Collectors.toList())));
         } finally {
             lock.unlock();
         }
@@ -219,7 +229,6 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
         lock.lock();
         try {
             allMessages.clear();
-            allThrowables.clear();
             lastMessage = null;
         } finally {
             lock.unlock();
@@ -236,7 +245,7 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     public Snapshot snapshot() {
         lock.lock();
         try {
-            return new Snapshot(allMessages, allThrowables, lastMessage);
+            return new Snapshot(allMessages, lastMessage);
         } finally {
             lock.unlock();
         }
@@ -254,13 +263,10 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
      */
     public static final class Snapshot {
         private final List<Holder> allMessages;
-        private final List<Throwable> allThrowables;
         private final String lastMessage;
 
-        private Snapshot(final Collection<Holder> allMessages,
-                         final Collection<Throwable> allThrowables, final String lastMessage) {
+        private Snapshot(final Collection<Holder> allMessages, final String lastMessage) {
             this.allMessages = new ArrayList<>(allMessages);
-            this.allThrowables = new ArrayList<>(allThrowables);
             this.lastMessage = lastMessage;
         }
 
@@ -271,64 +277,64 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
             return Collections.unmodifiableList(allMessages.stream().map(Holder::getMessage).collect(Collectors.toList()));
         }
 
-        private List<String> filterMessages(List<SeverityNumber> severities) {
-            return Collections.unmodifiableList(allMessages.stream().filter(h -> severities.contains(h.getSeverity())).map(Holder::getMessage).collect(Collectors.toList()));
+        private List<String> filterMessages(Function<SeverityNumber, Boolean> severityFilter) {
+            return Collections.unmodifiableList(allMessages.stream().filter(h -> severityFilter.apply(h.getSeverity())).map(Holder::getMessage).collect(Collectors.toList()));
         }
 
         /**
          * @return unmodifiable list of all info-level messages, in arrival order
          */
         public List<String> getAllInfoMessages() {
-            return filterMessages(Arrays.asList(SeverityNumber.INFO, SeverityNumber.INFO2, SeverityNumber.INFO3, SeverityNumber.INFO4));
+            return filterMessages(SeverityNumber::isInfo);
         }
 
         /**
          * @return unmodifiable list of all warning-level messages, in arrival order
          */
         public List<String> getAllWarnMessages() {
-            return filterMessages(Arrays.asList(SeverityNumber.WARN, SeverityNumber.WARN2, SeverityNumber.WARN3, SeverityNumber.WARN4));
+            return filterMessages(SeverityNumber::isWarn);
         }
 
         /**
          * @return unmodifiable list of all error-level messages, in arrival order
          */
         public List<String> getAllErrorMessages() {
-            return filterMessages(Arrays.asList(SeverityNumber.ERROR, SeverityNumber.ERROR2, SeverityNumber.ERROR3, SeverityNumber.ERROR4));
+            return filterMessages(SeverityNumber::isError);
         }
 
         /**
          * @return unmodifiable list of all fatal-level messages, in arrival order
          */
         public List<String> getAllFatalMessages() {
-            return filterMessages(Arrays.asList(SeverityNumber.FATAL, SeverityNumber.FATAL2, SeverityNumber.FATAL3, SeverityNumber.FATAL4));
+            return filterMessages(SeverityNumber::isFatal);
         }
 
         /**
          * @return unmodifiable list of all debug-level messages, in arrival order
          */
         public List<String> getAllDebugMessages() {
-            return filterMessages(Arrays.asList(SeverityNumber.DEBUG, SeverityNumber.DEBUG2, SeverityNumber.DEBUG3, SeverityNumber.DEBUG4));
+            return filterMessages(SeverityNumber::isDebug);
         }
 
         /**
          * @return unmodifiable list of all trace-level messages, in arrival order
          */
         public List<String> getAllTraceMessages() {
-            return filterMessages(Arrays.asList(SeverityNumber.TRACE, SeverityNumber.TRACE2, SeverityNumber.TRACE3, SeverityNumber.TRACE4));
+            return filterMessages(SeverityNumber::isTrace);
         }
 
         /**
          * @return unmodifiable list of all exception detail strings, in arrival order
          */
         public List<String> getAllExceptionMessages() {
-            return allThrowables.stream().map(Throwable::getMessage).collect(Collectors.toList());
+            return Collections.unmodifiableList(allMessages.stream().filter(Holder::hasException).map(Holder::getMessage).collect(Collectors.toList()));
         }
 
         /**
          * @return unmodifiable list of all handled exceptions, in arrival order
          */
         public List<Throwable> getAllThrowables() {
-            return allThrowables;
+            return Collections.unmodifiableList(allMessages.stream().map(Holder::getThrowable).filter(Objects::nonNull).collect(Collectors.toList()));
         }
 
         /**
@@ -343,10 +349,12 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     private static class Holder {
         private final SeverityNumber severity;
         private final String message;
+        private final Throwable throwable;
 
-        Holder(SeverityNumber severity, String message) {
+        Holder(SeverityNumber severity, String message, Throwable throwable) {
             this.severity = severity;
             this.message = message;
+            this.throwable = throwable;
         }
         public SeverityNumber getSeverity() {
             return severity;
@@ -354,6 +362,14 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
 
         public String getMessage() {
             return message;
+        }
+
+        public Throwable getThrowable() {
+            return throwable;
+        }
+
+        public boolean hasException() {
+            return throwable != null;
         }
     }
 }

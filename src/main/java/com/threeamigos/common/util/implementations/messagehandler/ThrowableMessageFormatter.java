@@ -33,12 +33,20 @@ final class ThrowableMessageFormatter {
      * <p>
      * The result has the form {@code "<message>: <detail>"} where {@code <detail>}
      * is produced by {@link #detail(Throwable)}.
+     * <p>
+     * If {@code message} is {@code null}, blank, or already equal to {@code <detail>},
+     * this method returns {@code <detail>} to avoid duplicate output such as
+     * {@code "boom: boom"}.
      *
      * @param message   a non-null contextual prefix to prepend
-     * @param throwable the Throeable to describe; must not be {@code null}
+     * @param throwable the Throwable to describe; must not be {@code null}
      * @return a non-null string of the form {@code "<message>: <detail>"}
      */
     static String withPrefix(final String message, final Throwable throwable) {
-        return message + ": " + detail(throwable);
+        String detail = detail(throwable);
+        if (message == null || message.isEmpty() || message.equals(detail)) {
+            return detail;
+        }
+        return message + ": " + detail;
     }
 }

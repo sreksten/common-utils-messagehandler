@@ -34,7 +34,7 @@ class AbstractMessageHandlerUnitTest {
 
         @Override
         public void handleMessage(@Nonnull SeverityNumber level, @Nonnull String message) {
-            record("INFO", message, null);
+            record(level.name(), message, null);
         }
 
         @Override
@@ -147,7 +147,7 @@ class AbstractMessageHandlerUnitTest {
         assertEquals(1, sut.callCount);
         assertEquals("EXCEPTION", sut.lastLevel);
         assertEquals(ex, sut.lastException);
-        assertNull(sut.lastMessage);
+        assertEquals("boom", sut.lastMessage);
     }
 
     @Test
@@ -161,10 +161,11 @@ class AbstractMessageHandlerUnitTest {
 
         RuntimeException ex = new RuntimeException("boom");
         sut.exception("prefix", ex);
-        assertEquals("EXCEPTION_WITH_MESSAGE", sut.lastLevel);
+        assertEquals("EXCEPTION", sut.lastLevel);
         assertEquals("prefix", sut.lastMessage);
         assertEquals(ex, sut.lastException);
 
+        sut.setErrorEnabled(false);
         sut.exception(new RuntimeException("dropped"));
         assertEquals(1, sut.callCount);
         assertTrue(sut.lastException == ex);

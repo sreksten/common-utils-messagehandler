@@ -147,12 +147,55 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
 
     @Override
     public void handleMessage(@Nonnull SeverityNumber level, @Nonnull String message) {
-        forEachHandler(mh -> mh.handleMessage(level, message));
+        forEachHandler(mh -> {
+            switch (level) {
+                case WARN:
+                case WARN2:
+                case WARN3:
+                case WARN4:
+                    mh.warn(message);
+                    break;
+                case ERROR:
+                case ERROR2:
+                case ERROR3:
+                case ERROR4:
+                    mh.error(message);
+                    break;
+                case FATAL:
+                case FATAL2:
+                case FATAL3:
+                case FATAL4:
+                    mh.fatal(message);
+                    break;
+                case DEBUG:
+                case DEBUG2:
+                case DEBUG3:
+                case DEBUG4:
+                    mh.debug(message);
+                    break;
+                case TRACE:
+                case TRACE2:
+                case TRACE3:
+                case TRACE4:
+                    mh.trace(message);
+                    break;
+                default:
+                    mh.info(message);
+                    break;
+            }
+        });
     }
 
     @Override
     public void handleThrowable(@Nonnull String message, @Nonnull Throwable throwable) {
-        forEachHandler(mh -> mh.handleThrowable(message, throwable));
+        forEachHandler(mh -> {
+            String detail = ThrowableMessageFormatter.detail(throwable);
+            if (message.isEmpty() || message.equals(throwable.getMessage()) || message.equals(detail)) {
+                mh.exception(throwable);
+            } else {
+                mh.exception(message, throwable);
+            }
+        });
     }
 
     private void forEachHandler(java.util.function.Consumer<MessageHandler> consumer) {

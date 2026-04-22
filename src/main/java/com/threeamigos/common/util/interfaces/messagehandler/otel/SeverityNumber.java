@@ -66,4 +66,28 @@ public enum SeverityNumber {
         }
         return UNSPECIFIED;
     }
+
+    public boolean isTrace() {
+        return this == TRACE || this == TRACE2 || this == TRACE3 || this == TRACE4;
+    }
+
+    public boolean isDebug() {
+        return this == DEBUG || this == DEBUG2 || this == DEBUG3 || this == DEBUG4;
+    }
+
+    public boolean isInfo() {
+        return this == INFO || this == INFO2 || this == INFO3 || this == INFO4;
+    }
+
+    public boolean isWarn() {
+        return this == WARN || this == WARN2 || this == WARN3 || this == WARN4;
+    }
+
+    public boolean isError() {
+        return this == ERROR || this == ERROR2 || this == ERROR3 || this == ERROR4;
+    }
+
+    public boolean isFatal() {
+        return this == FATAL || this == FATAL2 || this == FATAL3 || this == FATAL4;
+    }
 }

@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@DisplayName("ConcoleLogRecordFormatter unit tests")
+@DisplayName("ConsoleLogRecordFormatter unit tests")
 @Tag("unit")
 @Tag("messageHandler")
 class ConsoleLogRecordFormatterUnitTest {

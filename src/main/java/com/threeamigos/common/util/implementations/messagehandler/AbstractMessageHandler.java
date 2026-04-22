@@ -67,7 +67,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
     public void log(final @Nonnull Throwable throwable) {
         if (isEnabled(SeverityNumber.ERROR)) {
             Objects.requireNonNull(throwable, MessageHandlerResourceBundle.get("nullThrowableProvided"));
-            String throwableMessage = throwable.getMessage() != null ? throwable.getMessage() : "";
+            String throwableMessage = throwable.getMessage() != null ? throwable.getMessage() : throwable.toString();
             handleThrowable(throwableMessage, throwable);
         }
     }

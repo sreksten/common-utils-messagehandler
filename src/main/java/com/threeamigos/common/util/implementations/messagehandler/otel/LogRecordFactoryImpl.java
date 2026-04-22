@@ -38,7 +38,7 @@ public class LogRecordFactoryImpl implements LogRecordFactory {
     @Override
     public LogRecord create(String message, Throwable throwable) {
         Objects.requireNonNull(message, MessageHandlerResourceBundle.get("nullMessageProvided"));
-        Objects.requireNonNull(throwable, MessageHandlerResourceBundle.get("nullExceptionProvided"));
+        Objects.requireNonNull(throwable, MessageHandlerResourceBundle.get("nullThrowableProvided"));
         LogRecordImpl logRecord = new LogRecordImpl();
         setErrorSeverity(logRecord);
         logRecord.setBody(AnyValueImpl.ofString(message));
@@ -48,7 +48,7 @@ public class LogRecordFactoryImpl implements LogRecordFactory {
 
     @Override
     public LogRecord create(Throwable throwable) {
-        Objects.requireNonNull(throwable, MessageHandlerResourceBundle.get("nullExceptionProvided"));
+        Objects.requireNonNull(throwable, MessageHandlerResourceBundle.get("nullThrowableProvided"));
         LogRecordImpl logRecord = new LogRecordImpl();
         setErrorSeverity(logRecord);
         String throwableMessage = throwable.getMessage() != null ? throwable.getMessage() : throwable.toString();
