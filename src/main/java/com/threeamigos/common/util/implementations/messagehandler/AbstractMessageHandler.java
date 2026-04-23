@@ -13,17 +13,48 @@ import java.util.function.Supplier;
  * thrown. If the parameter is a Supplier, and the supplier returns null, an exception is thrown.<br/>
  * The advantage of using a Supplier is that if the message level is deactivated, the message construction can be
  * skipped, saving resources.
- *
+ * <p>
+ * Levels enabled by default: INFO*, WARN*, ERROR*, FATAL*.
+ * <p>
+ * To enable or disable whole message levels, use the corresponding setEnabled methods. For example, to enable all
+ * DEBUG* messages, call <code>setDebugEnabled(true)</code>. To disable all TRACE* messages, call
+ * <code>setTraceEnabled(false)</code>.
+ * <p>
+ * To enable or disable specific message levels, use the corresponding <code>enable</code> or <code>disable</code>
+ * methods. For example, to enable WARN2 messages, call <code>enable(SeverityNumber.WARN2)</code>. To disable INFO3
+ * messages, call <code>disable(SeverityNumber.INFO3)</code>.
+ * <p>
  * @author Stefano Reksten
  */
 public abstract class AbstractMessageHandler implements MessageHandler {
 
-    private volatile int enabledLevels = 0b11111111111111111111111111; // All enabled by default
+    private volatile int enabledLevels =
+                    1 << SeverityNumber.INFO.getValue() |
+                    1 << SeverityNumber.INFO2.getValue() |
+                    1 << SeverityNumber.INFO3.getValue() |
+                    1 << SeverityNumber.INFO4.getValue() |
+                    1 << SeverityNumber.WARN.getValue() |
+                    1 << SeverityNumber.WARN2.getValue() |
+                    1 << SeverityNumber.WARN3.getValue() |
+                    1 << SeverityNumber.WARN4.getValue() |
+                    1 << SeverityNumber.ERROR.getValue() |
+                    1 << SeverityNumber.ERROR2.getValue() |
+                    1 << SeverityNumber.ERROR3.getValue() |
+                    1 << SeverityNumber.ERROR4.getValue() |
+                    1 << SeverityNumber.FATAL.getValue() |
+                    1 << SeverityNumber.FATAL2.getValue() |
+                    1 << SeverityNumber.FATAL3.getValue() |
+                    1 << SeverityNumber.FATAL4.getValue()
+            ;
+
+    private static int levelMask(final SeverityNumber level) {
+        return 1 << level.getValue();
+    }
 
     public void enable(final SeverityNumber ... levels) {
         int newEnabledLevels = 0;
         for (SeverityNumber level : levels) {
-            newEnabledLevels |= level.getValue();
+            newEnabledLevels |= levelMask(level);
         }
         enabledLevels = newEnabledLevels;
     }
@@ -31,22 +62,22 @@ public abstract class AbstractMessageHandler implements MessageHandler {
     public void disable(final SeverityNumber ... levels) {
         int newEnabledLevels = enabledLevels;
         for (SeverityNumber level : levels) {
-            newEnabledLevels &= ~level.getValue();
+            newEnabledLevels &= ~levelMask(level);
         }
         enabledLevels = newEnabledLevels;
     }
 
     public boolean isEnabled(final @Nonnull SeverityNumber level) {
         Objects.requireNonNull(level, MessageHandlerResourceBundle.get("nullLevelProvided"));
-        return (enabledLevels & level.getValue()) != 0;
+        return (enabledLevels & levelMask(level)) != 0;
     }
 
     public void setEnabled(final @Nonnull SeverityNumber level, final boolean enabled) {
         Objects.requireNonNull(level, MessageHandlerResourceBundle.get("nullLevelProvided"));
         if (enabled) {
-            enabledLevels |= level.getValue();
+            enabledLevels |= levelMask(level);
         } else {
-            enabledLevels &= ~level.getValue();
+            enabledLevels &= ~levelMask(level);
         }
     }
     public void log(final @Nonnull SeverityNumber level, final @Nonnull Supplier<String> message) {
@@ -94,7 +125,11 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * reaching the concrete implementation.
      */
     public void setInfoEnabled(boolean infoEnabled) {
-        setEnabled(SeverityNumber.INFO, infoEnabled);
+        if (infoEnabled) {
+            enable(SeverityNumber.INFO, SeverityNumber.INFO2, SeverityNumber.INFO3, SeverityNumber.INFO4);
+        } else {
+            disable(SeverityNumber.INFO, SeverityNumber.INFO2, SeverityNumber.INFO3, SeverityNumber.INFO4);
+        }
     }
 
     /**
@@ -111,7 +146,11 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * reaching the concrete implementation.
      */
     public void setWarnEnabled(boolean warnEnabled) {
-        setEnabled(SeverityNumber.WARN, warnEnabled);
+        if (warnEnabled) {
+            enable(SeverityNumber.WARN, SeverityNumber.WARN2, SeverityNumber.WARN3, SeverityNumber.WARN4);
+        } else {
+            disable(SeverityNumber.WARN, SeverityNumber.WARN2, SeverityNumber.WARN3, SeverityNumber.WARN4);
+        }
     }
 
     /**
@@ -128,7 +167,11 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * reaching the concrete implementation.
      */
     public void setErrorEnabled(boolean errorEnabled) {
-        setEnabled(SeverityNumber.ERROR, errorEnabled);
+        if (errorEnabled) {
+            enable(SeverityNumber.ERROR, SeverityNumber.ERROR2, SeverityNumber.ERROR3, SeverityNumber.ERROR4);
+        } else {
+            disable(SeverityNumber.ERROR, SeverityNumber.ERROR2, SeverityNumber.ERROR3, SeverityNumber.ERROR4);
+        }
     }
 
     /**
@@ -145,7 +188,11 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * reaching the concrete implementation.
      */
     public void setFatalEnabled(boolean fatalEnabled) {
-        setEnabled(SeverityNumber.FATAL, fatalEnabled);
+        if (fatalEnabled) {
+            enable(SeverityNumber.FATAL, SeverityNumber.FATAL2, SeverityNumber.FATAL3, SeverityNumber.FATAL4);
+        } else {
+            disable(SeverityNumber.FATAL, SeverityNumber.FATAL2, SeverityNumber.FATAL3, SeverityNumber.FATAL4);
+        }
     }
 
     /**
@@ -162,7 +209,11 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * reaching the concrete implementation.
      */
     public void setDebugEnabled(boolean debugEnabled) {
-        setEnabled(SeverityNumber.DEBUG, debugEnabled);
+        if (debugEnabled) {
+            enable(SeverityNumber.DEBUG, SeverityNumber.DEBUG2, SeverityNumber.DEBUG3, SeverityNumber.DEBUG4);
+        } else {
+            disable(SeverityNumber.DEBUG, SeverityNumber.DEBUG2, SeverityNumber.DEBUG3, SeverityNumber.DEBUG4);
+        }
     }
 
     /**
@@ -179,9 +230,12 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * reaching the concrete implementation.
      */
     public void setTraceEnabled(boolean traceEnabled) {
-        setEnabled(SeverityNumber.TRACE, traceEnabled);
+        if (traceEnabled) {
+            enable(SeverityNumber.TRACE, SeverityNumber.TRACE2, SeverityNumber.TRACE3, SeverityNumber.TRACE4);
+        } else {
+            disable(SeverityNumber.TRACE, SeverityNumber.TRACE2, SeverityNumber.TRACE3, SeverityNumber.TRACE4);
+        }
     }
-
 
     /**
      * {@inheritDoc}

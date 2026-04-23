@@ -90,6 +90,7 @@ class SwingMessageHandlerUnitTest {
     @DisplayName("Should throw an exception if a null debug message is provided")
     void shouldThrowAnExceptionIfANullDebugMessageIsProvided() {
         SwingMessageHandler sut = new SwingMessageHandler();
+        sut.setDebugEnabled(true);
         assertThrows(NullPointerException.class, () -> sut.debug((String) null));
     }
 
@@ -97,6 +98,7 @@ class SwingMessageHandlerUnitTest {
     @DisplayName("Should throw an exception if a null trace message is provided")
     void shouldThrowAnExceptionIfANullTraceMessageIsProvided() {
         SwingMessageHandler sut = new SwingMessageHandler();
+        sut.setTraceEnabled(true);
         assertThrows(NullPointerException.class, () -> sut.trace((String) null));
     }
 
@@ -125,6 +127,8 @@ class SwingMessageHandlerUnitTest {
     @DisplayName("Should display info, warn, error, debug and trace messages")
     void shouldDisplayStandardMessages() {
         CapturingSwingMessageHandler sut = new CapturingSwingMessageHandler();
+        sut.setDebugEnabled(true);
+        sut.setTraceEnabled(true);
 
         sut.info("info-message");
         assertEquals(1, sut.calls);

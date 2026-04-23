@@ -172,6 +172,7 @@ class ConsoleMessageHandlerUnitTest {
     void shouldThrowAnExceptionIfANullDebugMessageIsProvided() {
         // Given
         ConsoleMessageHandler sut = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
+        sut.setDebugEnabled(true);
         // When
         String debugMessage = null;
         // Then
@@ -183,6 +184,7 @@ class ConsoleMessageHandlerUnitTest {
     void shouldHandleDebugMessage() {
         // Given
         ConsoleMessageHandler sut = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
+        sut.setDebugEnabled(true);
         // When
         sut.debug("DEBUG");
         // Then
@@ -194,6 +196,7 @@ class ConsoleMessageHandlerUnitTest {
     void shouldThrowAnExceptionIfANullTraceMessageIsProvided() {
         // Given
         ConsoleMessageHandler sut = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
+        sut.setTraceEnabled(true);
         // When
         String traceMessage = null;
         // Then
@@ -205,6 +208,7 @@ class ConsoleMessageHandlerUnitTest {
     void shouldHandleTraceMessage() {
         // Given
         ConsoleMessageHandler sut = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
+        sut.setTraceEnabled(true);
         // When
         sut.trace("TRACE");
         // Then

@@ -37,6 +37,8 @@ class Log4JMessageHandlerUnitTest {
     void shouldBridgeToLog4JLevels() {
         Logger logger = mock(Logger.class);
         Log4JMessageHandler handler = new Log4JMessageHandler(logger);
+        handler.setDebugEnabled(true);
+        handler.setTraceEnabled(true);
 
         handler.info("info");
         verify(logger).info("info");

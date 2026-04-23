@@ -76,6 +76,8 @@ class AbstractMessageHandlerUnitTest {
     @DisplayName("warn/error/fatal/debug/trace should forward to matching impl methods")
     void levelsShouldForwardToMatchingImplMethods() {
         ProbeMessageHandler sut = new ProbeMessageHandler();
+        sut.setDebugEnabled(true);
+        sut.setTraceEnabled(true);
 
         sut.warn("w");
         assertEquals("WARN", sut.lastLevel);
@@ -114,6 +116,8 @@ class AbstractMessageHandlerUnitTest {
     @DisplayName("message-based APIs should reject null values")
     void messageApisShouldRejectNullValues() {
         ProbeMessageHandler sut = new ProbeMessageHandler();
+        sut.setDebugEnabled(true);
+        sut.setTraceEnabled(true);
 
         assertThrows(NullPointerException.class, () -> sut.info((String) null));
         assertThrows(NullPointerException.class, () -> sut.warn((String) null));
@@ -127,6 +131,8 @@ class AbstractMessageHandlerUnitTest {
     @DisplayName("supplier-based APIs should reject null suppliers")
     void supplierApisShouldRejectNullSuppliers() {
         ProbeMessageHandler sut = new ProbeMessageHandler();
+        sut.setDebugEnabled(true);
+        sut.setTraceEnabled(true);
 
         assertThrows(NullPointerException.class, () -> sut.info((java.util.function.Supplier<String>) null));
         assertThrows(NullPointerException.class, () -> sut.warn((java.util.function.Supplier<String>) null));

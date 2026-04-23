@@ -58,6 +58,8 @@ class JULMessageHandlerUnitTest {
         logger.setLevel(Level.ALL);
 
         JULMessageHandler handler = new JULMessageHandler(logger);
+        handler.setDebugEnabled(true);
+        handler.setTraceEnabled(true);
         handler.info("info");
         assertEquals(Level.INFO, capturingHandler.last.getLevel());
         assertEquals("info", capturingHandler.last.getMessage());

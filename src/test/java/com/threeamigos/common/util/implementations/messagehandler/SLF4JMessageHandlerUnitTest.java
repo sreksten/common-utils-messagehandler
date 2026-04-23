@@ -37,6 +37,8 @@ class SLF4JMessageHandlerUnitTest {
     void shouldBridgeToSLF4JLevels() {
         Logger logger = mock(Logger.class);
         SLF4JMessageHandler handler = new SLF4JMessageHandler(logger);
+        handler.setDebugEnabled(true);
+        handler.setTraceEnabled(true);
 
         handler.info("info");
         verify(logger).info("info");

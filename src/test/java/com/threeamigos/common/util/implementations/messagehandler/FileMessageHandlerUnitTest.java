@@ -244,6 +244,8 @@ class FileMessageHandlerUnitTest {
         Path file = Files.createTempFile("fmh", ".log");
         Files.deleteIfExists(file);
         try (FileMessageHandler handler = new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString())) {
+            handler.setDebugEnabled(true);
+            handler.setTraceEnabled(true);
             handler.info("info");
             handler.warn("warn");
             handler.error("error");

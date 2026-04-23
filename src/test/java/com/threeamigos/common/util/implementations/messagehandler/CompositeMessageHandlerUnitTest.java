@@ -594,6 +594,7 @@ class CompositeMessageHandlerUnitTest {
     void shouldThrowAnExceptionIfANullDebugMessageSupplierIsProvided() {
         // Given
         CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
+        sut.setDebugEnabled(true);
         // When
         Supplier<String> debugMessageSupplier = null;
         // Then
@@ -605,6 +606,7 @@ class CompositeMessageHandlerUnitTest {
     void shouldThrowAnExceptionIfANullDebugMessageIsProvided() {
         // Given
         CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
+        sut.setDebugEnabled(true);
         // When
         String debugMessage = null;
         // Then
@@ -616,6 +618,7 @@ class CompositeMessageHandlerUnitTest {
     void shouldPropagateSuppliedDebugMessagesToAllHandlersIfActive() {
         // Given
         CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
+        sut.setDebugEnabled(true);
         Supplier<String> debugMessageSupplier = () -> FIRST_MESSAGE;
         Supplier<String> secondDebugMessageSupplier = () -> SECOND_MESSAGE;
         // When
@@ -633,6 +636,7 @@ class CompositeMessageHandlerUnitTest {
     void shouldPropagateDebugMessagesToAllHandlersIfActive() {
         // Given
         CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
+        sut.setDebugEnabled(true);
         // When
         sut.debug(FIRST_MESSAGE);
         sut.debug(SECOND_MESSAGE);
@@ -676,6 +680,7 @@ class CompositeMessageHandlerUnitTest {
     void shouldThrowAnExceptionIfANullTraceMessageSupplierIsProvided() {
         // Given
         CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
+        sut.setTraceEnabled(true);
         // When
         Supplier<String> traceMessageSupplier = null;
         // Then
@@ -687,6 +692,7 @@ class CompositeMessageHandlerUnitTest {
     void shouldThrowAnExceptionIfANullTraceMessageIsProvided() {
         // Given
         CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
+        sut.setTraceEnabled(true);
         // When
         String traceMessage = null;
         // Then
@@ -698,6 +704,7 @@ class CompositeMessageHandlerUnitTest {
     void shouldPropagateSuppliedTraceMessagesToAllHandlersIfActive() {
         // Given
         CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
+        sut.setTraceEnabled(true);
         Supplier<String> traceMessageSupplier = () -> FIRST_MESSAGE;
         Supplier<String> secondTraceMessageSupplier = () -> SECOND_MESSAGE;
         // When
@@ -715,6 +722,7 @@ class CompositeMessageHandlerUnitTest {
     void shouldPropagateTraceMessagesToAllHandlersIfActive() {
         // Given
         CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
+        sut.setTraceEnabled(true);
         // When
         sut.trace(FIRST_MESSAGE);
         sut.trace(SECOND_MESSAGE);

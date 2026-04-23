@@ -154,6 +154,7 @@ class InMemoryMessageHandlerUnitTest {
     void shouldThrowAnExceptionIfANullDebugMessageIsProvided() {
         // Given
         InMemoryMessageHandler sut = new InMemoryMessageHandler();
+        sut.setDebugEnabled(true);
         // When
         String debugMessage = null;
         // Then
@@ -165,6 +166,7 @@ class InMemoryMessageHandlerUnitTest {
     void shouldStoreAllDebugMessages() {
         //Given
         InMemoryMessageHandler sut = new InMemoryMessageHandler();
+        sut.setDebugEnabled(true);
         //When
         sut.debug(FIRST_MESSAGE);
         sut.debug(SECOND_MESSAGE);
@@ -186,6 +188,7 @@ class InMemoryMessageHandlerUnitTest {
     void shouldThrowAnExceptionIfANullTraceMessageIsProvided() {
         // Given
         InMemoryMessageHandler sut = new InMemoryMessageHandler();
+        sut.setTraceEnabled(true);
         // When
         String traceMessage = null;
         // Then
@@ -197,6 +200,7 @@ class InMemoryMessageHandlerUnitTest {
     void shouldStoreAllTraceMessages() {
         //Given
         InMemoryMessageHandler sut = new InMemoryMessageHandler();
+        sut.setTraceEnabled(true);
         //When
         sut.trace(FIRST_MESSAGE);
         sut.trace(SECOND_MESSAGE);
@@ -366,6 +370,8 @@ class InMemoryMessageHandlerUnitTest {
     @DisplayName("Snapshot should expose an immutable and internally consistent view")
     void snapshotShouldExposeImmutableAndConsistentView() {
         InMemoryMessageHandler sut = new InMemoryMessageHandler();
+        sut.setDebugEnabled(true);
+        sut.setTraceEnabled(true);
 
         sut.info("info");
         sut.warn("warn");
