@@ -130,4 +130,21 @@ class JULMessageHandlerUnitTest {
         assertEquals("prefix: boom", capturingHandler.last.getMessage());
         assertEquals(exception, capturingHandler.last.getThrown());
     }
+
+    @Test
+    @DisplayName("Unknown severity should fallback to INFO level")
+    void unknownSeverityShouldFallbackToInfoLevel() {
+        Logger logger = Logger.getLogger("test-jul-handler-unknown-severity");
+        logger.setUseParentHandlers(false);
+        CapturingHandler capturingHandler = new CapturingHandler();
+        logger.addHandler(capturingHandler);
+        logger.setLevel(Level.ALL);
+
+        JULMessageHandler handler = new JULMessageHandler(logger);
+        handler.handleMessage(com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber.UNSPECIFIED, "payload");
+
+        assertEquals(Level.INFO, capturingHandler.last.getLevel());
+        assertTrue(capturingHandler.last.getMessage().contains("Unknown severity level"));
+        assertTrue(capturingHandler.last.getMessage().contains("payload"));
+    }
 }

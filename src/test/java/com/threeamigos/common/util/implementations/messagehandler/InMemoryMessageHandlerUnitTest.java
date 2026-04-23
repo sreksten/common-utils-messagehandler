@@ -367,6 +367,32 @@ class InMemoryMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("Should store throwable detail when message is empty")
+    void shouldStoreThrowableDetailWhenMessageIsEmpty() {
+        InMemoryMessageHandler sut = new InMemoryMessageHandler();
+        RuntimeException exception = new RuntimeException("boom");
+
+        sut.handleThrowable("", exception);
+
+        assertEquals(1, sut.getAllExceptionMessages().size());
+        assertEquals("boom", sut.getAllExceptionMessages().get(0));
+        assertEquals("boom", sut.getLastMessage());
+    }
+
+    @Test
+    @DisplayName("Should store throwable detail when message is null")
+    void shouldStoreThrowableDetailWhenMessageIsNull() {
+        InMemoryMessageHandler sut = new InMemoryMessageHandler();
+        RuntimeException exception = new RuntimeException("boom");
+
+        sut.handleThrowable(null, exception);
+
+        assertEquals(1, sut.getAllExceptionMessages().size());
+        assertEquals("boom", sut.getAllExceptionMessages().get(0));
+        assertEquals("boom", sut.getLastMessage());
+    }
+
+    @Test
     @DisplayName("Snapshot should expose an immutable and internally consistent view")
     void snapshotShouldExposeImmutableAndConsistentView() {
         InMemoryMessageHandler sut = new InMemoryMessageHandler();

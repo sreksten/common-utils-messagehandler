@@ -791,6 +791,34 @@ class CompositeMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("handleThrowable should treat empty message as plain exception")
+    void handleThrowableShouldTreatEmptyMessageAsPlainException() {
+        IllegalArgumentException exception = new IllegalArgumentException("boom");
+        CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
+
+        sut.handleThrowable("", exception);
+
+        verify(firstMessageHandler, times(1)).exception(eq(exception));
+        verify(secondMessageHandler, times(1)).exception(eq(exception));
+        verify(firstMessageHandler, never()).exception(eq(""), eq(exception));
+        verify(secondMessageHandler, never()).exception(eq(""), eq(exception));
+    }
+
+    @Test
+    @DisplayName("handleThrowable should treat message equal to throwable detail as plain exception")
+    void handleThrowableShouldTreatDetailMessageAsPlainException() {
+        RuntimeException exception = new RuntimeException((String) null);
+        CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
+
+        sut.handleThrowable(exception.toString(), exception);
+
+        verify(firstMessageHandler, times(1)).exception(eq(exception));
+        verify(secondMessageHandler, times(1)).exception(eq(exception));
+        verify(firstMessageHandler, never()).exception(eq(exception.toString()), eq(exception));
+        verify(secondMessageHandler, never()).exception(eq(exception.toString()), eq(exception));
+    }
+
+    @Test
     @DisplayName("forEachHandler should catch Throwable from a child handler and continue to subsequent handlers")
     void forEachHandlerShouldCatchThrowableAndContinueToSubsequentHandlers() {
         List<String> errors = new ArrayList<>();

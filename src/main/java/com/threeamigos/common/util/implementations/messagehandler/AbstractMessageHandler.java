@@ -52,7 +52,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
     }
 
     public void enable(final SeverityNumber ... levels) {
-        int newEnabledLevels = 0;
+        int newEnabledLevels = enabledLevels;
         for (SeverityNumber level : levels) {
             newEnabledLevels |= levelMask(level);
         }
@@ -74,12 +74,15 @@ public abstract class AbstractMessageHandler implements MessageHandler {
 
     public void setEnabled(final @Nonnull SeverityNumber level, final boolean enabled) {
         Objects.requireNonNull(level, MessageHandlerResourceBundle.get("nullLevelProvided"));
+        int newEnabledLevels = enabledLevels;
         if (enabled) {
-            enabledLevels |= levelMask(level);
+            newEnabledLevels |= levelMask(level);
         } else {
-            enabledLevels &= ~levelMask(level);
+            newEnabledLevels &= ~levelMask(level);
         }
+        enabledLevels = newEnabledLevels;
     }
+
     public void log(final @Nonnull SeverityNumber level, final @Nonnull Supplier<String> message) {
         if (isEnabled(level)) {
             Objects.requireNonNull(message, MessageHandlerResourceBundle.get("nullMessageSupplierProvided"));

@@ -290,7 +290,7 @@ public final class TraceContextValidator {
      *
      * @param vendorName  tracestate vendor key
      * @param vendorValue tracestate vendor value
-     * @throws InvalidTraceContextException when vendor key or value is invalid
+     * @throws InvalidTraceContextException when a vendor key or value is invalid
      */
     public void upsertVendorEntry(final String vendorName, final String vendorValue) throws InvalidTraceContextException {
         if (isNotValidTracestateKey(vendorName)) {

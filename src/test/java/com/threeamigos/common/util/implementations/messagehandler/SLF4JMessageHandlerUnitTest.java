@@ -98,4 +98,28 @@ class SLF4JMessageHandlerUnitTest {
 
         verify(logger).error("prefix", (Throwable) exception);
     }
+
+    @Test
+    @DisplayName("Unknown severity should fallback to INFO message")
+    void unknownSeverityShouldFallbackToInfoMessage() {
+        Logger logger = mock(Logger.class);
+        SLF4JMessageHandler handler = new SLF4JMessageHandler(logger);
+
+        handler.handleMessage(com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber.UNSPECIFIED, "payload");
+
+        verify(logger).info("Unknown severity level: {}. Logging as INFO. {}",
+                com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber.UNSPECIFIED, "payload");
+    }
+
+    @Test
+    @DisplayName("Empty throwable message should fallback to throwable detail")
+    void emptyThrowableMessageShouldFallbackToDetail() {
+        Logger logger = mock(Logger.class);
+        SLF4JMessageHandler handler = new SLF4JMessageHandler(logger);
+        RuntimeException exception = new RuntimeException("boom");
+
+        handler.handleThrowable("", exception);
+
+        verify(logger).error("boom", (Throwable) exception);
+    }
 }

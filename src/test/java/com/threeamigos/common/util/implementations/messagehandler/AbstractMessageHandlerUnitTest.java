@@ -176,4 +176,23 @@ class AbstractMessageHandlerUnitTest {
         assertEquals(1, sut.callCount);
         assertTrue(sut.lastException == ex);
     }
+
+    @Test
+    @DisplayName("setEnabled should toggle a single level and keep other levels unchanged")
+    void setEnabledShouldToggleSingleLevelAndValidateNull() {
+        ProbeMessageHandler sut = new ProbeMessageHandler();
+
+        assertTrue(sut.isInfoEnabled());
+        assertFalse(sut.isDebugEnabled());
+
+        sut.setEnabled(SeverityNumber.DEBUG, true);
+        assertTrue(sut.isDebugEnabled());
+        assertTrue(sut.isInfoEnabled());
+
+        sut.setEnabled(SeverityNumber.DEBUG, false);
+        assertFalse(sut.isDebugEnabled());
+        assertTrue(sut.isInfoEnabled());
+
+        assertThrows(NullPointerException.class, () -> sut.setEnabled(null, true));
+    }
 }
