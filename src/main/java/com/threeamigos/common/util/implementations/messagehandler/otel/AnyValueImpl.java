@@ -56,6 +56,10 @@ public final class AnyValueImpl implements AnyValue {
         return new AnyValueImpl(Type.STRING, value, false, 0L, 0.0, null, null, null);
     }
 
+    public static AnyValue ofNullableString(final String value) {
+        return value == null ? EMPTY_VALUE : ofString(value);
+    }
+
     public static AnyValue ofBoolean(final boolean value) {
         return new AnyValueImpl(Type.BOOL, null, value, 0L, 0.0, null, null, null);
     }
@@ -71,19 +75,41 @@ public final class AnyValueImpl implements AnyValue {
     public static AnyValue ofArray(final List<AnyValue> value) {
         Objects.requireNonNull(value, MessageHandlerResourceBundle.get("valueMustNotBeNull"));
         List<AnyValue> copy = new ArrayList<>(value.size());
-        int index = 0;
         for (AnyValue entry : value) {
-            copy.add(Objects.requireNonNull(entry,
-                    MessageHandlerResourceBundle.format("arrayValueMustNotContainNullElementAtIndex", index)));
-            index++;
+            // OTel Common allows empty values and requires preserving nulls in arrays when accepted.
+            copy.add(entry != null ? entry : EMPTY_VALUE);
         }
         return new AnyValueImpl(Type.ARRAY, null, false, 0L, 0.0, Collections.unmodifiableList(copy), null, null);
     }
 
     public static AnyValue ofKvList(final List<KeyValue> value) {
-        List<KeyValue> copy = OpenTelemetryAttributeValidator.copyAndValidateKeyValues(
-                Objects.requireNonNull(value, MessageHandlerResourceBundle.get("valueMustNotBeNull")),
-                MessageHandlerResourceBundle.get("kvlistValuesFieldName"));
+        Objects.requireNonNull(value, MessageHandlerResourceBundle.get("valueMustNotBeNull"));
+        List<KeyValue> copy = new ArrayList<>(value.size());
+        java.util.Set<String> keys = new java.util.HashSet<>(value.size());
+        int index = 0;
+        for (KeyValue kv : value) {
+            if (kv == null) {
+                throw new NullPointerException(MessageHandlerResourceBundle.format(
+                        "fieldContainsNullElementAtIndex",
+                        MessageHandlerResourceBundle.get("kvlistValuesFieldName"),
+                        index));
+            }
+            String key = Objects.requireNonNull(kv.getKey(),
+                    MessageHandlerResourceBundle.format(
+                            "fieldKeyMustNotBeNullAtIndex",
+                            MessageHandlerResourceBundle.get("kvlistValuesFieldName"),
+                            index));
+            if (!keys.add(key)) {
+                throw new IllegalArgumentException(MessageHandlerResourceBundle.format(
+                        "fieldContainsDuplicateKey",
+                        MessageHandlerResourceBundle.get("kvlistValuesFieldName"),
+                        key));
+            }
+            // OTel Common map<string, AnyValue>: null value is valid and maps to empty AnyValue.
+            AnyValue normalizedValue = kv.getValue() != null ? kv.getValue() : EMPTY_VALUE;
+            copy.add(new KvListKeyValue(key, normalizedValue));
+            index++;
+        }
         return new AnyValueImpl(Type.KVLIST, null, false, 0L, 0.0, null, Collections.unmodifiableList(copy), null);
     }
 
@@ -149,6 +175,26 @@ public final class AnyValueImpl implements AnyValue {
                     "anyValueTypeMismatch",
                     type,
                     expectedType));
+        }
+    }
+
+    private static final class KvListKeyValue implements KeyValue {
+        private final String key;
+        private final AnyValue value;
+
+        private KvListKeyValue(final String key, final AnyValue value) {
+            this.key = key;
+            this.value = value;
+        }
+
+        @Override
+        public String getKey() {
+            return key;
+        }
+
+        @Override
+        public AnyValue getValue() {
+            return value;
         }
     }
 }

@@ -1,7 +1,9 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Resource;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -125,8 +127,8 @@ class LogRecordImplUnitTest {
     void simpleSettersShouldStoreValues() {
         LogRecordImpl record = new LogRecordImpl();
         AnyValue body = AnyValueImpl.ofString("body");
-        ResourceImpl resource = new ResourceImpl();
-        InstrumentationScopeImpl scope = new InstrumentationScopeImpl();
+        Resource resource = ResourceFactory.create(null, null);
+        InstrumentationScope scope = InstrumentationScopeFactory.create(null, null, null, null);
 
         record.setBody(body);
         record.setResource(resource);
@@ -191,14 +193,18 @@ class LogRecordImplUnitTest {
     }
 
     @Test
-    @DisplayName("setDroppedAttributesCount() should reject negatives and accept non-negative values")
-    void setDroppedAttributesCountShouldValidateInput() {
+    @DisplayName("setAttributes() should drop entries above the default attribute count limit")
+    void setAttributesShouldDropEntriesAboveDefaultLimit() {
         LogRecordImpl record = new LogRecordImpl();
-        assertThrows(IllegalArgumentException.class, () -> record.setDroppedAttributesCount(-1));
+        List<KeyValue> attributes = new ArrayList<>();
+        for (int i = 0; i < 129; i++) {
+            attributes.add(new KeyValueImpl("k" + i, AnyValueImpl.ofString("v" + i)));
+        }
 
-        record.setDroppedAttributesCount(0);
-        assertEquals(0, record.getDroppedAttributesCount());
-        record.setDroppedAttributesCount(9);
-        assertEquals(9, record.getDroppedAttributesCount());
+        record.setAttributes(attributes);
+
+        assertEquals(128, record.getAttributes().size());
+        assertEquals(1, record.getDroppedAttributesCount());
+        assertEquals("k127", record.getAttributes().get(127).getKey());
     }
 }

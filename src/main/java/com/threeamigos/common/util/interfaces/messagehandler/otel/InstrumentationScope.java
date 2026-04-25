@@ -33,7 +33,7 @@ public interface InstrumentationScope {
     List<KeyValue> getAttributes();
 
     /**
-     * @return the number of attributes that were dropped due to collection limits; {@code 0} if none.
+     * @return the number of attributes dropped due to limits; may be {@code 0} if not applicable.
      */
     int getDroppedAttributesCount();
 }

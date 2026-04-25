@@ -4,36 +4,45 @@ import com.threeamigos.common.util.implementations.messagehandler.MessageHandler
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
 /**
- * Mutable implementation of {@link InstrumentationScope}.
- * All fields default to {@code null} / empty list / {@code 0} and may be set via the corresponding setters.
+ * Immutable implementation of {@link InstrumentationScope}.
+ * <p>
+ * All fields are set at construction time.
+ * Scope attributes are internally capped to the default OpenTelemetry attribute count limit and
+ * any overflow is reported through {@link #getDroppedAttributesCount()}.
  *
  * @author Stefano Reksten
  */
-public class InstrumentationScopeImpl implements InstrumentationScope {
+final class InstrumentationScopeImpl implements InstrumentationScope {
 
-    private String name;
-    private String version;
-    private String schemaUrl;
-    private List<KeyValue> attributes = new ArrayList<>();
-    private int droppedAttributesCount;
+    private final String name;
+    private final String version;
+    private final String schemaUrl;
+    private final List<KeyValue> attributes;
+    private final int droppedAttributesCount;
+
+    public InstrumentationScopeImpl(final String name,
+                                    final String version,
+                                    final String schemaUrl,
+                                    final List<KeyValue> attributes) {
+        OpenTelemetryAttributeValidator.ValidationResult validationResult =
+                OpenTelemetryAttributeValidator.copyValidateAndLimitKeyValues(
+                        attributes,
+                        MessageHandlerResourceBundle.get("scopeAttributesFieldName"),
+                        OpenTelemetryAttributeValidator.DEFAULT_ATTRIBUTE_COUNT_LIMIT);
+        this.name = name;
+        this.version = version;
+        this.schemaUrl = schemaUrl;
+        this.attributes = Collections.unmodifiableList(validationResult.getAttributes());
+        this.droppedAttributesCount = validationResult.getDroppedAttributesCount();
+    }
 
     @Override
     public String getName() {
         return name;
-    }
-
-    /**
-     * Sets the name of the instrumentation scope.
-     *
-     * @param name the instrumentation scope name, e.g., the library package name; may be {@code null}.
-     */
-    public void setName(final String name) {
-        this.name = name;
     }
 
     @Override
@@ -41,41 +50,18 @@ public class InstrumentationScopeImpl implements InstrumentationScope {
         return version;
     }
 
-    public void setVersion(final String version) {
-        this.version = version;
-    }
-
     @Override
     public String getSchemaUrl() {
         return schemaUrl;
     }
 
-    public void setSchemaUrl(final String schemaUrl) {
-        this.schemaUrl = schemaUrl;
-    }
-
     @Override
     public List<KeyValue> getAttributes() {
-        return Collections.unmodifiableList(attributes);
-    }
-
-    public void setAttributes(final List<KeyValue> attributes) {
-        this.attributes = OpenTelemetryAttributeValidator.copyAndValidateKeyValues(
-                attributes,
-                MessageHandlerResourceBundle.get("scopeAttributesFieldName"));
+        return attributes;
     }
 
     @Override
     public int getDroppedAttributesCount() {
         return droppedAttributesCount;
-    }
-
-    public void setDroppedAttributesCount(final int droppedAttributesCount) {
-        if (droppedAttributesCount < 0) {
-            throw new IllegalArgumentException(MessageHandlerResourceBundle.format(
-                    "droppedAttributesCountMustNotBeNegative",
-                    droppedAttributesCount));
-        }
-        this.droppedAttributesCount = droppedAttributesCount;
     }
 }

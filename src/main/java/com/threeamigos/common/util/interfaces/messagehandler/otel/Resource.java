@@ -3,15 +3,24 @@ package com.threeamigos.common.util.interfaces.messagehandler.otel;
 import java.util.List;
 
 /**
- * Describes the entity that produced a telemetry signal, following the OpenTelemetry
- * <a href="https://opentelemetry.io/docs/specs/otel/resource/sdk/">Resource specification</a>.
+ * Describes the source of telemetry, following the OpenTelemetry
+ * <a href="https://opentelemetry.io/docs/specs/otel/resource/data-model/">Resource Data Model</a>.
  * <p>
- * Common attributes include {@code service.name}, {@code service.version},
- * {@code host.name}, and {@code process.pid}.
+ * A resource is represented by:
+ * <ul>
+ *     <li>zero or more typed {@link Entity} values</li>
+ *     <li>zero or more loose resource attributes</li>
+ * </ul>
+ * The OTLP schema URL associated with the resource can be exposed through {@link #getSchemaUrl()}.
  *
  * @author Stefano Reksten
  */
 public interface Resource {
+
+    /**
+     * @return typed entities belonging to this resource; never {@code null}, may be empty.
+     */
+    List<Entity> getEntities();
 
     /**
      * @return the Schema URL that identifies the semantic convention schema used by this resource,
@@ -25,7 +34,10 @@ public interface Resource {
     List<KeyValue> getAttributes();
 
     /**
-     * @return the number of attributes that were dropped due to collection limits; {@code 0} if none.
+     * Merges this resource with another one according to the OpenTelemetry Resource merge model.
+     *
+     * @param other incoming resource
+     * @return merged resource
      */
-    int getDroppedAttributesCount();
+    Resource merge(Resource other);
 }

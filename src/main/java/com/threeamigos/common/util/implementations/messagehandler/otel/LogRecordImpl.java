@@ -19,6 +19,16 @@ import java.util.regex.Pattern;
  * {@code timestamp} defaults to {@link Instant#now()} at construction time, reflecting the moment
  * the log record is created. All other fields default to {@code null} / {@code 0} / an empty list
  * and may be set via the corresponding setters.
+ * <p>
+ * Hint: if you're looking where to look for:
+ * <ul>
+ *     <li>Fully qualified method name: <code>code.function.name</code></li>
+ *     <li>Class name: <code>code.namespace</code> (deprecated attribute)</li>
+ *     <li>Logger class name (e.g., Java logger name: <code>InstrumentationScope.name</code>)</li>
+ *     <li>Exception message: <code>exception.message</code> in attributes (e.g., "Division by zero")</li>
+ *     <li>Exception type: <code>exception.type</code> in attributes (e.g., java.net.ConnectException)</li>
+ *     <li>Exception stacktrace: <code>exception.stacktrace</code> in attributes</li>
+ * </ul>
  *
  * @author Stefano Reksten
  */
@@ -155,23 +165,17 @@ public class LogRecordImpl implements LogRecord {
     }
 
     public void setAttributes(final List<KeyValue> attributes) {
-        this.attributes = OpenTelemetryAttributeValidator.copyAndValidateKeyValues(
+        OpenTelemetryAttributeValidator.ValidationResult validationResult =
+                OpenTelemetryAttributeValidator.copyValidateAndLimitKeyValues(
                 attributes,
-                MessageHandlerResourceBundle.get("logRecordAttributesFieldName"));
+                MessageHandlerResourceBundle.get("logRecordAttributesFieldName"),
+                OpenTelemetryAttributeValidator.DEFAULT_ATTRIBUTE_COUNT_LIMIT);
+        this.attributes = validationResult.getAttributes();
+        this.droppedAttributesCount = validationResult.getDroppedAttributesCount();
     }
 
-    @Override
     public int getDroppedAttributesCount() {
         return droppedAttributesCount;
-    }
-
-    public void setDroppedAttributesCount(final int droppedAttributesCount) {
-        if (droppedAttributesCount < 0) {
-            throw new IllegalArgumentException(MessageHandlerResourceBundle.format(
-                    "droppedAttributesCountMustNotBeNegative",
-                    droppedAttributesCount));
-        }
-        this.droppedAttributesCount = droppedAttributesCount;
     }
 
     @Override

@@ -75,11 +75,6 @@ public interface LogRecord {
     List<KeyValue> getAttributes();
 
     /**
-     * @return the number of attributes that were dropped due to collection limits; {@code 0} if none.
-     */
-    int getDroppedAttributesCount();
-
-    /**
      * @return the event name that identifies the class / type of event or {@code null} if not set.
      */
     String getEventName();

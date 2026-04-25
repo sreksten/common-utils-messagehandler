@@ -73,7 +73,10 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
 
     private static String renderThrowableMessage(final String message, final Throwable throwable) {
         String detail = ThrowableMessageFormatter.detail(throwable);
-        if (message == null || message.isEmpty() || message.equals(throwable.getMessage()) || message.equals(detail)) {
+        if (message == null ||
+                message.isEmpty() ||
+                message.equals(throwable.getMessage()) ||
+                message.equals(detail)) {
             return detail;
         }
         return message + ": " + detail;

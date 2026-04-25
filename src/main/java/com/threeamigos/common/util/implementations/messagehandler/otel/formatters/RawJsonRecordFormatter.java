@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel.formatters;
 
 import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
+import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordImpl;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
@@ -69,8 +70,9 @@ public class RawJsonRecordFormatter implements LogRecordFormatter {
         }
         first = appendBody(sb, first, logRecord.getBody());
         first = appendKeyValueArray(sb, first, logRecord.getAttributes());
-        if (logRecord.getDroppedAttributesCount() != 0) {
-            first = appendInt(sb, first, F_DROPPED_ATTRIBUTES_COUNT, logRecord.getDroppedAttributesCount());
+        int droppedAttributesCount = droppedAttributesCount(logRecord);
+        if (droppedAttributesCount != 0) {
+            first = appendInt(sb, first, F_DROPPED_ATTRIBUTES_COUNT, droppedAttributesCount);
         }
         appendString(sb, first, F_EVENT_NAME, logRecord.getEventName());
         sb.append('}');
@@ -170,6 +172,13 @@ public class RawJsonRecordFormatter implements LogRecordFormatter {
         sb.append('"').append(F_BODY).append("\":");
         appendAnyValue(sb, body);
         return false;
+    }
+
+    private static int droppedAttributesCount(final LogRecord logRecord) {
+        if (logRecord instanceof LogRecordImpl) {
+            return ((LogRecordImpl) logRecord).getDroppedAttributesCount();
+        }
+        return 0;
     }
 
     private static boolean appendKeyValueArray(final StringBuilder sb, final boolean first, final List<KeyValue> attrs) {

@@ -367,6 +367,32 @@ class InMemoryMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("Should store throwable detail when message matches exception message")
+    void shouldStoreThrowableDetailWhenMessageMatchesExceptionMessage() {
+        InMemoryMessageHandler sut = new InMemoryMessageHandler();
+        RuntimeException exception = new RuntimeException("boom");
+
+        sut.exception("boom", exception);
+
+        assertEquals(1, sut.getAllExceptionMessages().size());
+        assertEquals("boom", sut.getAllExceptionMessages().get(0));
+        assertEquals("boom", sut.getLastMessage());
+    }
+
+    @Test
+    @DisplayName("Should store throwable detail when message matches throwable detail")
+    void shouldStoreThrowableDetailWhenMessageMatchesThrowableDetail() {
+        InMemoryMessageHandler sut = new InMemoryMessageHandler();
+        Exception exception = new Exception((String) null);
+
+        sut.exception(exception.toString(), exception);
+
+        assertEquals(1, sut.getAllExceptionMessages().size());
+        assertEquals(exception.toString(), sut.getAllExceptionMessages().get(0));
+        assertEquals(exception.toString(), sut.getLastMessage());
+    }
+
+    @Test
     @DisplayName("Should store throwable detail when message is empty")
     void shouldStoreThrowableDetailWhenMessageIsEmpty() {
         InMemoryMessageHandler sut = new InMemoryMessageHandler();

@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel.formatters;
 
-import com.threeamigos.common.util.implementations.messagehandler.ClassNameReducer;
+import com.threeamigos.common.util.implementations.messagehandler.utils.ClassNameReducer;
 import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
@@ -29,7 +29,7 @@ import java.util.Objects;
  * immediately after the severity token.
  * <p>
  * If {@link #isReduceScopeClassName()} is enabled, the scope name is reduced with
- * {@link com.threeamigos.common.util.implementations.messagehandler.ClassNameReducer#reduce(String)}
+ * {@link ClassNameReducer#reduce(String)}
  * before rendering. This is useful when the scope name is a fully qualified Java class name.
  *
  * @author Stefano Reksten

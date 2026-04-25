@@ -24,7 +24,7 @@ class InstrumentationScopeImplUnitTest {
     @Test
     @DisplayName("defaults should be null name/version/schemaUrl, empty attributes and zero dropped count")
     void defaultsShouldBeExpectedValues() {
-        InstrumentationScopeImpl scope = new InstrumentationScopeImpl();
+        InstrumentationScopeImpl scope = new InstrumentationScopeImpl(null, null, null, null);
         assertNull(scope.getName());
         assertNull(scope.getVersion());
         assertNull(scope.getSchemaUrl());
@@ -33,12 +33,13 @@ class InstrumentationScopeImplUnitTest {
     }
 
     @Test
-    @DisplayName("setters should store scalar fields")
-    void settersShouldStoreScalarFields() {
-        InstrumentationScopeImpl scope = new InstrumentationScopeImpl();
-        scope.setName("com.example.lib");
-        scope.setVersion("1.2.3");
-        scope.setSchemaUrl("https://opentelemetry.io/schemas/1.26.0");
+    @DisplayName("constructor should store scalar fields")
+    void constructorShouldStoreScalarFields() {
+        InstrumentationScopeImpl scope = new InstrumentationScopeImpl(
+                "com.example.lib",
+                "1.2.3",
+                "https://opentelemetry.io/schemas/1.26.0",
+                null);
 
         assertEquals("com.example.lib", scope.getName());
         assertEquals("1.2.3", scope.getVersion());
@@ -46,14 +47,14 @@ class InstrumentationScopeImplUnitTest {
     }
 
     @Test
-    @DisplayName("setAttributes() should copy and expose unmodifiable attributes")
-    void setAttributesShouldCopyAndExposeUnmodifiableAttributes() {
-        InstrumentationScopeImpl scope = new InstrumentationScopeImpl();
+    @DisplayName("constructor should copy and expose unmodifiable attributes")
+    void constructorShouldCopyAndExposeUnmodifiableAttributes() {
         List<KeyValue> attrs = new ArrayList<>(Collections.singletonList(
                 new KeyValueImpl("scope.attr", AnyValueImpl.ofString("x"))
         ));
 
-        scope.setAttributes(attrs);
+        InstrumentationScopeImpl scope = new InstrumentationScopeImpl(
+                null, null, null, attrs);
         assertEquals(1, scope.getAttributes().size());
         assertThrows(UnsupportedOperationException.class,
                 () -> scope.getAttributes().add(new KeyValueImpl("k", AnyValueImpl.ofString("v"))));
@@ -63,28 +64,27 @@ class InstrumentationScopeImplUnitTest {
     }
 
     @Test
-    @DisplayName("setAttributes() should accept null as empty list")
-    void setAttributesShouldAcceptNullAsEmptyList() {
-        InstrumentationScopeImpl scope = new InstrumentationScopeImpl();
-        scope.setAttributes(null);
+    @DisplayName("constructor should accept null attributes as empty list")
+    void constructorShouldAcceptNullAsEmptyList() {
+        InstrumentationScopeImpl scope = new InstrumentationScopeImpl(
+                null, null, null, null);
         assertTrue(scope.getAttributes().isEmpty());
     }
 
     @Test
-    @DisplayName("setAttributes() should reject duplicate keys")
-    void setAttributesShouldRejectDuplicateKeys() {
-        InstrumentationScopeImpl scope = new InstrumentationScopeImpl();
+    @DisplayName("constructor should reject duplicate keys")
+    void constructorShouldRejectDuplicateKeys() {
         List<KeyValue> attrs = Arrays.asList(
                 new KeyValueImpl("k", AnyValueImpl.ofString("v1")),
                 new KeyValueImpl("k", AnyValueImpl.ofString("v2"))
         );
-        assertThrows(IllegalArgumentException.class, () -> scope.setAttributes(attrs));
+        assertThrows(IllegalArgumentException.class, () ->
+                new InstrumentationScopeImpl(null, null, null, attrs));
     }
 
     @Test
-    @DisplayName("setAttributes() should reject invalid key/value entries")
-    void setAttributesShouldRejectInvalidEntries() {
-        InstrumentationScopeImpl scope = new InstrumentationScopeImpl();
+    @DisplayName("constructor should reject invalid key/value entries")
+    void constructorShouldRejectInvalidEntries() {
         KeyValue emptyKey = new KeyValue() {
             @Override
             public String getKey() {
@@ -108,19 +108,25 @@ class InstrumentationScopeImplUnitTest {
             }
         };
 
-        assertThrows(IllegalArgumentException.class, () -> scope.setAttributes(Collections.singletonList(emptyKey)));
-        assertThrows(NullPointerException.class, () -> scope.setAttributes(Collections.singletonList(nullValue)));
+        assertThrows(IllegalArgumentException.class, () ->
+                new InstrumentationScopeImpl(null, null, null, Collections.singletonList(emptyKey)));
+        assertThrows(NullPointerException.class, () ->
+                new InstrumentationScopeImpl(null, null, null, Collections.singletonList(nullValue)));
     }
 
     @Test
-    @DisplayName("setDroppedAttributesCount() should reject negatives and accept non-negative values")
-    void setDroppedAttributesCountShouldValidateInput() {
-        InstrumentationScopeImpl scope = new InstrumentationScopeImpl();
-        assertThrows(IllegalArgumentException.class, () -> scope.setDroppedAttributesCount(-1));
+    @DisplayName("constructor should drop attributes above the default attribute count limit")
+    void constructorShouldDropAttributesAboveDefaultLimit() {
+        List<KeyValue> attributes = new ArrayList<>();
+        for (int i = 0; i < 129; i++) {
+            attributes.add(new KeyValueImpl("k" + i, AnyValueImpl.ofString("v" + i)));
+        }
 
-        scope.setDroppedAttributesCount(0);
-        assertEquals(0, scope.getDroppedAttributesCount());
-        scope.setDroppedAttributesCount(3);
-        assertEquals(3, scope.getDroppedAttributesCount());
+        InstrumentationScopeImpl scope = new InstrumentationScopeImpl(
+                null, null, null, attributes);
+
+        assertEquals(128, scope.getAttributes().size());
+        assertEquals(1, scope.getDroppedAttributesCount());
+        assertEquals("k127", scope.getAttributes().get(127).getKey());
     }
 }

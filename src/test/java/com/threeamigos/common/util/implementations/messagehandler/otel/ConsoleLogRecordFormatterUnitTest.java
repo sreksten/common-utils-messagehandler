@@ -79,8 +79,8 @@ class ConsoleLogRecordFormatterUnitTest {
         record.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
         record.setSeverityText("INFO");
         record.setBody(AnyValueImpl.ofString("hello"));
-        InstrumentationScopeImpl scope = new InstrumentationScopeImpl();
-        scope.setName("com.example.Foo");
+        InstrumentationScope scope = InstrumentationScopeFactory.create(
+                "com.example.Foo", null, null, null);
         record.setInstrumentationScope(scope);
 
         String result = formatter.format(record);
@@ -96,8 +96,8 @@ class ConsoleLogRecordFormatterUnitTest {
         record.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
         record.setSeverityText("INFO");
         record.setBody(AnyValueImpl.ofString("hello"));
-        InstrumentationScopeImpl scope = new InstrumentationScopeImpl();
-        scope.setName("com.example.Foo");
+        InstrumentationScope scope = InstrumentationScopeFactory.create(
+                "com.example.Foo", null, null, null);
         record.setInstrumentationScope(scope);
 
         String result = reducedFormatter.format(record);
@@ -125,7 +125,7 @@ class ConsoleLogRecordFormatterUnitTest {
         withNullName.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
         withNullName.setSeverityText("INFO");
         withNullName.setBody(AnyValueImpl.ofString("hello"));
-        withNullName.setInstrumentationScope(new InstrumentationScopeImpl());
+        withNullName.setInstrumentationScope(InstrumentationScopeFactory.create(null, null, null, null));
 
         String nullNameResult = formatter.format(withNullName);
         assertEquals("2026-04-21T08:30:00Z [INFO  ] hello", nullNameResult);
@@ -134,8 +134,8 @@ class ConsoleLogRecordFormatterUnitTest {
         withBlankName.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
         withBlankName.setSeverityText("INFO");
         withBlankName.setBody(AnyValueImpl.ofString("hello"));
-        InstrumentationScopeImpl blankScope = new InstrumentationScopeImpl();
-        blankScope.setName("   ");
+        InstrumentationScope blankScope = InstrumentationScopeFactory.create(
+                "   ", null, null, null);
         withBlankName.setInstrumentationScope(blankScope);
 
         String blankNameResult = formatter.format(withBlankName);
@@ -279,8 +279,6 @@ class ConsoleLogRecordFormatterUnitTest {
             @Override
             public List<KeyValue> getAttributes() { return Collections.emptyList(); }
             @Override
-            public int getDroppedAttributesCount() { return 0; }
-            @Override
             public String getEventName() { return null; }
         };
 
@@ -313,8 +311,6 @@ class ConsoleLogRecordFormatterUnitTest {
             public InstrumentationScope getInstrumentationScope() { return null; }
             @Override
             public List<KeyValue> getAttributes() { return Collections.emptyList(); }
-            @Override
-            public int getDroppedAttributesCount() { return 0; }
             @Override
             public String getEventName() { return null; }
         };

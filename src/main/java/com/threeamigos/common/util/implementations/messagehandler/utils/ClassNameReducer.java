@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.implementations.messagehandler;
+package com.threeamigos.common.util.implementations.messagehandler.utils;
 
 /**
  *

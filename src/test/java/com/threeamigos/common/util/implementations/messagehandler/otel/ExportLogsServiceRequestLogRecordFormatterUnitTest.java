@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -75,8 +76,8 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
     void formatShouldSerializeEmptyResourceAndScopeObjectsWhenPresent() {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(FIXED_TS);
-        record.setResource(new ResourceImpl());
-        record.setInstrumentationScope(new InstrumentationScopeImpl());
+        record.setResource(ResourceFactory.create(null, null));
+        record.setInstrumentationScope(InstrumentationScopeFactory.create(null, null, null, null));
 
         String result = formatter.format(record);
         assertTrue(result.contains("\"resource\":{}"));
@@ -84,25 +85,10 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
     }
 
     @Test
-    @DisplayName("format() should serialize resource droppedAttributesCount without leading comma when attributes are absent")
-    void formatShouldSerializeResourceDroppedCountWithoutLeadingComma() {
-        ResourceImpl resource = new ResourceImpl();
-        resource.setDroppedAttributesCount(5);
-
-        LogRecordImpl record = new LogRecordImpl();
-        record.setTimestamp(FIXED_TS);
-        record.setResource(resource);
-
-        String result = formatter.format(record);
-        assertTrue(result.contains("\"resource\":{\"droppedAttributesCount\":5}"));
-        assertFalse(result.contains("\"resource\":{,\"droppedAttributesCount\""));
-    }
-
-    @Test
     @DisplayName("format() should serialize scope version without leading comma when name is absent")
     void formatShouldSerializeScopeVersionWithoutLeadingComma() {
-        InstrumentationScopeImpl scope = new InstrumentationScopeImpl();
-        scope.setVersion("2.1.0");
+        InstrumentationScope scope = InstrumentationScopeFactory.create(
+                null, "2.1.0", null, null);
 
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(FIXED_TS);
@@ -116,8 +102,9 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
     @Test
     @DisplayName("format() should serialize scope attributes without leading comma when name/version are absent")
     void formatShouldSerializeScopeAttributesWithoutLeadingComma() {
-        InstrumentationScopeImpl scope = new InstrumentationScopeImpl();
-        scope.setAttributes(Collections.singletonList(new KeyValueImpl("k", AnyValueImpl.ofString("v"))));
+        InstrumentationScope scope = InstrumentationScopeFactory.create(
+                null, null, null,
+                Collections.singletonList(new KeyValueImpl("k", AnyValueImpl.ofString("v"))));
 
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(FIXED_TS);
@@ -129,34 +116,110 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
     }
 
     @Test
-    @DisplayName("format() should serialize scope droppedAttributesCount without leading comma when scope has no other fields")
+    @DisplayName("format() should serialize scope droppedAttributesCount when scope attributes exceed the internal limit")
     void formatShouldSerializeScopeDroppedCountWithoutLeadingComma() {
-        InstrumentationScopeImpl scope = new InstrumentationScopeImpl();
-        scope.setDroppedAttributesCount(4);
+        InstrumentationScope scope = InstrumentationScopeFactory.create(
+                null, null, null, createAttributes("scope", 129));
 
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(FIXED_TS);
         record.setInstrumentationScope(scope);
 
         String result = formatter.format(record);
-        assertTrue(result.contains("\"scope\":{\"droppedAttributesCount\":4}"));
+        assertTrue(result.contains("\"scope\":{\"attributes\":["));
+        assertTrue(result.contains("\"droppedAttributesCount\":1}"));
+    }
+
+    @Test
+    @DisplayName("format() should omit scope droppedAttributesCount for non-implementation InstrumentationScope instances")
+    void formatShouldOmitScopeDroppedCountForCustomScope() {
+        InstrumentationScope scope = new InstrumentationScope() {
+            @Override
+            public String getName() {
+                return "custom.scope";
+            }
+
+            @Override
+            public String getVersion() {
+                return null;
+            }
+
+            @Override
+            public String getSchemaUrl() {
+                return null;
+            }
+
+            @Override
+            public List<KeyValue> getAttributes() {
+                return Collections.emptyList();
+            }
+
+            @Override
+            public int getDroppedAttributesCount() {
+                return 0;
+            }
+        };
+
+        LogRecordImpl record = new LogRecordImpl();
+        record.setTimestamp(FIXED_TS);
+        record.setInstrumentationScope(scope);
+
+        String result = formatter.format(record);
+        assertTrue(result.contains("\"scope\":{\"name\":\"custom.scope\"}"));
+        assertFalse(result.contains("\"droppedAttributesCount\""));
+    }
+
+    @Test
+    @DisplayName("format() should serialize scope droppedAttributesCount without leading comma for custom scope with no other fields")
+    void formatShouldSerializeCustomScopeDroppedCountWithoutLeadingComma() {
+        InstrumentationScope scope = new InstrumentationScope() {
+            @Override
+            public String getName() {
+                return null;
+            }
+
+            @Override
+            public String getVersion() {
+                return null;
+            }
+
+            @Override
+            public String getSchemaUrl() {
+                return null;
+            }
+
+            @Override
+            public List<KeyValue> getAttributes() {
+                return Collections.emptyList();
+            }
+
+            @Override
+            public int getDroppedAttributesCount() {
+                return 2;
+            }
+        };
+
+        LogRecordImpl record = new LogRecordImpl();
+        record.setTimestamp(FIXED_TS);
+        record.setInstrumentationScope(scope);
+
+        String result = formatter.format(record);
+        assertTrue(result.contains("\"scope\":{\"droppedAttributesCount\":2}"));
         assertFalse(result.contains("\"scope\":{,\"droppedAttributesCount\""));
     }
 
     @Test
     @DisplayName("format() should serialize resource/scope blocks with schema URLs at parent level")
     void formatShouldSerializeResourceAndScopeWithSchemaUrls() {
-        ResourceImpl resource = new ResourceImpl();
-        resource.setAttributes(Collections.singletonList(new KeyValueImpl("service.name", AnyValueImpl.ofString("svc"))));
-        resource.setDroppedAttributesCount(1);
-        resource.setSchemaUrl("https://opentelemetry.io/schemas/1.26.0");
+        Resource resource = ResourceFactory.create(
+                "https://opentelemetry.io/schemas/1.26.0",
+                Collections.singletonList(new KeyValueImpl("service.name", AnyValueImpl.ofString("svc"))));
 
-        InstrumentationScopeImpl scope = new InstrumentationScopeImpl();
-        scope.setName("com.example.lib");
-        scope.setVersion("1.0.0");
-        scope.setAttributes(Collections.singletonList(new KeyValueImpl("scope.attr", AnyValueImpl.ofString("x"))));
-        scope.setDroppedAttributesCount(2);
-        scope.setSchemaUrl("https://opentelemetry.io/schemas/1.27.0");
+        InstrumentationScope scope = InstrumentationScopeFactory.create(
+                "com.example.lib",
+                "1.0.0",
+                "https://opentelemetry.io/schemas/1.27.0",
+                Collections.singletonList(new KeyValueImpl("scope.attr", AnyValueImpl.ofString("x"))));
 
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(FIXED_TS);
@@ -165,10 +228,8 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
 
         String result = formatter.format(record);
         assertTrue(result.contains("\"resource\":{\"attributes\":[{\"key\":\"service.name\""));
-        assertTrue(result.contains("\"droppedAttributesCount\":1}"));
         assertTrue(result.contains("},\"schemaUrl\":\"https://opentelemetry.io/schemas/1.26.0\",\"scopeLogs\""));
         assertTrue(result.contains("\"scope\":{\"name\":\"com.example.lib\",\"version\":\"1.0.0\",\"attributes\":[{\"key\":\"scope.attr\""));
-        assertTrue(result.contains("\"droppedAttributesCount\":2}"));
         assertTrue(result.contains("},\"schemaUrl\":\"https://opentelemetry.io/schemas/1.27.0\",\"logRecords\""));
         assertFalse(result.contains("\"resource\":{\"schemaUrl\""));
         assertFalse(result.contains("\"scope\":{\"schemaUrl\""));
@@ -185,11 +246,7 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
         record.setTraceFlags(1);
         record.setSeverityText("NOTICE");
         record.setSeverityNumber(SeverityNumber.INFO2);
-        record.setAttributes(Arrays.asList(
-                new KeyValueImpl("a", AnyValueImpl.ofString("x")),
-                new KeyValueImpl("b", AnyValueImpl.ofLong(7))
-        ));
-        record.setDroppedAttributesCount(3);
+        record.setAttributes(createAttributes("attr", 129));
         record.setEventName("evt");
 
         String result = rawFormatter.format(record);
@@ -200,9 +257,8 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
         assertTrue(result.contains("\"flags\":1"));
         assertTrue(result.contains("\"severityText\":\"NOTICE\""));
         assertTrue(result.contains("\"severityNumber\":10"));
-        assertTrue(result.contains("\"attributes\":[{\"key\":\"a\""));
-        assertTrue(result.contains("{\"key\":\"b\",\"value\":{\"intValue\":\"7\"}}"));
-        assertTrue(result.contains("\"droppedAttributesCount\":3"));
+        assertTrue(result.contains("\"attributes\":[{\"key\":\"attr0\""));
+        assertTrue(result.contains("\"droppedAttributesCount\":1"));
         assertTrue(result.contains("\"eventName\":\"evt\""));
     }
 
@@ -387,7 +443,6 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
         private Resource resource;
         private InstrumentationScope instrumentationScope;
         private List<KeyValue> attributes = Collections.emptyList();
-        private int droppedAttributesCount;
         private String eventName;
 
         @Override
@@ -446,13 +501,16 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
         }
 
         @Override
-        public int getDroppedAttributesCount() {
-            return droppedAttributesCount;
-        }
-
-        @Override
         public String getEventName() {
             return eventName;
         }
+    }
+
+    private static List<KeyValue> createAttributes(final String prefix, final int count) {
+        List<KeyValue> attributes = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            attributes.add(new KeyValueImpl(prefix + i, AnyValueImpl.ofString("v" + i)));
+        }
+        return attributes;
     }
 }

@@ -58,6 +58,17 @@ class AnyValueImplUnitTest {
     }
 
     @Test
+    @DisplayName("ofNullableString() should map null to EMPTY and non-null to STRING")
+    void ofNullableStringShouldMapNullAndNonNullValues() {
+        AnyValue nullValue = AnyValueImpl.ofNullableString(null);
+        AnyValue textValue = AnyValueImpl.ofNullableString("abc");
+
+        assertSame(AnyValueImpl.empty(), nullValue);
+        assertEquals(AnyValue.Type.STRING, textValue.getType());
+        assertEquals("abc", textValue.asString());
+    }
+
+    @Test
     @DisplayName("ofBoolean() should store and return boolean values")
     void ofBooleanShouldStoreAndReturnBooleanValues() {
         AnyValue value = AnyValueImpl.ofBoolean(true);
@@ -98,10 +109,14 @@ class AnyValueImplUnitTest {
     }
 
     @Test
-    @DisplayName("ofArray() should reject null list and null elements")
-    void ofArrayShouldRejectNullListAndElements() {
+    @DisplayName("ofArray() should reject null list and preserve null elements as EMPTY")
+    void ofArrayShouldRejectNullListAndPreserveNullElementsAsEmpty() {
         assertThrows(NullPointerException.class, () -> AnyValueImpl.ofArray(null));
-        assertThrows(NullPointerException.class, () -> AnyValueImpl.ofArray(Arrays.asList(AnyValueImpl.ofString("x"), null)));
+        AnyValue value = AnyValueImpl.ofArray(Arrays.asList(AnyValueImpl.ofString("x"), null));
+        assertEquals(AnyValue.Type.ARRAY, value.getType());
+        assertEquals(2, value.asArray().size());
+        assertEquals("x", value.asArray().get(0).asString());
+        assertEquals(AnyValue.Type.EMPTY, value.asArray().get(1).getType());
     }
 
     @Test
@@ -130,6 +145,41 @@ class AnyValueImplUnitTest {
                 new KeyValueImpl("dup", AnyValueImpl.ofString("v1")),
                 new KeyValueImpl("dup", AnyValueImpl.ofString("v2"))
         )));
+    }
+
+    @Test
+    @DisplayName("ofKvList() should preserve null values as EMPTY and allow empty keys")
+    void ofKvListShouldPreserveNullValuesAndAllowEmptyKeys() {
+        KeyValue withNullValue = new KeyValue() {
+            @Override
+            public String getKey() {
+                return "nullable";
+            }
+
+            @Override
+            public AnyValue getValue() {
+                return null;
+            }
+        };
+        KeyValue withEmptyKey = new KeyValue() {
+            @Override
+            public String getKey() {
+                return "";
+            }
+
+            @Override
+            public AnyValue getValue() {
+                return AnyValueImpl.ofString("v");
+            }
+        };
+
+        AnyValue value = AnyValueImpl.ofKvList(Arrays.asList(withNullValue, withEmptyKey));
+        assertEquals(AnyValue.Type.KVLIST, value.getType());
+        assertEquals(2, value.asKvList().size());
+        assertEquals("nullable", value.asKvList().get(0).getKey());
+        assertEquals(AnyValue.Type.EMPTY, value.asKvList().get(0).getValue().getType());
+        assertEquals("", value.asKvList().get(1).getKey());
+        assertEquals("v", value.asKvList().get(1).getValue().asString());
     }
 
     @Test

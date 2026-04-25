@@ -56,17 +56,9 @@ public class ExportLogsServiceRequestLogRecordFormatter implements LogRecordForm
 
     private static void appendResourceBlock(final StringBuilder sb, final Resource resource) {
         sb.append('"').append(F_RESOURCE).append("\":{");
-        boolean resourceFirst = true;
         if (!resource.getAttributes().isEmpty()) {
             sb.append('"').append(F_ATTRIBUTES).append("\":");
             RawJsonRecordFormatter.appendKeyValueArrayInline(sb, resource.getAttributes());
-            resourceFirst = false;
-        }
-        if (resource.getDroppedAttributesCount() != 0) {
-            if (!resourceFirst) {
-                sb.append(',');
-            }
-            sb.append('"').append(F_DROPPED_ATTRIBUTES_COUNT).append("\":").append(resource.getDroppedAttributesCount());
         }
         sb.append('}');
         if (resource.getSchemaUrl() != null) {
@@ -96,11 +88,12 @@ public class ExportLogsServiceRequestLogRecordFormatter implements LogRecordForm
             RawJsonRecordFormatter.appendKeyValueArrayInline(sb, scope.getAttributes());
             scopeFirst = false;
         }
-        if (scope.getDroppedAttributesCount() != 0) {
+        int droppedAttributesCount = scope.getDroppedAttributesCount();
+        if (droppedAttributesCount != 0) {
             if (!scopeFirst) {
                 sb.append(',');
             }
-            sb.append('"').append(F_DROPPED_ATTRIBUTES_COUNT).append("\":").append(scope.getDroppedAttributesCount());
+            sb.append('"').append(F_DROPPED_ATTRIBUTES_COUNT).append("\":").append(droppedAttributesCount);
         }
         sb.append('}');
         if (scope.getSchemaUrl() != null) {

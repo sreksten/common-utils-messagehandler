@@ -1,52 +1,92 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Entity;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Resource;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@DisplayName("ResourceImpl unit tests")
+@DisplayName("ResourceFactory unit tests")
 @Tag("unit")
 @Tag("messageHandler")
-class ResourceImplUnitTest {
+class ResourceFactoryUnitTest {
 
     @Test
-    @DisplayName("defaults should be null schemaUrl, empty attributes and zero dropped count")
-    void defaultsShouldBeExpectedValues() {
-        ResourceImpl resource = new ResourceImpl();
+    @DisplayName("create() should support null schemaUrl and null attributes")
+    void createShouldSupportNullSchemaUrlAndNullAttributes() {
+        Resource resource = ResourceFactory.create(null, null);
         assertNull(resource.getSchemaUrl());
+        assertTrue(resource.getEntities().isEmpty());
         assertTrue(resource.getAttributes().isEmpty());
-        assertEquals(0, resource.getDroppedAttributesCount());
     }
 
     @Test
-    @DisplayName("setSchemaUrl() should store value")
-    void setSchemaUrlShouldStoreValue() {
-        ResourceImpl resource = new ResourceImpl();
-        resource.setSchemaUrl("https://opentelemetry.io/schemas/1.26.0");
+    @DisplayName("create() should store schemaUrl value")
+    void createShouldStoreSchemaUrlValue() {
+        Resource resource = ResourceFactory.create("https://opentelemetry.io/schemas/1.26.0", null);
         assertEquals("https://opentelemetry.io/schemas/1.26.0", resource.getSchemaUrl());
     }
 
     @Test
-    @DisplayName("setAttributes() should copy and expose unmodifiable attributes")
-    void setAttributesShouldCopyAndExposeUnmodifiableAttributes() {
-        ResourceImpl resource = new ResourceImpl();
+    @DisplayName("create(schemaUrl, entities, attributes) should expose unmodifiable entities and derive schemaUrl from entities")
+    void createWithEntitiesShouldExposeUnmodifiableEntitiesAndDeriveSchemaUrl() {
+        List<Entity> entities = new ArrayList<>(Collections.singletonList(
+                EntityFactory.create(
+                        "service",
+                        "https://opentelemetry.io/schemas/1.27.0",
+                        Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("i-1"))),
+                        Collections.singletonList(new KeyValueImpl("service.name", AnyValueImpl.ofString("billing")))
+                )));
+        List<KeyValue> attributes = new ArrayList<>(Collections.singletonList(
+                new KeyValueImpl("deployment.environment", AnyValueImpl.ofString("dev"))));
+
+        Resource resource = ResourceFactory.create("https://ignored.example/schema", entities, attributes);
+
+        assertEquals("https://opentelemetry.io/schemas/1.27.0", resource.getSchemaUrl());
+        assertEquals(1, resource.getEntities().size());
+        assertThrows(UnsupportedOperationException.class, () ->
+                resource.getEntities().add(EntityFactory.create(
+                        "host",
+                        Collections.singletonList(new KeyValueImpl("host.id", AnyValueImpl.ofString("h-1"))),
+                        null)));
+
+        entities.add(EntityFactory.create(
+                "host",
+                "https://opentelemetry.io/schemas/1.27.0",
+                Collections.singletonList(new KeyValueImpl("host.id", AnyValueImpl.ofString("h-1"))),
+                null));
+        attributes.add(new KeyValueImpl("host.name", AnyValueImpl.ofString("host-a")));
+        assertEquals(1, resource.getEntities().size());
+        assertEquals(1, resource.getAttributes().size());
+    }
+
+    @Test
+    @DisplayName("create() should copy and expose unmodifiable attributes")
+    void createShouldCopyAndExposeUnmodifiableAttributes() {
         List<KeyValue> attrs = new ArrayList<>(Collections.singletonList(
                 new KeyValueImpl("service.name", AnyValueImpl.ofString("svc"))
         ));
 
-        resource.setAttributes(attrs);
+        Resource resource = ResourceFactory.create(null, attrs);
         assertEquals(1, resource.getAttributes().size());
         assertThrows(UnsupportedOperationException.class,
                 () -> resource.getAttributes().add(new KeyValueImpl("x", AnyValueImpl.ofString("y"))));
@@ -56,28 +96,170 @@ class ResourceImplUnitTest {
     }
 
     @Test
-    @DisplayName("setAttributes() should accept null as empty list")
-    void setAttributesShouldAcceptNullAsEmptyList() {
-        ResourceImpl resource = new ResourceImpl();
-        resource.setAttributes(null);
+    @DisplayName("create() should accept null attributes as empty list")
+    void createShouldAcceptNullAttributesAsEmptyList() {
+        Resource resource = ResourceFactory.create(null, null);
         assertTrue(resource.getAttributes().isEmpty());
     }
 
     @Test
-    @DisplayName("setAttributes() should reject duplicate keys")
-    void setAttributesShouldRejectDuplicateKeys() {
-        ResourceImpl resource = new ResourceImpl();
+    @DisplayName("create() should reject null entity elements")
+    void createShouldRejectNullEntityElements() {
+        List<Entity> entities = new ArrayList<>();
+        entities.add(EntityFactory.create(
+                "service",
+                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-1"))),
+                null));
+        entities.add(null);
+
+        assertThrows(NullPointerException.class, () -> ResourceFactory.create(null, entities, null));
+    }
+
+    @Test
+    @DisplayName("create() should collapse duplicate entity types using Entity.merge semantics")
+    void createShouldCollapseDuplicateEntityTypes() {
+        List<Entity> entities = Arrays.asList(
+                EntityFactory.create(
+                        "service",
+                        "https://opentelemetry.io/schemas/1.27.0",
+                        Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-1"))),
+                        Collections.singletonList(new KeyValueImpl("deployment.environment", AnyValueImpl.ofString("dev")))),
+                EntityFactory.create(
+                        "service",
+                        "https://opentelemetry.io/schemas/1.27.0",
+                        Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-1"))),
+                        Collections.singletonList(new KeyValueImpl("host.name", AnyValueImpl.ofString("host-a")))),
+                EntityFactory.create(
+                        "service",
+                        "https://opentelemetry.io/schemas/1.27.0",
+                        Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-2"))),
+                        Collections.singletonList(new KeyValueImpl("ignored.key", AnyValueImpl.ofString("ignored"))))
+        );
+
+        Resource resource = ResourceFactory.create(null, entities, null);
+
+        assertEquals(1, resource.getEntities().size());
+        Map<String, String> description = keyValuesToStringMap(resource.getEntities().get(0).getDescription());
+        assertEquals(2, description.size());
+        assertEquals("dev", description.get("deployment.environment"));
+        assertEquals("host-a", description.get("host.name"));
+        assertFalse(description.containsKey("ignored.key"));
+    }
+
+    @Test
+    @DisplayName("create() should drop lower-priority conflicting entities and loose attributes covered by entity keys")
+    void createShouldDropConflictingEntitiesAndCoveredLooseAttributes() {
+        List<Entity> entities = Arrays.asList(
+                EntityFactory.create(
+                        "host",
+                        "https://opentelemetry.io/schemas/1.27.0",
+                        Collections.singletonList(new KeyValueImpl("host.id", AnyValueImpl.ofString("h-1"))),
+                        Collections.singletonList(new KeyValueImpl("deployment.environment", AnyValueImpl.ofString("prod")))),
+                EntityFactory.create(
+                        "service",
+                        "https://opentelemetry.io/schemas/1.27.0",
+                        Collections.singletonList(new KeyValueImpl("host.id", AnyValueImpl.ofString("h-1"))),
+                        Collections.singletonList(new KeyValueImpl("service.name", AnyValueImpl.ofString("billing")))),
+                EntityFactory.create(
+                        "process",
+                        "https://opentelemetry.io/schemas/1.27.0",
+                        Collections.singletonList(new KeyValueImpl("process.pid", AnyValueImpl.ofLong(123L))),
+                        Collections.singletonList(new KeyValueImpl("deployment.environment", AnyValueImpl.ofString("dev"))))
+        );
+
+        List<KeyValue> looseAttributes = Arrays.asList(
+                new KeyValueImpl("deployment.environment", AnyValueImpl.ofString("staging")),
+                new KeyValueImpl("host.id", AnyValueImpl.ofString("from-loose-attr")),
+                new KeyValueImpl("service.namespace", AnyValueImpl.ofString("payments"))
+        );
+
+        Resource resource = ResourceFactory.create("https://ignored.example/schema", entities, looseAttributes);
+
+        assertEquals(1, resource.getEntities().size());
+        assertEquals("host", resource.getEntities().get(0).getType());
+        assertEquals(1, resource.getAttributes().size());
+        assertEquals("service.namespace", resource.getAttributes().get(0).getKey());
+    }
+
+    @Test
+    @DisplayName("create() should set schemaUrl to null when entity schema URLs are empty or inconsistent")
+    void createShouldSetSchemaUrlNullWhenEntitySchemaUrlsAreEmptyOrInconsistent() {
+        Resource emptySchema = ResourceFactory.create(
+                "https://fallback.example/schema",
+                Collections.singletonList(EntityFactory.create(
+                        "service",
+                        "",
+                        Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("i-1"))),
+                        null)),
+                null);
+        assertNull(emptySchema.getSchemaUrl());
+
+        Resource mixedSchema = ResourceFactory.create(
+                "https://fallback.example/schema",
+                Arrays.asList(
+                        EntityFactory.create(
+                                "service",
+                                "https://opentelemetry.io/schemas/1.27.0",
+                                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("i-1"))),
+                                null),
+                        EntityFactory.create(
+                                "host",
+                                "https://opentelemetry.io/schemas/1.28.0",
+                                Collections.singletonList(new KeyValueImpl("host.id", AnyValueImpl.ofString("h-1"))),
+                                null)),
+                null);
+        assertNull(mixedSchema.getSchemaUrl());
+    }
+
+    @Test
+    @DisplayName("create() should set schemaUrl to null when an entity schemaUrl is null")
+    void createShouldSetSchemaUrlNullWhenEntitySchemaUrlIsNull() {
+        Resource resource = ResourceFactory.create(
+                "https://fallback.example/schema",
+                Collections.singletonList(EntityFactory.create(
+                        "service",
+                        null,
+                        Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("i-1"))),
+                        null)),
+                null);
+
+        assertNull(resource.getSchemaUrl());
+    }
+
+    @Test
+    @DisplayName("create() should keep schemaUrl when all entities share the same non-empty schema")
+    void createShouldKeepSchemaUrlWhenAllEntitiesShareSameNonEmptySchema() {
+        Resource resource = ResourceFactory.create(
+                null,
+                Arrays.asList(
+                        EntityFactory.create(
+                                "service",
+                                "https://opentelemetry.io/schemas/1.27.0",
+                                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("i-1"))),
+                                null),
+                        EntityFactory.create(
+                                "host",
+                                "https://opentelemetry.io/schemas/1.27.0",
+                                Collections.singletonList(new KeyValueImpl("host.id", AnyValueImpl.ofString("h-1"))),
+                                null)),
+                null);
+
+        assertEquals("https://opentelemetry.io/schemas/1.27.0", resource.getSchemaUrl());
+    }
+
+    @Test
+    @DisplayName("create() should reject duplicate keys")
+    void createShouldRejectDuplicateKeys() {
         List<KeyValue> attrs = Arrays.asList(
                 new KeyValueImpl("k", AnyValueImpl.ofString("v1")),
                 new KeyValueImpl("k", AnyValueImpl.ofString("v2"))
         );
-        assertThrows(IllegalArgumentException.class, () -> resource.setAttributes(attrs));
+        assertThrows(IllegalArgumentException.class, () -> ResourceFactory.create(null, attrs));
     }
 
     @Test
-    @DisplayName("setAttributes() should reject invalid key/value entries")
-    void setAttributesShouldRejectInvalidEntries() {
-        ResourceImpl resource = new ResourceImpl();
+    @DisplayName("create() should reject invalid key/value entries")
+    void createShouldRejectInvalidEntries() {
         KeyValue nullKey = new KeyValue() {
             @Override
             public String getKey() {
@@ -101,20 +283,153 @@ class ResourceImplUnitTest {
             }
         };
 
-        assertThrows(NullPointerException.class, () -> resource.setAttributes(Collections.singletonList(null)));
-        assertThrows(NullPointerException.class, () -> resource.setAttributes(Collections.singletonList(nullKey)));
-        assertThrows(NullPointerException.class, () -> resource.setAttributes(Collections.singletonList(nullValue)));
+        assertThrows(NullPointerException.class, () -> ResourceFactory.create(null, Collections.singletonList(null)));
+        assertThrows(NullPointerException.class, () -> ResourceFactory.create(null, Collections.singletonList(nullKey)));
+        assertThrows(NullPointerException.class, () -> ResourceFactory.create(null, Collections.singletonList(nullValue)));
     }
 
     @Test
-    @DisplayName("setDroppedAttributesCount() should reject negatives and accept non-negative values")
-    void setDroppedAttributesCountShouldValidateInput() {
-        ResourceImpl resource = new ResourceImpl();
-        assertThrows(IllegalArgumentException.class, () -> resource.setDroppedAttributesCount(-1));
+    @DisplayName("create() should keep all attributes without applying the generic limit")
+    void createShouldKeepAllAttributesWithoutGenericLimit() {
+        List<KeyValue> attributes = new ArrayList<>();
+        for (int i = 0; i < 129; i++) {
+            attributes.add(new KeyValueImpl("k" + i, AnyValueImpl.ofString("v" + i)));
+        }
 
-        resource.setDroppedAttributesCount(0);
-        assertEquals(0, resource.getDroppedAttributesCount());
-        resource.setDroppedAttributesCount(4);
-        assertEquals(4, resource.getDroppedAttributesCount());
+        Resource resource = ResourceFactory.create(null, attributes);
+
+        assertEquals(129, resource.getAttributes().size());
+        assertEquals("k128", resource.getAttributes().get(128).getKey());
+    }
+
+    @Test
+    @DisplayName("merge() should reject null resource")
+    void mergeShouldRejectNullResource() {
+        Resource resource = ResourceFactory.create(null, null);
+        assertThrows(NullPointerException.class, () -> resource.merge(null));
+    }
+
+    @Test
+    @DisplayName("merge() should override loose attributes and prefer incoming schemaUrl when entities are absent")
+    void mergeShouldOverrideLooseAttributesAndPreferIncomingSchemaUrlWithoutEntities() {
+        Resource base = ResourceFactory.create(
+                "https://base.example/schema",
+                Arrays.asList(
+                        new KeyValueImpl("service.name", AnyValueImpl.ofString("billing")),
+                        new KeyValueImpl("deployment.environment", AnyValueImpl.ofString("dev"))));
+
+        Resource incoming = ResourceFactory.create(
+                "https://incoming.example/schema",
+                Arrays.asList(
+                        new KeyValueImpl("deployment.environment", AnyValueImpl.ofString("prod")),
+                        new KeyValueImpl("host.name", AnyValueImpl.ofString("host-a"))));
+
+        Resource merged = base.merge(incoming);
+
+        assertNotNull(merged);
+        assertEquals("https://incoming.example/schema", merged.getSchemaUrl());
+        Map<String, String> mergedAttributes = keyValuesToStringMap(merged.getAttributes());
+        assertEquals(3, mergedAttributes.size());
+        assertEquals("billing", mergedAttributes.get("service.name"));
+        assertEquals("prod", mergedAttributes.get("deployment.environment"));
+        assertEquals("host-a", mergedAttributes.get("host.name"));
+    }
+
+    @Test
+    @DisplayName("merge() should preserve current schemaUrl when incoming schemaUrl is null and entities are absent")
+    void mergeShouldPreserveCurrentSchemaUrlWhenIncomingSchemaUrlIsNullAndEntitiesAreAbsent() {
+        Resource base = ResourceFactory.create("https://base.example/schema", null);
+        Resource incoming = ResourceFactory.create(null, Collections.<KeyValue>emptyList());
+
+        Resource merged = base.merge(incoming);
+
+        assertEquals("https://base.example/schema", merged.getSchemaUrl());
+    }
+
+    @Test
+    @DisplayName("merge() should merge entities by type and drop loose attributes covered by merged entity keys")
+    void mergeShouldMergeEntitiesAndDropCoveredLooseAttributes() {
+        Entity baseService = EntityFactory.create(
+                "service",
+                "https://opentelemetry.io/schemas/1.27.0",
+                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-1"))),
+                Collections.singletonList(new KeyValueImpl("service.name", AnyValueImpl.ofString("billing"))));
+
+        Entity incomingService = EntityFactory.create(
+                "service",
+                "https://opentelemetry.io/schemas/1.27.0",
+                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-1"))),
+                Collections.singletonList(new KeyValueImpl("deployment.environment", AnyValueImpl.ofString("prod"))));
+
+        Resource base = ResourceFactory.create(
+                null,
+                Collections.singletonList(baseService),
+                Arrays.asList(
+                        new KeyValueImpl("service.name", AnyValueImpl.ofString("from-resource")),
+                        new KeyValueImpl("resource.only", AnyValueImpl.ofString("base"))));
+
+        Resource incoming = ResourceFactory.create(
+                null,
+                Collections.singletonList(incomingService),
+                Arrays.asList(
+                        new KeyValueImpl("deployment.environment", AnyValueImpl.ofString("from-resource")),
+                        new KeyValueImpl("resource.only", AnyValueImpl.ofString("incoming"))));
+
+        Resource merged = base.merge(incoming);
+
+        assertEquals("https://opentelemetry.io/schemas/1.27.0", merged.getSchemaUrl());
+        assertEquals(1, merged.getEntities().size());
+        Map<String, String> mergedDescription = keyValuesToStringMap(merged.getEntities().get(0).getDescription());
+        assertEquals(2, mergedDescription.size());
+        assertEquals("billing", mergedDescription.get("service.name"));
+        assertEquals("prod", mergedDescription.get("deployment.environment"));
+
+        Map<String, String> looseAttributes = keyValuesToStringMap(merged.getAttributes());
+        assertEquals(1, looseAttributes.size());
+        assertEquals("incoming", looseAttributes.get("resource.only"));
+    }
+
+    @Test
+    @DisplayName("merge() should set schemaUrl to null when merged entities have different schema URLs")
+    void mergeShouldSetSchemaUrlToNullWhenMergedEntitiesHaveDifferentSchemaUrls() {
+        Resource base = ResourceFactory.create(
+                "https://base.example/schema",
+                Collections.singletonList(EntityFactory.create(
+                        "service",
+                        "https://opentelemetry.io/schemas/1.27.0",
+                        Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("i-1"))),
+                        null)),
+                null);
+
+        Resource incoming = ResourceFactory.create(
+                "https://incoming.example/schema",
+                Collections.singletonList(EntityFactory.create(
+                        "host",
+                        "https://opentelemetry.io/schemas/1.28.0",
+                        Collections.singletonList(new KeyValueImpl("host.id", AnyValueImpl.ofString("h-1"))),
+                        null)),
+                null);
+
+        Resource merged = base.merge(incoming);
+
+        assertNull(merged.getSchemaUrl());
+        assertEquals(2, merged.getEntities().size());
+    }
+
+    @Test
+    @DisplayName("ResourceImpl(schemaUrl, attributes) constructor should delegate to entity-aware model")
+    void legacyResourceImplConstructorShouldDelegate() {
+        ResourceImpl resource = new ResourceImpl(
+                "https://opentelemetry.io/schemas/1.26.0",
+                Collections.singletonList(new KeyValueImpl("service.name", AnyValueImpl.ofString("billing"))));
+
+        assertEquals("https://opentelemetry.io/schemas/1.26.0", resource.getSchemaUrl());
+        assertTrue(resource.getEntities().isEmpty());
+        assertEquals(1, resource.getAttributes().size());
+    }
+
+    private static Map<String, String> keyValuesToStringMap(final List<KeyValue> keyValues) {
+        return keyValues.stream()
+                .collect(Collectors.toMap(KeyValue::getKey, kv -> kv.getValue().asString()));
     }
 }
