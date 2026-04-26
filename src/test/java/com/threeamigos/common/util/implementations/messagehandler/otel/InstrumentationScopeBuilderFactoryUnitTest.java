@@ -9,7 +9,6 @@ import java.lang.reflect.Constructor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -41,7 +40,7 @@ class InstrumentationScopeBuilderFactoryUnitTest {
 
         assertSame(builder, builder.withName("scope.name"));
         assertSame(builder, builder.withVersion("1.0.0"));
-        assertNull(builder.withScopeUrl("https://opentelemetry.io/schemas/1.27.0"));
+        assertSame(builder, builder.withScopeUrl("https://opentelemetry.io/schemas/1.27.0"));
 
         assertSame(builder, builder.withString("k", "v"));
         assertEquals(1, builder.attributes.size());
