@@ -11,8 +11,4 @@ public class EntityBuilderFactory {
     public static EntityBuilderInterface getBuilder() {
         return new EntityBuilderImpl();
     }
-
-    private static void main(String[] args) {
-
-    }
 }
