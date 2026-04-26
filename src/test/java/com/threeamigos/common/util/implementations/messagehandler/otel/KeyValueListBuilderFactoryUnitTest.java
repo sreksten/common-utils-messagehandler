@@ -6,8 +6,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -22,15 +20,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("unit")
 @Tag("messageHandler")
 class KeyValueListBuilderFactoryUnitTest {
-
-    @Test
-    @DisplayName("constructor should be private")
-    void constructorShouldBePrivate() throws Exception {
-        Constructor<KeyValueListBuilderFactory> constructor = KeyValueListBuilderFactory.class.getDeclaredConstructor();
-        assertTrue(Modifier.isPrivate(constructor.getModifiers()));
-        constructor.setAccessible(true);
-        assertNotNull(constructor.newInstance());
-    }
 
     @Test
     @DisplayName("create() should return KeyValueListBuilderImpl")

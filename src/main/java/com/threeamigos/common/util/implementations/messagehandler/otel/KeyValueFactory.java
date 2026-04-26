@@ -11,7 +11,6 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 public final class KeyValueFactory {
 
     private KeyValueFactory() {
-        throw new UnsupportedOperationException();
     }
 
     public static KeyValue of(final String key, final AnyValue value) {

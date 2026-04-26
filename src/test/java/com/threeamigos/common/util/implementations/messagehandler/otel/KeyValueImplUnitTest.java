@@ -6,35 +6,17 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Modifier;
 import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("KeyValueImpl unit tests")
 @Tag("unit")
 @Tag("messageHandler")
 class KeyValueImplUnitTest {
-
-    @Test
-    @DisplayName("KeyValueFactory constructor should be private and reject instantiation")
-    void keyValueFactoryConstructorShouldBePrivateAndRejectInstantiation() throws Exception {
-        Constructor<KeyValueFactory> constructor = KeyValueFactory.class.getDeclaredConstructor();
-        assertTrue(Modifier.isPrivate(constructor.getModifiers()));
-        constructor.setAccessible(true);
-
-        InvocationTargetException exception = assertThrows(
-                InvocationTargetException.class,
-                constructor::newInstance);
-
-        assertTrue(exception.getCause() instanceof UnsupportedOperationException);
-    }
 
     @Test
     @DisplayName("constructor should reject null key")

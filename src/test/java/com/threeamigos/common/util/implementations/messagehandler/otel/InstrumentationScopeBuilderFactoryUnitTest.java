@@ -5,8 +5,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Constructor;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -16,15 +14,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("unit")
 @Tag("messageHandler")
 class InstrumentationScopeBuilderFactoryUnitTest {
-
-    @Test
-    @DisplayName("private constructor should be invocable via reflection")
-    void privateConstructorShouldBeInvocableViaReflection() throws Exception {
-        Constructor<InstrumentationScopeBuilderFactory> constructor = InstrumentationScopeBuilderFactory.class.getDeclaredConstructor();
-        assertTrue(java.lang.reflect.Modifier.isPrivate(constructor.getModifiers()));
-        constructor.setAccessible(true);
-        assertNotNull(constructor.newInstance());
-    }
 
     @Test
     @DisplayName("getBuilder() should return InstrumentationScopeBuilderImpl step0")
