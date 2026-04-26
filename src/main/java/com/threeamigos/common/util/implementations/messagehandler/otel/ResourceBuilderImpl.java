@@ -32,7 +32,7 @@ public class ResourceBuilderImpl extends KeyValueBuilderImpl implements Resource
         if (serviceName == null || serviceName.isEmpty()) {
             serviceName = "unknown_service";
         }
-        overridingAttributes.put(Names.ATTR_SERVICE_NAME.name(), serviceName);
+        overridingAttributes.put(Names.ATTR_SERVICE_NAME.getValue(), serviceName);
         return this;
     }
 
@@ -41,7 +41,7 @@ public class ResourceBuilderImpl extends KeyValueBuilderImpl implements Resource
         if (serviceNamespace == null || serviceNamespace.isEmpty()) {
             return this;
         }
-        overridingAttributes.put(Names.ATTR_SERVICE_NAMESPACE.name(), serviceNamespace);
+        overridingAttributes.put(Names.ATTR_SERVICE_NAMESPACE.getValue(), serviceNamespace);
         return this;
     }
 
@@ -55,7 +55,7 @@ public class ResourceBuilderImpl extends KeyValueBuilderImpl implements Resource
         if (serviceVersion == null || serviceVersion.isEmpty()) {
             return this;
         }
-        overridingAttributes.put(Names.ATTR_SERVICE_VERSION.name(), serviceVersion);
+        overridingAttributes.put(Names.ATTR_SERVICE_VERSION.getValue(), serviceVersion);
         return this;
     }
 
@@ -69,13 +69,13 @@ public class ResourceBuilderImpl extends KeyValueBuilderImpl implements Resource
         if (serviceInstanceId == null || serviceInstanceId.isEmpty()) {
             return this;
         }
-        overridingAttributes.put(Names.ATTR_SERVICE_INSTANCE_ID.name(), serviceInstanceId);
+        overridingAttributes.put(Names.ATTR_SERVICE_INSTANCE_ID.getValue(), serviceInstanceId);
         return this;
     }
 
     @Override
     public ResourceBuilderStepDeploymentEnvironmentName withNoServiceInstanceId() {
-        return null;
+        return this;
     }
 
     @Override
@@ -83,7 +83,7 @@ public class ResourceBuilderImpl extends KeyValueBuilderImpl implements Resource
         if (deploymentEnvironmentName == null || deploymentEnvironmentName.isEmpty()) {
             return this;
         }
-        overridingAttributes.put(Names.ATTR_DEPLOYMENT_ENVIRONMENT_NAME.name(), deploymentEnvironmentName);
+        overridingAttributes.put(Names.ATTR_DEPLOYMENT_ENVIRONMENT_NAME.getValue(), deploymentEnvironmentName);
         return this;
     }
 
