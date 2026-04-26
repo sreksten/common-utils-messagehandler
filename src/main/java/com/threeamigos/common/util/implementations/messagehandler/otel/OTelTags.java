@@ -74,6 +74,8 @@ public enum OTelTags {
     /**
      * Programming language of the telemetry SDK.
      * Resource attribute typically set by the SDK (for example: java).
+     * Known values enum:
+     * {@link com.threeamigos.common.util.implementations.messagehandler.otel.knownvalues.TelemetrySdkLanguageKnownValuesEnum}.
      */
     TELEMETRY_SDK_LANGUAGE("telemetry.sdk.language"),
     /**
@@ -115,6 +117,8 @@ public enum OTelTags {
      * The CPU architecture the host system is running on.
      * Resource attribute: use OTel well-known values when applicable
      * (for example: amd64, arm32, arm64, ia64, ppc32, ppc64, s390x, x86).
+     * Known values enum:
+     * {@link com.threeamigos.common.util.implementations.messagehandler.otel.knownvalues.HostArchKnownValuesEnum}.
      */
     HOST_ARCH("host.arch"),
     /**
@@ -296,6 +300,8 @@ public enum OTelTags {
     /**
      * Context-switch type for the process data point.
      * Use OTel well-known values when applicable: {@code voluntary}, {@code involuntary}.
+     * Known values enum:
+     * {@link com.threeamigos.common.util.implementations.messagehandler.otel.knownvalues.ProcessContextSwitchTypeKnownValuesEnum}.
      */
     PROCESS_CONTEXT_SWITCH_TYPE("process.context_switch.type"),
     /**
@@ -395,6 +401,8 @@ public enum OTelTags {
      * Process state.
      * Use OTel well-known values when applicable: {@code running}, {@code sleeping},
      * {@code stopped}, {@code defunct}.
+     * Known values enum:
+     * {@link com.threeamigos.common.util.implementations.messagehandler.otel.knownvalues.ProcessStateKnownValuesEnum}.
      */
     PROCESS_STATE("process.state"),
     /**
@@ -455,6 +463,8 @@ public enum OTelTags {
     /**
      * Current container state.
      * Use well-known values when applicable: {@code running}, {@code waiting}, {@code terminated}.
+     * Known values enum:
+     * {@link com.threeamigos.common.util.implementations.messagehandler.otel.knownvalues.K8sContainerStatusStateKnownValuesEnum}.
      */
     K8S_CONTAINER_STATUS_STATE("k8s.container.status.state"),
     /**
@@ -575,6 +585,8 @@ public enum OTelTags {
     /**
      * Current namespace phase from Kubernetes API.
      * Use well-known values when applicable: {@code active}, {@code terminating}.
+     * Known values enum:
+     * {@link com.threeamigos.common.util.implementations.messagehandler.otel.knownvalues.K8sNamespacePhaseKnownValuesEnum}.
      */
     K8S_NAMESPACE_PHASE("k8s.namespace.phase"),
     /**
@@ -585,12 +597,16 @@ public enum OTelTags {
     /**
      * Condition status for a Kubernetes Node condition.
      * Use well-known values when applicable: {@code true}, {@code false}, {@code unknown}.
+     * Known values enum:
+     * {@link com.threeamigos.common.util.implementations.messagehandler.otel.knownvalues.K8sNodeConditionStatusKnownValuesEnum}.
      */
     K8S_NODE_CONDITION_STATUS("k8s.node.condition.status"),
     /**
      * Node condition type.
      * Use well-known values when applicable: {@code DiskPressure}, {@code MemoryPressure},
      * {@code NetworkUnavailable}, {@code PIDPressure}, {@code Ready}.
+     * Known values enum:
+     * {@link com.threeamigos.common.util.implementations.messagehandler.otel.knownvalues.K8sNodeConditionTypeKnownValuesEnum}.
      */
     K8S_NODE_CONDITION_TYPE("k8s.node.condition.type"),
     /**
@@ -637,6 +653,8 @@ public enum OTelTags {
      * Pod lifecycle phase.
      * Use well-known values when applicable: {@code Pending}, {@code Running},
      * {@code Succeeded}, {@code Failed}, {@code Unknown}.
+     * Known values enum:
+     * {@link com.threeamigos.common.util.implementations.messagehandler.otel.knownvalues.K8sPodStatusPhaseKnownValuesEnum}.
      */
     K8S_POD_STATUS_PHASE("k8s.pod.status.phase"),
     /**
@@ -694,11 +712,15 @@ public enum OTelTags {
     /**
      * Address type of the endpoint.
      * Use well-known values when applicable: {@code IPv4}, {@code IPv6}, {@code FQDN}.
+     * Known values enum:
+     * {@link com.threeamigos.common.util.implementations.messagehandler.otel.knownvalues.K8sServiceEndpointAddressTypeKnownValuesEnum}.
      */
     K8S_SERVICE_ENDPOINT_ADDRESS_TYPE("k8s.service.endpoint.address_type"),
     /**
      * Endpoint condition.
      * Use well-known values when applicable: {@code ready}, {@code serving}, {@code terminating}.
+     * Known values enum:
+     * {@link com.threeamigos.common.util.implementations.messagehandler.otel.knownvalues.K8sServiceEndpointConditionKnownValuesEnum}.
      */
     K8S_SERVICE_ENDPOINT_CONDITION("k8s.service.endpoint.condition"),
     /**
@@ -727,12 +749,16 @@ public enum OTelTags {
      * Service traffic distribution policy.
      * Known values include {@code PreferSameZone} and {@code PreferSameNode}.
      * If not set on the Service, this attribute SHOULD NOT be emitted.
+     * Known values enum:
+     * {@link com.threeamigos.common.util.implementations.messagehandler.otel.knownvalues.K8sServiceTrafficDistributionKnownValuesEnum}.
      */
     K8S_SERVICE_TRAFFIC_DISTRIBUTION("k8s.service.traffic_distribution"),
     /**
      * Service type.
      * Use well-known values when applicable: {@code ClusterIP}, {@code NodePort},
      * {@code LoadBalancer}, {@code ExternalName}.
+     * Known values enum:
+     * {@link com.threeamigos.common.util.implementations.messagehandler.otel.knownvalues.K8sServiceTypeKnownValuesEnum}.
      */
     K8S_SERVICE_TYPE("k8s.service.type"),
     /**
@@ -769,6 +795,8 @@ public enum OTelTags {
      * Kubernetes volume source type.
      * Use well-known values when applicable: {@code configMap}, {@code downwardAPI},
      * {@code emptyDir}, {@code local}, {@code persistentVolumeClaim}, {@code secret}.
+     * Known values enum:
+     * {@link com.threeamigos.common.util.implementations.messagehandler.otel.knownvalues.K8sVolumeTypeKnownValuesEnum}.
      */
     K8S_VOLUME_TYPE("k8s.volume.type"),
 
@@ -799,11 +827,15 @@ public enum OTelTags {
      * Cloud platform/service in use (for example {@code aws_ec2}, {@code aws_lambda}, {@code gcp_cloud_run}).
      * If a well-known OTel value applies, it MUST be used; otherwise a custom value MAY be used.
      * The service prefix SHOULD match {@link #CLOUD_PROVIDER}.
+     * Known values enum:
+     * {@link com.threeamigos.common.util.implementations.messagehandler.otel.knownvalues.CloudPlatformKnownValuesEnum}.
      */
     CLOUD_PLATFORM("cloud.platform"),
     /**
      * Name of the cloud provider (for example {@code aws}, {@code azure}, {@code gcp}).
      * If a well-known OTel value applies, it MUST be used; otherwise a custom value MAY be used.
+     * Known values enum:
+     * {@link com.threeamigos.common.util.implementations.messagehandler.otel.knownvalues.CloudProviderKnownValuesEnum}.
      */
     CLOUD_PROVIDER("cloud.provider"),
     /**
@@ -824,6 +856,8 @@ public enum OTelTags {
      * Operational criticality of the service.
      * If one well-known value applies, it MUST be used: {@code critical}, {@code high},
      * {@code medium}, {@code low}; otherwise a custom value MAY be used.
+     * Known values enum:
+     * {@link com.threeamigos.common.util.implementations.messagehandler.otel.knownvalues.ServiceCriticalityKnownValuesEnum}.
      */
     SERVICE_CRITICALITY("service.criticality"),
     /**
