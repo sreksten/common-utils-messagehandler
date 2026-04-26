@@ -360,7 +360,24 @@ public enum Names {
     RES_SERVICE_EPHEMERAL_ID("service.ephemeral_id"),
     RES_SERVICE_ID("service.id"),
     ATTR_SERVICE_STATE("service.state"),
-    RES_SERVICE_TYPE("service.type");
+    RES_SERVICE_TYPE("service.type"),
+
+    // ---------------------------------------------------------------------
+    // Browser
+    // ---------------------------------------------------------------------
+    ATTR_BROWSER_BRANDS("browser.brands"),
+    ATTR_BROWSER_LANGUAGE("browser.language"),
+    ATTR_BROWSER_MOBILE("browser.mobile"),
+    ATTR_BROWSER_PLATFORM("browser.platform"),
+    ATTR_USER_AGENT_ORIGINAL("user_agent.original"),
+
+    // ---------------------------------------------------------------------
+    // Device
+    // ---------------------------------------------------------------------
+    ATTR_DEVICE_ID("device.id"),
+    ATTR_DEVICE_MANUFACTURER("device.manufacturer"),
+    ATTR_DEVICE_MOEL_IDENTIFIER("device.model.indentifier"),
+    ATTR_DEVICE_MODEL_NAME("device.model.name");
 
     private final String value;
 

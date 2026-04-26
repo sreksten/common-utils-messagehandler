@@ -12,77 +12,154 @@ import java.util.List;
  */
 public interface EntityBuilderInterface {
 
-    interface EntityBuilderStepType {
-        EntityBuilderStepSchemaUrl withType(String type);
+        /**
+         * Generic type
+         * @param type type of Entity
+         */
+        EntityBuilderSchemaUrlStep withType(String type);
+
+        // ---------------------------------------------------------------------
+        // Software and services
+        // ---------------------------------------------------------------------
         EntityBuilderServiceStep withServiceType();
+        EntityBuilderProcessStep withProcessType();
+        /**
+         * Adds the TelemetrySDKData attributes, no further operation allowed
+         */
+        EntityBuilderBuildStep withTelemetryType();
+
+        // ---------------------------------------------------------------------
+        // Host infrastructure
+        // ---------------------------------------------------------------------
         EntityBuilderHostStep withHostType();
         EntityBuilderContainerStep withContainerType();
-        EntityBuilderProcessType withProcessType();
-        EntityBuilderPodType withK8sPodType(String podUid);
-        EntityBuilderNodeType withK8SNodeType(String nodeUid);
-        EntityBuilderCloudAccountType withCloudAccountType(String cloudAccountId);
-    }
+
+        // ---------------------------------------------------------------------
+        // Orchestration - Kubernetes
+        // ---------------------------------------------------------------------
+        EntityBuilderK8sClusterStep withK8sClusterType();
+        EntityBuilderK8sNodeStep withK8SNodeType();
+        EntityBuilderK8sNamespaceStep withK8sNamespaceType();
+        EntityBuilderK8sPodStep withK8sPodType();
+        EntityBuilderK8sDeploymentStep withK8sDeploymentType();
+
+        // ---------------------------------------------------------------------
+        // Cloud and platform
+        // ---------------------------------------------------------------------
+        EntityBuilderCloudPlatformStep withCloudPlatformType();
+        EntityBuilderCloudRegionStep withCloudRegionType();
+        EntityBuilderCloudAccountStep withCloudAccountType();
+
+        // ---------------------------------------------------------------------
+        // Web and browser
+        // ---------------------------------------------------------------------
+        EntityBuilderBrowserStep withBrowserType();
+        EntityBuilderDeviceStep withDeviceType();
 
     /**
      * Logical name of the service
      */
     interface EntityBuilderServiceStep {
-        EntityBuilderStepSchemaUrl withServiceName(String serviceName);
+        EntityBuilderSchemaUrlStep withServiceName(String serviceName);
     }
 
     /**
      * Unique ID or name of the host
      */
     interface EntityBuilderHostStep {
-        EntityBuilderStepSchemaUrl withHostId(String hostId);
-        EntityBuilderStepSchemaUrl withHostName(String hostName);
+        EntityBuilderSchemaUrlStep withHostId(String hostId);
+        EntityBuilderSchemaUrlStep withHostName(String hostName);
     }
 
     /**
      * Unique ID or name of the container (e.g., Docker ID)
      */
     interface EntityBuilderContainerStep {
-        EntityBuilderStepSchemaUrl withContainerId(String containerId);
+        EntityBuilderSchemaUrlStep withContainerId(String containerId);
     }
 
     /**
      * PID of the process
      */
-    interface EntityBuilderProcessType {
-        EntityBuilderProcessStartTime withProcessPid(long pid);
+    interface EntityBuilderProcessStep {
+        EntityBuilderProcessStartTimeSubstep withProcessPid(long pid);
     }
 
     /**
      * Start time of the process
      */
-    interface EntityBuilderProcessStartTime {
-        EntityBuilderStepSchemaUrl withProcessStartTime(long timestamp);
+    interface EntityBuilderProcessStartTimeSubstep {
+        EntityBuilderSchemaUrlStep withProcessStartTime(long timestamp);
     }
 
     /**
      * K8s POD uid
      */
-    interface EntityBuilderPodType {
-        EntityBuilderStepSchemaUrl withPodUid(String podUid);
+    interface EntityBuilderK8sPodStep {
+        EntityBuilderSchemaUrlStep withPodUid(String podUid);
+    }
+
+    interface EntityBuilderK8sClusterStep {
+        EntityBuilderSchemaUrlStep withClusterName(String clusterName);
     }
 
     /**
      * K8s node uid
      */
-    interface EntityBuilderNodeType {
-        EntityBuilderStepSchemaUrl withNodeUid(String nodeUid);
+    interface EntityBuilderK8sNodeStep {
+        EntityBuilderSchemaUrlStep withNodeUid(String nodeUid);
+    }
+
+    interface EntityBuilderK8sNamespaceStep {
+        EntityBuilderK8sClusterStep withNamespaceName(String namespace);
+    }
+
+    interface EntityBuilderK8sDeploymentStep {
+        EntityBuilderK8sNamespaceStep withDeploymentName(String deploymentName);
+    }
+
+    interface EntityBuilderK8sDeploymentNamespaceSubstep {
+        EntityBuilderSchemaUrlStep withNamespaceName(String namespaceName);
+    }
+
+    interface EntityBuilderCloudPlatformStep {
+        EntityBuilderCloudPlatformSubstep withCloudProvider(String cloudProvider);
+    }
+
+    interface EntityBuilderCloudPlatformSubstep {
+        EntityBuilderSchemaUrlStep withCloudPlatform(String cloudPlatform);
+    }
+
+    interface EntityBuilderCloudRegionStep {
+        EntityBuilderCloudRegionCloudProviderSubstep withCloudRegion(String cloudRegion);
+    }
+
+    interface EntityBuilderCloudRegionCloudProviderSubstep {
+        EntityBuilderCloudAccountStep withCloudProvider(String cloudProvider);
     }
 
     /**
      * Cloud account id
      */
-    interface EntityBuilderCloudAccountType {
-        EntityBuilderStepSchemaUrl withCloudAccountId(String cloudAccountId);
+    interface EntityBuilderCloudAccountStep extends EntityBuilderCloudPlatformSubstep {
+        EntityBuilderSchemaUrlStep withCloudAccountId(String cloudAccountId);
     }
 
-    interface EntityBuilderStepSchemaUrl {
+    interface EntityBuilderSchemaUrlStep {
         EntityBuilderStepId withSchemaUrl(String schemaUrl);
         EntityBuilderStepId withNoSchemaUrl();
+    }
+
+    interface EntityBuilderBrowserStep {
+        EntityBuilderBrowserPlatformSubstep withBrowserBrands(String browserBrands);
+    }
+
+    interface EntityBuilderBrowserPlatformSubstep {
+        EntityBuilderStepId withBrowserPlatform(String browserPlatform);
+    }
+
+    interface EntityBuilderDeviceStep {
+        EntityBuilderSchemaUrlStep withDeviceId(String deviceId);
     }
 
     interface EntityBuilderStepId {
@@ -132,7 +209,7 @@ public interface EntityBuilderInterface {
         EntityBuilderStepIdOrAttributes withIdBytes(String name, final byte[] value);
         EntityBuilderStepIdOrAttributes withIdBytes(Names name, final byte[] value);
 
-        EntityBuilderStepBuild withDescription(List<KeyValue> description);
+        EntityBuilderBuildStep withDescription(List<KeyValue> description);
 
         EntityBuilderStepAttributes withDescriptionString(String name, String value);
         EntityBuilderStepAttributes withDescriptionString(Names name, String value);
@@ -159,7 +236,7 @@ public interface EntityBuilderInterface {
     }
 
     interface EntityBuilderStepAttributes {
-        EntityBuilderStepBuild withDescription(List<KeyValue> description);
+        EntityBuilderBuildStep withDescription(List<KeyValue> description);
 
         EntityBuilderStepAttributes withDescriptionString(String name, String value);
         EntityBuilderStepAttributes withDescriptionString(Names name, String value);
@@ -185,7 +262,7 @@ public interface EntityBuilderInterface {
         Entity build();
     }
 
-    interface EntityBuilderStepBuild {
+    interface EntityBuilderBuildStep {
         Entity build();
     }
 }
