@@ -104,7 +104,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
 
     @Override
     public EntityBuilderContainerStep withContainerType() {
-        this.type = "host";
+        this.type = "container";
         return this;
     }
 
@@ -231,7 +231,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
     @Override
     public EntityBuilderStepId withBrowserPlatform(String browserPlatform) {
         id.add(KeyValueFactory.of(Names.ATTR_BROWSER_PLATFORM, AnyValueFactory.ofString(browserPlatform)));
-        return null;
+        return this;
     }
 
     @Override
