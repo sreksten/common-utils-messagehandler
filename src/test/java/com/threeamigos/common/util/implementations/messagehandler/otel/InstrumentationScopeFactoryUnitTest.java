@@ -29,7 +29,7 @@ class InstrumentationScopeFactoryUnitTest {
                 "com.example.lib",
                 "1.0.0",
                 "https://opentelemetry.io/schemas/1.27.0",
-                Collections.singletonList(new KeyValueImpl("scope.attr", AnyValueImpl.ofString("x"))));
+                Collections.singletonList(new KeyValueImpl("scope.attr", AnyValueFactory.ofString("x"))));
 
         assertEquals("com.example.lib", scope.getName());
         assertEquals("1.0.0", scope.getVersion());
@@ -37,7 +37,7 @@ class InstrumentationScopeFactoryUnitTest {
         assertEquals(1, scope.getAttributes().size());
         assertEquals(0, scope.getDroppedAttributesCount());
         assertThrows(UnsupportedOperationException.class,
-                () -> scope.getAttributes().add(new KeyValueImpl("another", AnyValueImpl.ofString("y"))));
+                () -> scope.getAttributes().add(new KeyValueImpl("another", AnyValueFactory.ofString("y"))));
     }
 
     @Test
@@ -45,7 +45,7 @@ class InstrumentationScopeFactoryUnitTest {
     void createShouldDropOverflowAttributes() {
         List<KeyValue> attributes = new ArrayList<>();
         for (int i = 0; i < 129; i++) {
-            attributes.add(new KeyValueImpl("k" + i, AnyValueImpl.ofString("v" + i)));
+            attributes.add(new KeyValueImpl("k" + i, AnyValueFactory.ofString("v" + i)));
         }
 
         InstrumentationScope scope = InstrumentationScopeFactory.create(null, null, null, attributes);

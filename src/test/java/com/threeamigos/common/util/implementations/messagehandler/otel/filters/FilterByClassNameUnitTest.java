@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel.filters;
 
-import com.threeamigos.common.util.implementations.messagehandler.otel.AnyValueImpl;
-import com.threeamigos.common.util.implementations.messagehandler.otel.KeyValueImpl;
+import com.threeamigos.common.util.implementations.messagehandler.otel.AnyValueFactory;
+import com.threeamigos.common.util.implementations.messagehandler.otel.KeyValueFactory;
 import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordImpl;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
@@ -256,7 +256,7 @@ class FilterByClassNameUnitTest {
     }
 
     private static KeyValue keyValue(final String key, final String value) {
-        return new KeyValueImpl(key, AnyValueImpl.ofString(value));
+        return KeyValueFactory.of(key, AnyValueFactory.ofString(value));
     }
 
     private static Object newRegexHolder(final String regex) throws Exception {

@@ -1,0 +1,36 @@
+package com.threeamigos.common.util.implementations.messagehandler.otel;
+
+import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+
+import java.util.Arrays;
+import java.util.Collections;
+
+import static org.junit.jupiter.api.Assertions.assertSame;
+
+@DisplayName("KeyValueBuilderImpl unit tests")
+@Tag("unit")
+@Tag("messageHandler")
+class KeyValueBuilderImplUnitTest {
+
+    @Test
+    @DisplayName("all builder methods should return same instance")
+    void allBuilderMethodsShouldReturnSameInstance() {
+        KeyValueBuilderImpl builder = new KeyValueBuilderImpl();
+
+        AnyValue anyValue = AnyValueFactory.ofString("v");
+        KeyValue keyValue = new KeyValueImpl("k", anyValue);
+
+        assertSame(builder, builder.withEmpty("empty"));
+        assertSame(builder, builder.withString("s", "v"));
+        assertSame(builder, builder.withBoolean("b", true));
+        assertSame(builder, builder.withLong("l", 1L));
+        assertSame(builder, builder.withDouble("d", 1.5));
+        assertSame(builder, builder.withArray("a", Arrays.asList(anyValue)));
+        assertSame(builder, builder.withKeyValueList("kvl", Collections.singletonList(keyValue)));
+        assertSame(builder, builder.withBytes("bytes", new byte[] {1, 2}));
+    }
+}

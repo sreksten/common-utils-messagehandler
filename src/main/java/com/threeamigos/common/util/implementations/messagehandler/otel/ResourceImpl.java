@@ -24,14 +24,9 @@ final class ResourceImpl implements Resource {
     private static final String RESOURCE_ATTRIBUTES_FIELD_NAME = MessageHandlerResourceBundle.get("resourceAttributesFieldName");
     private static final String RESOURCE_ENTITIES_FIELD_NAME = MessageHandlerResourceBundle.get("resourceEntitiesFieldName");
 
-    private final List<Entity> entities;
     private final String schemaUrl;
+    private final List<Entity> entities;
     private final List<KeyValue> attributes;
-
-    ResourceImpl(final String schemaUrl,
-                 final List<KeyValue> attributes) {
-        this(schemaUrl, null, attributes);
-    }
 
     ResourceImpl(final String schemaUrl,
                  final List<Entity> entities,
@@ -44,13 +39,13 @@ final class ResourceImpl implements Resource {
     }
 
     @Override
-    public List<Entity> getEntities() {
-        return entities;
+    public String getSchemaUrl() {
+        return schemaUrl;
     }
 
     @Override
-    public String getSchemaUrl() {
-        return schemaUrl;
+    public List<Entity> getEntities() {
+        return entities;
     }
 
     @Override

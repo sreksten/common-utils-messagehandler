@@ -16,11 +16,6 @@ public final class ResourceFactory {
     private ResourceFactory() {}
 
     public static Resource create(final String schemaUrl,
-                                  final List<KeyValue> attributes) {
-        return create(schemaUrl, null, attributes);
-    }
-
-    public static Resource create(final String schemaUrl,
                                   final List<Entity> entities,
                                   final List<KeyValue> attributes) {
         return new ResourceImpl(schemaUrl, entities, attributes);

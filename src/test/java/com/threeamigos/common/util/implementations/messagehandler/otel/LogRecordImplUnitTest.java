@@ -126,8 +126,8 @@ class LogRecordImplUnitTest {
     @DisplayName("body/resource/scope/eventName setters should store values")
     void simpleSettersShouldStoreValues() {
         LogRecordImpl record = new LogRecordImpl();
-        AnyValue body = AnyValueImpl.ofString("body");
-        Resource resource = ResourceFactory.create(null, null);
+        AnyValue body = AnyValueFactory.ofString("body");
+        Resource resource = ResourceFactory.create(null, null, null);
         InstrumentationScope scope = InstrumentationScopeFactory.create(null, null, null, null);
 
         record.setBody(body);
@@ -146,15 +146,15 @@ class LogRecordImplUnitTest {
     void setAttributesShouldCopyAndExposeUnmodifiableList() {
         LogRecordImpl record = new LogRecordImpl();
         List<KeyValue> attrs = new ArrayList<>(Collections.singletonList(
-                new KeyValueImpl("k1", AnyValueImpl.ofString("v1"))
+                new KeyValueImpl("k1", AnyValueFactory.ofString("v1"))
         ));
 
         record.setAttributes(attrs);
         assertEquals(1, record.getAttributes().size());
         assertThrows(UnsupportedOperationException.class,
-                () -> record.getAttributes().add(new KeyValueImpl("k2", AnyValueImpl.ofString("v2"))));
+                () -> record.getAttributes().add(new KeyValueImpl("k2", AnyValueFactory.ofString("v2"))));
 
-        attrs.add(new KeyValueImpl("k2", AnyValueImpl.ofString("v2")));
+        attrs.add(new KeyValueImpl("k2", AnyValueFactory.ofString("v2")));
         assertEquals(1, record.getAttributes().size());
     }
 
@@ -172,8 +172,8 @@ class LogRecordImplUnitTest {
         LogRecordImpl record = new LogRecordImpl();
 
         List<KeyValue> duplicates = Arrays.asList(
-                new KeyValueImpl("dup", AnyValueImpl.ofString("v1")),
-                new KeyValueImpl("dup", AnyValueImpl.ofString("v2"))
+                new KeyValueImpl("dup", AnyValueFactory.ofString("v1")),
+                new KeyValueImpl("dup", AnyValueFactory.ofString("v2"))
         );
         assertThrows(IllegalArgumentException.class, () -> record.setAttributes(duplicates));
 
@@ -198,7 +198,7 @@ class LogRecordImplUnitTest {
         LogRecordImpl record = new LogRecordImpl();
         List<KeyValue> attributes = new ArrayList<>();
         for (int i = 0; i < 129; i++) {
-            attributes.add(new KeyValueImpl("k" + i, AnyValueImpl.ofString("v" + i)));
+            attributes.add(new KeyValueImpl("k" + i, AnyValueFactory.ofString("v" + i)));
         }
 
         record.setAttributes(attributes);

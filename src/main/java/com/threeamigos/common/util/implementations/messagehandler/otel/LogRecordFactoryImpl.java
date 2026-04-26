@@ -31,7 +31,7 @@ public class LogRecordFactoryImpl implements LogRecordFactory {
         LogRecordImpl logRecord = new LogRecordImpl();
         logRecord.setSeverityNumber(severityNumber);
         logRecord.setSeverityText(severityNumber.name());
-        logRecord.setBody(AnyValueImpl.ofString(message));
+        logRecord.setBody(AnyValueFactory.ofString(message));
         return logRecord;
     }
 
@@ -41,7 +41,7 @@ public class LogRecordFactoryImpl implements LogRecordFactory {
         Objects.requireNonNull(throwable, MessageHandlerResourceBundle.get("nullThrowableProvided"));
         LogRecordImpl logRecord = new LogRecordImpl();
         setErrorSeverity(logRecord);
-        logRecord.setBody(AnyValueImpl.ofString(message));
+        logRecord.setBody(AnyValueFactory.ofString(message));
         addThrowableDetails(logRecord, throwable);
         return logRecord;
     }
@@ -52,7 +52,7 @@ public class LogRecordFactoryImpl implements LogRecordFactory {
         LogRecordImpl logRecord = new LogRecordImpl();
         setErrorSeverity(logRecord);
         String throwableMessage = throwable.getMessage() != null ? throwable.getMessage() : throwable.toString();
-        logRecord.setBody(AnyValueImpl.ofString(throwableMessage));
+        logRecord.setBody(AnyValueFactory.ofString(throwableMessage));
         addThrowableDetails(logRecord, throwable);
         return logRecord;
     }
@@ -65,11 +65,11 @@ public class LogRecordFactoryImpl implements LogRecordFactory {
     private static void addThrowableDetails(final LogRecordImpl logRecord, final Throwable throwable) {
         logRecord.setEventName(Names.EVENT_EXCEPTION.getValue());
         List<KeyValue> attributes = new ArrayList<>(3);
-        attributes.add(KeyValueImpl.of(Names.ATTR_EXCEPTION_TYPE, AnyValueImpl.ofString(throwable.getClass().getName())));
+        attributes.add(KeyValueFactory.of(Names.ATTR_EXCEPTION_TYPE, AnyValueFactory.ofString(throwable.getClass().getName())));
         if (throwable.getMessage() != null) {
-            attributes.add(KeyValueImpl.of(Names.ATTR_EXCEPTION_MESSAGE, AnyValueImpl.ofString(throwable.getMessage())));
+            attributes.add(KeyValueFactory.of(Names.ATTR_EXCEPTION_MESSAGE, AnyValueFactory.ofString(throwable.getMessage())));
         }
-        attributes.add(KeyValueImpl.of(Names.ATTR_EXCEPTION_STACKTRACE, AnyValueImpl.ofString(stackTraceAsString(throwable))));
+        attributes.add(KeyValueFactory.of(Names.ATTR_EXCEPTION_STACKTRACE, AnyValueFactory.ofString(stackTraceAsString(throwable))));
         logRecord.setAttributes(attributes);
     }
 

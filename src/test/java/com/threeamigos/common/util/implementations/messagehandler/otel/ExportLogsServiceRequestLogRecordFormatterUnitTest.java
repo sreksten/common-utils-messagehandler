@@ -76,7 +76,7 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
     void formatShouldSerializeEmptyResourceAndScopeObjectsWhenPresent() {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(FIXED_TS);
-        record.setResource(ResourceFactory.create(null, null));
+        record.setResource(ResourceFactory.create(null, null, null));
         record.setInstrumentationScope(InstrumentationScopeFactory.create(null, null, null, null));
 
         String result = formatter.format(record);
@@ -104,7 +104,7 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
     void formatShouldSerializeScopeAttributesWithoutLeadingComma() {
         InstrumentationScope scope = InstrumentationScopeFactory.create(
                 null, null, null,
-                Collections.singletonList(new KeyValueImpl("k", AnyValueImpl.ofString("v"))));
+                Collections.singletonList(new KeyValueImpl("k", AnyValueFactory.ofString("v"))));
 
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(FIXED_TS);
@@ -213,13 +213,14 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
     void formatShouldSerializeResourceAndScopeWithSchemaUrls() {
         Resource resource = ResourceFactory.create(
                 "https://opentelemetry.io/schemas/1.26.0",
-                Collections.singletonList(new KeyValueImpl("service.name", AnyValueImpl.ofString("svc"))));
+                null,
+                Collections.singletonList(new KeyValueImpl("service.name", AnyValueFactory.ofString("svc"))));
 
         InstrumentationScope scope = InstrumentationScopeFactory.create(
                 "com.example.lib",
                 "1.0.0",
                 "https://opentelemetry.io/schemas/1.27.0",
-                Collections.singletonList(new KeyValueImpl("scope.attr", AnyValueImpl.ofString("x"))));
+                Collections.singletonList(new KeyValueImpl("scope.attr", AnyValueFactory.ofString("x"))));
 
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(FIXED_TS);
@@ -283,7 +284,7 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
     void formatRecordShouldEncodeEmptyAnyValue() {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(FIXED_TS);
-        record.setBody(AnyValueImpl.empty());
+        record.setBody(AnyValueFactory.empty());
         assertTrue(rawFormatter.format(record).contains("\"body\":{}"));
     }
 
@@ -292,15 +293,15 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
     void formatRecordShouldEncodeAllAnyValueTypes() {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(FIXED_TS);
-        record.setBody(AnyValueImpl.ofArray(Arrays.asList(
-                AnyValueImpl.ofString("s"),
-                AnyValueImpl.ofBoolean(true),
-                AnyValueImpl.ofLong(9),
-                AnyValueImpl.ofDouble(1.25),
-                AnyValueImpl.ofBytes(new byte[] {1, 2, 3}),
-                AnyValueImpl.ofKvList(Arrays.asList(
-                        new KeyValueImpl("k1", AnyValueImpl.ofString("v1")),
-                        new KeyValueImpl("k2", AnyValueImpl.ofLong(2))
+        record.setBody(AnyValueFactory.ofArray(Arrays.asList(
+                AnyValueFactory.ofString("s"),
+                AnyValueFactory.ofBoolean(true),
+                AnyValueFactory.ofLong(9),
+                AnyValueFactory.ofDouble(1.25),
+                AnyValueFactory.ofBytes(new byte[] {1, 2, 3}),
+                AnyValueFactory.ofKvList(Arrays.asList(
+                        new KeyValueImpl("k1", AnyValueFactory.ofString("v1")),
+                        new KeyValueImpl("k2", AnyValueFactory.ofLong(2))
                 ))
         )));
 
@@ -319,13 +320,13 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(FIXED_TS);
 
-        record.setBody(AnyValueImpl.ofDouble(Double.NaN));
+        record.setBody(AnyValueFactory.ofDouble(Double.NaN));
         assertTrue(rawFormatter.format(record).contains("\"doubleValue\":\"NaN\""));
 
-        record.setBody(AnyValueImpl.ofDouble(Double.POSITIVE_INFINITY));
+        record.setBody(AnyValueFactory.ofDouble(Double.POSITIVE_INFINITY));
         assertTrue(rawFormatter.format(record).contains("\"doubleValue\":\"Infinity\""));
 
-        record.setBody(AnyValueImpl.ofDouble(Double.NEGATIVE_INFINITY));
+        record.setBody(AnyValueFactory.ofDouble(Double.NEGATIVE_INFINITY));
         assertTrue(rawFormatter.format(record).contains("\"doubleValue\":\"-Infinity\""));
     }
 
@@ -335,10 +336,10 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(FIXED_TS);
 
-        record.setBody(AnyValueImpl.ofArray(Collections.emptyList()));
+        record.setBody(AnyValueFactory.ofArray(Collections.emptyList()));
         assertTrue(rawFormatter.format(record).contains("\"arrayValue\":{\"values\":[]}"));
 
-        record.setBody(AnyValueImpl.ofKvList(Collections.emptyList()));
+        record.setBody(AnyValueFactory.ofKvList(Collections.emptyList()));
         assertTrue(rawFormatter.format(record).contains("\"kvlistValue\":{\"values\":[]}"));
     }
 
@@ -347,8 +348,8 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
     void formatRecordShouldEscapeStringsAndControlCharacters() {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(FIXED_TS);
-        record.setBody(AnyValueImpl.ofString("q\" b\\ n\n r\r t\t c\u0001"));
-        record.setAttributes(Collections.singletonList(new KeyValueImpl("k\"\\\n", AnyValueImpl.ofString("v\"\\\u0002"))));
+        record.setBody(AnyValueFactory.ofString("q\" b\\ n\n r\r t\t c\u0001"));
+        record.setAttributes(Collections.singletonList(new KeyValueImpl("k\"\\\n", AnyValueFactory.ofString("v\"\\\u0002"))));
 
         String result = rawFormatter.format(record);
         assertTrue(result.contains("q\\\" b\\\\ n\\n r\\r t\\t c\\u0001"));
@@ -509,7 +510,7 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
     private static List<KeyValue> createAttributes(final String prefix, final int count) {
         List<KeyValue> attributes = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
-            attributes.add(new KeyValueImpl(prefix + i, AnyValueImpl.ofString("v" + i)));
+            attributes.add(new KeyValueImpl(prefix + i, AnyValueFactory.ofString("v" + i)));
         }
         return attributes;
     }

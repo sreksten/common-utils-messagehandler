@@ -50,16 +50,16 @@ class InstrumentationScopeImplUnitTest {
     @DisplayName("constructor should copy and expose unmodifiable attributes")
     void constructorShouldCopyAndExposeUnmodifiableAttributes() {
         List<KeyValue> attrs = new ArrayList<>(Collections.singletonList(
-                new KeyValueImpl("scope.attr", AnyValueImpl.ofString("x"))
+                new KeyValueImpl("scope.attr", AnyValueFactory.ofString("x"))
         ));
 
         InstrumentationScopeImpl scope = new InstrumentationScopeImpl(
                 null, null, null, attrs);
         assertEquals(1, scope.getAttributes().size());
         assertThrows(UnsupportedOperationException.class,
-                () -> scope.getAttributes().add(new KeyValueImpl("k", AnyValueImpl.ofString("v"))));
+                () -> scope.getAttributes().add(new KeyValueImpl("k", AnyValueFactory.ofString("v"))));
 
-        attrs.add(new KeyValueImpl("other", AnyValueImpl.ofLong(2)));
+        attrs.add(new KeyValueImpl("other", AnyValueFactory.ofLong(2)));
         assertEquals(1, scope.getAttributes().size());
     }
 
@@ -75,8 +75,8 @@ class InstrumentationScopeImplUnitTest {
     @DisplayName("constructor should reject duplicate keys")
     void constructorShouldRejectDuplicateKeys() {
         List<KeyValue> attrs = Arrays.asList(
-                new KeyValueImpl("k", AnyValueImpl.ofString("v1")),
-                new KeyValueImpl("k", AnyValueImpl.ofString("v2"))
+                new KeyValueImpl("k", AnyValueFactory.ofString("v1")),
+                new KeyValueImpl("k", AnyValueFactory.ofString("v2"))
         );
         assertThrows(IllegalArgumentException.class, () ->
                 new InstrumentationScopeImpl(null, null, null, attrs));
@@ -93,7 +93,7 @@ class InstrumentationScopeImplUnitTest {
 
             @Override
             public AnyValue getValue() {
-                return AnyValueImpl.ofString("v");
+                return AnyValueFactory.ofString("v");
             }
         };
         KeyValue nullValue = new KeyValue() {
@@ -119,7 +119,7 @@ class InstrumentationScopeImplUnitTest {
     void constructorShouldDropAttributesAboveDefaultLimit() {
         List<KeyValue> attributes = new ArrayList<>();
         for (int i = 0; i < 129; i++) {
-            attributes.add(new KeyValueImpl("k" + i, AnyValueImpl.ofString("v" + i)));
+            attributes.add(new KeyValueImpl("k" + i, AnyValueFactory.ofString("v" + i)));
         }
 
         InstrumentationScopeImpl scope = new InstrumentationScopeImpl(

@@ -38,7 +38,7 @@ class ConsoleLogRecordFormatterUnitTest {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
         record.setSeverityText("INFO");
-        record.setBody(AnyValueImpl.ofString("hello"));
+        record.setBody(AnyValueFactory.ofString("hello"));
 
         String result = formatter.format(record);
 
@@ -51,7 +51,7 @@ class ConsoleLogRecordFormatterUnitTest {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
         record.setSeverityText("UNSPECIFIED");
-        record.setBody(AnyValueImpl.ofString("hello"));
+        record.setBody(AnyValueFactory.ofString("hello"));
 
         String result = formatter.format(record);
 
@@ -65,7 +65,7 @@ class ConsoleLogRecordFormatterUnitTest {
         record.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
         record.setSeverityText("   ");
         record.setSeverityNumber(SeverityNumber.WARN2);
-        record.setBody(AnyValueImpl.ofString("hello"));
+        record.setBody(AnyValueFactory.ofString("hello"));
 
         String result = formatter.format(record);
 
@@ -78,7 +78,7 @@ class ConsoleLogRecordFormatterUnitTest {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
         record.setSeverityText("INFO");
-        record.setBody(AnyValueImpl.ofString("hello"));
+        record.setBody(AnyValueFactory.ofString("hello"));
         InstrumentationScope scope = InstrumentationScopeFactory.create(
                 "com.example.Foo", null, null, null);
         record.setInstrumentationScope(scope);
@@ -95,7 +95,7 @@ class ConsoleLogRecordFormatterUnitTest {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
         record.setSeverityText("INFO");
-        record.setBody(AnyValueImpl.ofString("hello"));
+        record.setBody(AnyValueFactory.ofString("hello"));
         InstrumentationScope scope = InstrumentationScopeFactory.create(
                 "com.example.Foo", null, null, null);
         record.setInstrumentationScope(scope);
@@ -124,7 +124,7 @@ class ConsoleLogRecordFormatterUnitTest {
         LogRecordImpl withNullName = new LogRecordImpl();
         withNullName.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
         withNullName.setSeverityText("INFO");
-        withNullName.setBody(AnyValueImpl.ofString("hello"));
+        withNullName.setBody(AnyValueFactory.ofString("hello"));
         withNullName.setInstrumentationScope(InstrumentationScopeFactory.create(null, null, null, null));
 
         String nullNameResult = formatter.format(withNullName);
@@ -133,7 +133,7 @@ class ConsoleLogRecordFormatterUnitTest {
         LogRecordImpl withBlankName = new LogRecordImpl();
         withBlankName.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
         withBlankName.setSeverityText("INFO");
-        withBlankName.setBody(AnyValueImpl.ofString("hello"));
+        withBlankName.setBody(AnyValueFactory.ofString("hello"));
         InstrumentationScope blankScope = InstrumentationScopeFactory.create(
                 "   ", null, null, null);
         withBlankName.setInstrumentationScope(blankScope);
@@ -167,7 +167,7 @@ class ConsoleLogRecordFormatterUnitTest {
         record.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
         record.setSeverityText(null);
         record.setSeverityNumber(SeverityNumber.UNSPECIFIED);
-        record.setBody(AnyValueImpl.ofString("hello"));
+        record.setBody(AnyValueFactory.ofString("hello"));
 
         assertEquals("2026-04-21T08:30:00Z [UNSPEC] hello", formatter.format(record));
     }
@@ -179,25 +179,25 @@ class ConsoleLogRecordFormatterUnitTest {
         record.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
         record.setSeverityText("INFO");
 
-        record.setBody(AnyValueImpl.ofBoolean(true));
+        record.setBody(AnyValueFactory.ofBoolean(true));
         assertEquals("2026-04-21T08:30:00Z [INFO  ] true", formatter.format(record));
 
-        record.setBody(AnyValueImpl.ofLong(7));
+        record.setBody(AnyValueFactory.ofLong(7));
         assertEquals("2026-04-21T08:30:00Z [INFO  ] 7", formatter.format(record));
 
-        record.setBody(AnyValueImpl.ofDouble(1.5));
+        record.setBody(AnyValueFactory.ofDouble(1.5));
         assertEquals("2026-04-21T08:30:00Z [INFO  ] 1.5", formatter.format(record));
 
-        record.setBody(AnyValueImpl.ofBytes(new byte[]{1, 2, 3}));
+        record.setBody(AnyValueFactory.ofBytes(new byte[]{1, 2, 3}));
         assertEquals("2026-04-21T08:30:00Z [INFO  ] AQID", formatter.format(record));
 
-        record.setBody(AnyValueImpl.ofArray(Collections.singletonList(AnyValueImpl.ofString("x"))));
+        record.setBody(AnyValueFactory.ofArray(Collections.singletonList(AnyValueFactory.ofString("x"))));
         assertTrue(formatter.format(record).startsWith("2026-04-21T08:30:00Z [INFO  ] ["));
 
-        record.setBody(AnyValueImpl.ofKvList(Collections.singletonList(new KeyValueImpl("k", AnyValueImpl.ofString("v")))));
+        record.setBody(AnyValueFactory.ofKvList(Collections.singletonList(new KeyValueImpl("k", AnyValueFactory.ofString("v")))));
         assertTrue(formatter.format(record).startsWith("2026-04-21T08:30:00Z [INFO  ] ["));
 
-        record.setBody(AnyValueImpl.empty());
+        record.setBody(AnyValueFactory.empty());
         assertEquals("2026-04-21T08:30:00Z [INFO  ] ", formatter.format(record));
     }
 
@@ -271,7 +271,7 @@ class ConsoleLogRecordFormatterUnitTest {
             @Override
             public SeverityNumber getSeverityNumber() { return SeverityNumber.INFO; }
             @Override
-            public AnyValue getBody() { return AnyValueImpl.ofString("hello"); }
+            public AnyValue getBody() { return AnyValueFactory.ofString("hello"); }
             @Override
             public com.threeamigos.common.util.interfaces.messagehandler.otel.Resource getResource() { return null; }
             @Override
@@ -304,7 +304,7 @@ class ConsoleLogRecordFormatterUnitTest {
             @Override
             public SeverityNumber getSeverityNumber() { return null; }
             @Override
-            public AnyValue getBody() { return AnyValueImpl.ofString("hello"); }
+            public AnyValue getBody() { return AnyValueFactory.ofString("hello"); }
             @Override
             public com.threeamigos.common.util.interfaces.messagehandler.otel.Resource getResource() { return null; }
             @Override

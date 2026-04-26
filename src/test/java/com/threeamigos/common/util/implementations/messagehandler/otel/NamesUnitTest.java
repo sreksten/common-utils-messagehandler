@@ -26,9 +26,12 @@ class NamesUnitTest {
         assertEquals("url.scheme", Names.ATTR_URL_SCHEME.getValue());
         assertEquals("exception", Names.EVENT_EXCEPTION.getValue());
         assertEquals("syslog.facility", Names.ATTR_SYSLOG_FACILITY.getValue());
-        assertEquals("host.name", Names.RES_HOST_NAME.getValue());
+        assertEquals("host.name", Names.ATTR_HOST_NAME.getValue());
         assertEquals("http.response.status_code", Names.ATTR_HTTP_RESPONSE_STATUS_CODE.getValue());
-        assertEquals("cloud.region", Names.RES_CLOUD_REGION.getValue());
+        assertEquals("cloud.region", Names.ATTR_CLOUD_REGION.getValue());
+        assertEquals("cloud.availability_zone", Names.ATTR_CLOUD_AVAILABILITY_ZONE.getValue());
+        assertEquals("cloud.platform", Names.ATTR_CLOUD_PLATFORM.getValue());
+        assertEquals("cloud.resource_id", Names.ATTR_CLOUD_RESOURCE_ID.getValue());
         assertEquals("service.instance.id", Names.ATTR_SERVICE_INSTANCE_ID.getValue());
         assertEquals("exception.type", Names.ATTR_EXCEPTION_TYPE.getValue());
         assertEquals("exception.message", Names.ATTR_EXCEPTION_MESSAGE.getValue());

@@ -18,6 +18,14 @@ import java.util.List;
 public interface Resource {
 
     /**
+     * Entities allow telemetry to explicitly model multiple related components within a single signal:
+     * <ul>
+     * <li>Service: The logical application component.</li>
+     * <li>Process: The specific runtime instance of that service.</li>
+     * <li>Container: The environment the process lives in.</li>
+     * <li>Host/Node: The physical or virtual machine running the container.</li>
+     * <li>Cloud/Cluster: The broader infrastructure context (e.g., a Kubernetes cluster or AWS region).</li>
+     * </ul>
      * @return typed entities belonging to this resource; never {@code null}, may be empty.
      */
     List<Entity> getEntities();

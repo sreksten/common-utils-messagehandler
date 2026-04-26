@@ -6,6 +6,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.Collections;
 
@@ -16,16 +19,16 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@DisplayName("AnyValueImpl unit tests")
+@DisplayName("AnyValueFactory unit tests")
 @Tag("unit")
 @Tag("messageHandler")
-class AnyValueImplUnitTest {
+class AnyValueFactoryUnitTest {
 
     @Test
     @DisplayName("empty() should return EMPTY type singleton")
     void emptyShouldReturnEmptyTypeSingleton() {
-        AnyValue first = AnyValueImpl.empty();
-        AnyValue second = AnyValueImpl.empty();
+        AnyValue first = AnyValueFactory.empty();
+        AnyValue second = AnyValueFactory.empty();
         assertSame(first, second);
         assertEquals(AnyValue.Type.EMPTY, first.getType());
     }
@@ -33,7 +36,7 @@ class AnyValueImplUnitTest {
     @Test
     @DisplayName("all typed accessors should throw when AnyValue is EMPTY")
     void typedAccessorsShouldThrowWhenEmpty() {
-        AnyValue empty = AnyValueImpl.empty();
+        AnyValue empty = AnyValueFactory.empty();
         assertThrows(IllegalStateException.class, empty::asString);
         assertThrows(IllegalStateException.class, empty::asBoolean);
         assertThrows(IllegalStateException.class, empty::asLong);
@@ -46,7 +49,7 @@ class AnyValueImplUnitTest {
     @Test
     @DisplayName("ofString() should store and return string values")
     void ofStringShouldStoreAndReturnStringValues() {
-        AnyValue value = AnyValueImpl.ofString("abc");
+        AnyValue value = AnyValueFactory.ofString("abc");
         assertEquals(AnyValue.Type.STRING, value.getType());
         assertEquals("abc", value.asString());
     }
@@ -54,16 +57,16 @@ class AnyValueImplUnitTest {
     @Test
     @DisplayName("ofString() should reject null")
     void ofStringShouldRejectNull() {
-        assertThrows(NullPointerException.class, () -> AnyValueImpl.ofString(null));
+        assertThrows(NullPointerException.class, () -> AnyValueFactory.ofString(null));
     }
 
     @Test
     @DisplayName("ofNullableString() should map null to EMPTY and non-null to STRING")
     void ofNullableStringShouldMapNullAndNonNullValues() {
-        AnyValue nullValue = AnyValueImpl.ofNullableString(null);
-        AnyValue textValue = AnyValueImpl.ofNullableString("abc");
+        AnyValue nullValue = AnyValueFactory.ofNullableString(null);
+        AnyValue textValue = AnyValueFactory.ofNullableString("abc");
 
-        assertSame(AnyValueImpl.empty(), nullValue);
+        assertSame(AnyValueFactory.empty(), nullValue);
         assertEquals(AnyValue.Type.STRING, textValue.getType());
         assertEquals("abc", textValue.asString());
     }
@@ -71,7 +74,7 @@ class AnyValueImplUnitTest {
     @Test
     @DisplayName("ofBoolean() should store and return boolean values")
     void ofBooleanShouldStoreAndReturnBooleanValues() {
-        AnyValue value = AnyValueImpl.ofBoolean(true);
+        AnyValue value = AnyValueFactory.ofBoolean(true);
         assertEquals(AnyValue.Type.BOOL, value.getType());
         assertTrue(value.asBoolean());
     }
@@ -79,7 +82,7 @@ class AnyValueImplUnitTest {
     @Test
     @DisplayName("ofLong() should store and return long values")
     void ofLongShouldStoreAndReturnLongValues() {
-        AnyValue value = AnyValueImpl.ofLong(42L);
+        AnyValue value = AnyValueFactory.ofLong(42L);
         assertEquals(AnyValue.Type.INT, value.getType());
         assertEquals(42L, value.asLong());
     }
@@ -87,7 +90,7 @@ class AnyValueImplUnitTest {
     @Test
     @DisplayName("ofDouble() should store and return double values")
     void ofDoubleShouldStoreAndReturnDoubleValues() {
-        AnyValue value = AnyValueImpl.ofDouble(3.14);
+        AnyValue value = AnyValueFactory.ofDouble(3.14);
         assertEquals(AnyValue.Type.DOUBLE, value.getType());
         assertEquals(3.14, value.asDouble(), 0.0);
     }
@@ -96,23 +99,23 @@ class AnyValueImplUnitTest {
     @DisplayName("ofArray() should defensively copy and expose unmodifiable list")
     void ofArrayShouldDefensivelyCopyAndExposeUnmodifiableList() {
         java.util.List<AnyValue> source = new java.util.ArrayList<>(
-                Collections.singletonList(AnyValueImpl.ofString("x")));
-        AnyValue value = AnyValueImpl.ofArray(source);
+                Collections.singletonList(AnyValueFactory.ofString("x")));
+        AnyValue value = AnyValueFactory.ofArray(source);
 
         assertEquals(AnyValue.Type.ARRAY, value.getType());
         assertEquals(1, value.asArray().size());
         assertEquals("x", value.asArray().get(0).asString());
-        assertThrows(UnsupportedOperationException.class, () -> value.asArray().add(AnyValueImpl.ofString("y")));
+        assertThrows(UnsupportedOperationException.class, () -> value.asArray().add(AnyValueFactory.ofString("y")));
 
-        source.add(AnyValueImpl.ofString("z"));
+        source.add(AnyValueFactory.ofString("z"));
         assertEquals(1, value.asArray().size());
     }
 
     @Test
     @DisplayName("ofArray() should reject null list and preserve null elements as EMPTY")
     void ofArrayShouldRejectNullListAndPreserveNullElementsAsEmpty() {
-        assertThrows(NullPointerException.class, () -> AnyValueImpl.ofArray(null));
-        AnyValue value = AnyValueImpl.ofArray(Arrays.asList(AnyValueImpl.ofString("x"), null));
+        assertThrows(NullPointerException.class, () -> AnyValueFactory.ofArray(null));
+        AnyValue value = AnyValueFactory.ofArray(Arrays.asList(AnyValueFactory.ofString("x"), null));
         assertEquals(AnyValue.Type.ARRAY, value.getType());
         assertEquals(2, value.asArray().size());
         assertEquals("x", value.asArray().get(0).asString());
@@ -123,27 +126,27 @@ class AnyValueImplUnitTest {
     @DisplayName("ofKvList() should defensively copy, validate and expose unmodifiable list")
     void ofKvListShouldDefensivelyCopyValidateAndExposeUnmodifiableList() {
         java.util.List<KeyValue> source = new java.util.ArrayList<>(Collections.singletonList(
-                new KeyValueImpl("k1", AnyValueImpl.ofString("v1"))
+                new KeyValueImpl("k1", AnyValueFactory.ofString("v1"))
         ));
-        AnyValue value = AnyValueImpl.ofKvList(source);
+        AnyValue value = AnyValueFactory.ofKvList(source);
 
         assertEquals(AnyValue.Type.KVLIST, value.getType());
         assertEquals(1, value.asKvList().size());
         assertEquals("k1", value.asKvList().get(0).getKey());
-        assertThrows(UnsupportedOperationException.class, () -> value.asKvList().add(new KeyValueImpl("k2", AnyValueImpl.ofString("v2"))));
+        assertThrows(UnsupportedOperationException.class, () -> value.asKvList().add(new KeyValueImpl("k2", AnyValueFactory.ofString("v2"))));
 
-        source.add(new KeyValueImpl("k2", AnyValueImpl.ofString("v2")));
+        source.add(new KeyValueImpl("k2", AnyValueFactory.ofString("v2")));
         assertEquals(1, value.asKvList().size());
     }
 
     @Test
     @DisplayName("ofKvList() should reject null input, duplicates and invalid elements")
     void ofKvListShouldRejectInvalidInputs() {
-        assertThrows(NullPointerException.class, () -> AnyValueImpl.ofKvList(null));
-        assertThrows(NullPointerException.class, () -> AnyValueImpl.ofKvList(Arrays.asList(new KeyValueImpl("k", AnyValueImpl.ofString("v")), null)));
-        assertThrows(IllegalArgumentException.class, () -> AnyValueImpl.ofKvList(Arrays.asList(
-                new KeyValueImpl("dup", AnyValueImpl.ofString("v1")),
-                new KeyValueImpl("dup", AnyValueImpl.ofString("v2"))
+        assertThrows(NullPointerException.class, () -> AnyValueFactory.ofKvList(null));
+        assertThrows(NullPointerException.class, () -> AnyValueFactory.ofKvList(Arrays.asList(new KeyValueImpl("k", AnyValueFactory.ofString("v")), null)));
+        assertThrows(IllegalArgumentException.class, () -> AnyValueFactory.ofKvList(Arrays.asList(
+                new KeyValueImpl("dup", AnyValueFactory.ofString("v1")),
+                new KeyValueImpl("dup", AnyValueFactory.ofString("v2"))
         )));
     }
 
@@ -169,11 +172,11 @@ class AnyValueImplUnitTest {
 
             @Override
             public AnyValue getValue() {
-                return AnyValueImpl.ofString("v");
+                return AnyValueFactory.ofString("v");
             }
         };
 
-        AnyValue value = AnyValueImpl.ofKvList(Arrays.asList(withNullValue, withEmptyKey));
+        AnyValue value = AnyValueFactory.ofKvList(Arrays.asList(withNullValue, withEmptyKey));
         assertEquals(AnyValue.Type.KVLIST, value.getType());
         assertEquals(2, value.asKvList().size());
         assertEquals("nullable", value.asKvList().get(0).getKey());
@@ -186,7 +189,7 @@ class AnyValueImplUnitTest {
     @DisplayName("ofBytes() should defensively copy input and output")
     void ofBytesShouldDefensivelyCopyInputAndOutput() {
         byte[] source = new byte[] {1, 2, 3};
-        AnyValue value = AnyValueImpl.ofBytes(source);
+        AnyValue value = AnyValueFactory.ofBytes(source);
         assertEquals(AnyValue.Type.BYTES, value.getType());
 
         source[0] = 9;
@@ -202,6 +205,6 @@ class AnyValueImplUnitTest {
     @Test
     @DisplayName("ofBytes() should reject null input")
     void ofBytesShouldRejectNull() {
-        assertThrows(NullPointerException.class, () -> AnyValueImpl.ofBytes(null));
+        assertThrows(NullPointerException.class, () -> AnyValueFactory.ofBytes(null));
     }
 }

@@ -11,7 +11,7 @@ import java.util.Objects;
  *
  * @author Stefano Reksten
  */
-public final class KeyValueImpl implements KeyValue {
+final class KeyValueImpl implements KeyValue {
 
     private final String key;
     private final AnyValue value;
@@ -22,7 +22,7 @@ public final class KeyValueImpl implements KeyValue {
      * @param key   attribute key
      * @param value attribute value
      */
-    public KeyValueImpl(final String key, final AnyValue value) {
+    KeyValueImpl(final String key, final AnyValue value) {
         Objects.requireNonNull(key, MessageHandlerResourceBundle.get("keyMustNotBeNull"));
         if (key.isEmpty()) {
             throw new IllegalArgumentException(MessageHandlerResourceBundle.get("keyMustNotBeEmpty"));
@@ -40,28 +40,6 @@ public final class KeyValueImpl implements KeyValue {
      */
     public KeyValueImpl(final Names name, final AnyValue value) {
         this(Objects.requireNonNull(name, MessageHandlerResourceBundle.get("keyMustNotBeNull")).getValue(), value);
-    }
-
-    /**
-     * Static factory creating a key-value pair from an explicit key string.
-     *
-     * @param key   attribute key
-     * @param value attribute value
-     * @return immutable key-value pair
-     */
-    public static KeyValue of(final String key, final AnyValue value) {
-        return new KeyValueImpl(key, value);
-    }
-
-    /**
-     * Static factory creating a key-value pair from a known OpenTelemetry {@link Names} key.
-     *
-     * @param name  known OpenTelemetry attribute/resource name
-     * @param value attribute value
-     * @return immutable key-value pair
-     */
-    public static KeyValue of(final Names name, final AnyValue value) {
-        return new KeyValueImpl(name, value);
     }
 
     @Override

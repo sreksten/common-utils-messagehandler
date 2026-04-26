@@ -33,7 +33,7 @@ class ResourceFactoryUnitTest {
     @Test
     @DisplayName("create() should support null schemaUrl and null attributes")
     void createShouldSupportNullSchemaUrlAndNullAttributes() {
-        Resource resource = ResourceFactory.create(null, null);
+        Resource resource = ResourceFactory.create(null, null, null);
         assertNull(resource.getSchemaUrl());
         assertTrue(resource.getEntities().isEmpty());
         assertTrue(resource.getAttributes().isEmpty());
@@ -42,7 +42,7 @@ class ResourceFactoryUnitTest {
     @Test
     @DisplayName("create() should store schemaUrl value")
     void createShouldStoreSchemaUrlValue() {
-        Resource resource = ResourceFactory.create("https://opentelemetry.io/schemas/1.26.0", null);
+        Resource resource = ResourceFactory.create("https://opentelemetry.io/schemas/1.26.0", null, null);
         assertEquals("https://opentelemetry.io/schemas/1.26.0", resource.getSchemaUrl());
     }
 
@@ -53,11 +53,11 @@ class ResourceFactoryUnitTest {
                 EntityFactory.create(
                         "service",
                         "https://opentelemetry.io/schemas/1.27.0",
-                        Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("i-1"))),
-                        Collections.singletonList(new KeyValueImpl("service.name", AnyValueImpl.ofString("billing")))
+                        Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("i-1"))),
+                        Collections.singletonList(new KeyValueImpl("service.name", AnyValueFactory.ofString("billing")))
                 )));
         List<KeyValue> attributes = new ArrayList<>(Collections.singletonList(
-                new KeyValueImpl("deployment.environment", AnyValueImpl.ofString("dev"))));
+                new KeyValueImpl("deployment.environment", AnyValueFactory.ofString("dev"))));
 
         Resource resource = ResourceFactory.create("https://ignored.example/schema", entities, attributes);
 
@@ -66,15 +66,16 @@ class ResourceFactoryUnitTest {
         assertThrows(UnsupportedOperationException.class, () ->
                 resource.getEntities().add(EntityFactory.create(
                         "host",
-                        Collections.singletonList(new KeyValueImpl("host.id", AnyValueImpl.ofString("h-1"))),
+                        null,
+                        Collections.singletonList(new KeyValueImpl("host.id", AnyValueFactory.ofString("h-1"))),
                         null)));
 
         entities.add(EntityFactory.create(
                 "host",
                 "https://opentelemetry.io/schemas/1.27.0",
-                Collections.singletonList(new KeyValueImpl("host.id", AnyValueImpl.ofString("h-1"))),
+                Collections.singletonList(new KeyValueImpl("host.id", AnyValueFactory.ofString("h-1"))),
                 null));
-        attributes.add(new KeyValueImpl("host.name", AnyValueImpl.ofString("host-a")));
+        attributes.add(new KeyValueImpl("host.name", AnyValueFactory.ofString("host-a")));
         assertEquals(1, resource.getEntities().size());
         assertEquals(1, resource.getAttributes().size());
     }
@@ -83,22 +84,22 @@ class ResourceFactoryUnitTest {
     @DisplayName("create() should copy and expose unmodifiable attributes")
     void createShouldCopyAndExposeUnmodifiableAttributes() {
         List<KeyValue> attrs = new ArrayList<>(Collections.singletonList(
-                new KeyValueImpl("service.name", AnyValueImpl.ofString("svc"))
+                new KeyValueImpl("service.name", AnyValueFactory.ofString("svc"))
         ));
 
-        Resource resource = ResourceFactory.create(null, attrs);
+        Resource resource = ResourceFactory.create(null, null, attrs);
         assertEquals(1, resource.getAttributes().size());
         assertThrows(UnsupportedOperationException.class,
-                () -> resource.getAttributes().add(new KeyValueImpl("x", AnyValueImpl.ofString("y"))));
+                () -> resource.getAttributes().add(new KeyValueImpl("x", AnyValueFactory.ofString("y"))));
 
-        attrs.add(new KeyValueImpl("service.version", AnyValueImpl.ofString("1.0")));
+        attrs.add(new KeyValueImpl("service.version", AnyValueFactory.ofString("1.0")));
         assertEquals(1, resource.getAttributes().size());
     }
 
     @Test
     @DisplayName("create() should accept null attributes as empty list")
     void createShouldAcceptNullAttributesAsEmptyList() {
-        Resource resource = ResourceFactory.create(null, null);
+        Resource resource = ResourceFactory.create(null, null, null);
         assertTrue(resource.getAttributes().isEmpty());
     }
 
@@ -108,7 +109,8 @@ class ResourceFactoryUnitTest {
         List<Entity> entities = new ArrayList<>();
         entities.add(EntityFactory.create(
                 "service",
-                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-1"))),
+                null,
+                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1"))),
                 null));
         entities.add(null);
 
@@ -122,18 +124,18 @@ class ResourceFactoryUnitTest {
                 EntityFactory.create(
                         "service",
                         "https://opentelemetry.io/schemas/1.27.0",
-                        Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-1"))),
-                        Collections.singletonList(new KeyValueImpl("deployment.environment", AnyValueImpl.ofString("dev")))),
+                        Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1"))),
+                        Collections.singletonList(new KeyValueImpl("deployment.environment", AnyValueFactory.ofString("dev")))),
                 EntityFactory.create(
                         "service",
                         "https://opentelemetry.io/schemas/1.27.0",
-                        Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-1"))),
-                        Collections.singletonList(new KeyValueImpl("host.name", AnyValueImpl.ofString("host-a")))),
+                        Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1"))),
+                        Collections.singletonList(new KeyValueImpl("host.name", AnyValueFactory.ofString("host-a")))),
                 EntityFactory.create(
                         "service",
                         "https://opentelemetry.io/schemas/1.27.0",
-                        Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-2"))),
-                        Collections.singletonList(new KeyValueImpl("ignored.key", AnyValueImpl.ofString("ignored"))))
+                        Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-2"))),
+                        Collections.singletonList(new KeyValueImpl("ignored.key", AnyValueFactory.ofString("ignored"))))
         );
 
         Resource resource = ResourceFactory.create(null, entities, null);
@@ -153,24 +155,24 @@ class ResourceFactoryUnitTest {
                 EntityFactory.create(
                         "host",
                         "https://opentelemetry.io/schemas/1.27.0",
-                        Collections.singletonList(new KeyValueImpl("host.id", AnyValueImpl.ofString("h-1"))),
-                        Collections.singletonList(new KeyValueImpl("deployment.environment", AnyValueImpl.ofString("prod")))),
+                        Collections.singletonList(new KeyValueImpl("host.id", AnyValueFactory.ofString("h-1"))),
+                        Collections.singletonList(new KeyValueImpl("deployment.environment", AnyValueFactory.ofString("prod")))),
                 EntityFactory.create(
                         "service",
                         "https://opentelemetry.io/schemas/1.27.0",
-                        Collections.singletonList(new KeyValueImpl("host.id", AnyValueImpl.ofString("h-1"))),
-                        Collections.singletonList(new KeyValueImpl("service.name", AnyValueImpl.ofString("billing")))),
+                        Collections.singletonList(new KeyValueImpl("host.id", AnyValueFactory.ofString("h-1"))),
+                        Collections.singletonList(new KeyValueImpl("service.name", AnyValueFactory.ofString("billing")))),
                 EntityFactory.create(
                         "process",
                         "https://opentelemetry.io/schemas/1.27.0",
-                        Collections.singletonList(new KeyValueImpl("process.pid", AnyValueImpl.ofLong(123L))),
-                        Collections.singletonList(new KeyValueImpl("deployment.environment", AnyValueImpl.ofString("dev"))))
+                        Collections.singletonList(new KeyValueImpl("process.pid", AnyValueFactory.ofLong(123L))),
+                        Collections.singletonList(new KeyValueImpl("deployment.environment", AnyValueFactory.ofString("dev"))))
         );
 
         List<KeyValue> looseAttributes = Arrays.asList(
-                new KeyValueImpl("deployment.environment", AnyValueImpl.ofString("staging")),
-                new KeyValueImpl("host.id", AnyValueImpl.ofString("from-loose-attr")),
-                new KeyValueImpl("service.namespace", AnyValueImpl.ofString("payments"))
+                new KeyValueImpl("deployment.environment", AnyValueFactory.ofString("staging")),
+                new KeyValueImpl("host.id", AnyValueFactory.ofString("from-loose-attr")),
+                new KeyValueImpl("service.namespace", AnyValueFactory.ofString("payments"))
         );
 
         Resource resource = ResourceFactory.create("https://ignored.example/schema", entities, looseAttributes);
@@ -189,7 +191,7 @@ class ResourceFactoryUnitTest {
                 Collections.singletonList(EntityFactory.create(
                         "service",
                         "",
-                        Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("i-1"))),
+                        Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("i-1"))),
                         null)),
                 null);
         assertNull(emptySchema.getSchemaUrl());
@@ -200,12 +202,12 @@ class ResourceFactoryUnitTest {
                         EntityFactory.create(
                                 "service",
                                 "https://opentelemetry.io/schemas/1.27.0",
-                                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("i-1"))),
+                                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("i-1"))),
                                 null),
                         EntityFactory.create(
                                 "host",
                                 "https://opentelemetry.io/schemas/1.28.0",
-                                Collections.singletonList(new KeyValueImpl("host.id", AnyValueImpl.ofString("h-1"))),
+                                Collections.singletonList(new KeyValueImpl("host.id", AnyValueFactory.ofString("h-1"))),
                                 null)),
                 null);
         assertNull(mixedSchema.getSchemaUrl());
@@ -219,7 +221,7 @@ class ResourceFactoryUnitTest {
                 Collections.singletonList(EntityFactory.create(
                         "service",
                         null,
-                        Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("i-1"))),
+                        Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("i-1"))),
                         null)),
                 null);
 
@@ -235,12 +237,12 @@ class ResourceFactoryUnitTest {
                         EntityFactory.create(
                                 "service",
                                 "https://opentelemetry.io/schemas/1.27.0",
-                                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("i-1"))),
+                                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("i-1"))),
                                 null),
                         EntityFactory.create(
                                 "host",
                                 "https://opentelemetry.io/schemas/1.27.0",
-                                Collections.singletonList(new KeyValueImpl("host.id", AnyValueImpl.ofString("h-1"))),
+                                Collections.singletonList(new KeyValueImpl("host.id", AnyValueFactory.ofString("h-1"))),
                                 null)),
                 null);
 
@@ -251,10 +253,10 @@ class ResourceFactoryUnitTest {
     @DisplayName("create() should reject duplicate keys")
     void createShouldRejectDuplicateKeys() {
         List<KeyValue> attrs = Arrays.asList(
-                new KeyValueImpl("k", AnyValueImpl.ofString("v1")),
-                new KeyValueImpl("k", AnyValueImpl.ofString("v2"))
+                new KeyValueImpl("k", AnyValueFactory.ofString("v1")),
+                new KeyValueImpl("k", AnyValueFactory.ofString("v2"))
         );
-        assertThrows(IllegalArgumentException.class, () -> ResourceFactory.create(null, attrs));
+        assertThrows(IllegalArgumentException.class, () -> ResourceFactory.create(null, null, attrs));
     }
 
     @Test
@@ -268,7 +270,7 @@ class ResourceFactoryUnitTest {
 
             @Override
             public AnyValue getValue() {
-                return AnyValueImpl.ofString("v");
+                return AnyValueFactory.ofString("v");
             }
         };
         KeyValue nullValue = new KeyValue() {
@@ -283,9 +285,9 @@ class ResourceFactoryUnitTest {
             }
         };
 
-        assertThrows(NullPointerException.class, () -> ResourceFactory.create(null, Collections.singletonList(null)));
-        assertThrows(NullPointerException.class, () -> ResourceFactory.create(null, Collections.singletonList(nullKey)));
-        assertThrows(NullPointerException.class, () -> ResourceFactory.create(null, Collections.singletonList(nullValue)));
+        assertThrows(NullPointerException.class, () -> ResourceFactory.create(null, null, Collections.singletonList(null)));
+        assertThrows(NullPointerException.class, () -> ResourceFactory.create(null, null, Collections.singletonList(nullKey)));
+        assertThrows(NullPointerException.class, () -> ResourceFactory.create(null, null, Collections.singletonList(nullValue)));
     }
 
     @Test
@@ -293,10 +295,10 @@ class ResourceFactoryUnitTest {
     void createShouldKeepAllAttributesWithoutGenericLimit() {
         List<KeyValue> attributes = new ArrayList<>();
         for (int i = 0; i < 129; i++) {
-            attributes.add(new KeyValueImpl("k" + i, AnyValueImpl.ofString("v" + i)));
+            attributes.add(new KeyValueImpl("k" + i, AnyValueFactory.ofString("v" + i)));
         }
 
-        Resource resource = ResourceFactory.create(null, attributes);
+        Resource resource = ResourceFactory.create(null, null, attributes);
 
         assertEquals(129, resource.getAttributes().size());
         assertEquals("k128", resource.getAttributes().get(128).getKey());
@@ -305,7 +307,7 @@ class ResourceFactoryUnitTest {
     @Test
     @DisplayName("merge() should reject null resource")
     void mergeShouldRejectNullResource() {
-        Resource resource = ResourceFactory.create(null, null);
+        Resource resource = ResourceFactory.create(null, null, null);
         assertThrows(NullPointerException.class, () -> resource.merge(null));
     }
 
@@ -314,15 +316,17 @@ class ResourceFactoryUnitTest {
     void mergeShouldOverrideLooseAttributesAndPreferIncomingSchemaUrlWithoutEntities() {
         Resource base = ResourceFactory.create(
                 "https://base.example/schema",
+                null,
                 Arrays.asList(
-                        new KeyValueImpl("service.name", AnyValueImpl.ofString("billing")),
-                        new KeyValueImpl("deployment.environment", AnyValueImpl.ofString("dev"))));
+                        new KeyValueImpl("service.name", AnyValueFactory.ofString("billing")),
+                        new KeyValueImpl("deployment.environment", AnyValueFactory.ofString("dev"))));
 
         Resource incoming = ResourceFactory.create(
                 "https://incoming.example/schema",
+                null,
                 Arrays.asList(
-                        new KeyValueImpl("deployment.environment", AnyValueImpl.ofString("prod")),
-                        new KeyValueImpl("host.name", AnyValueImpl.ofString("host-a"))));
+                        new KeyValueImpl("deployment.environment", AnyValueFactory.ofString("prod")),
+                        new KeyValueImpl("host.name", AnyValueFactory.ofString("host-a"))));
 
         Resource merged = base.merge(incoming);
 
@@ -338,8 +342,8 @@ class ResourceFactoryUnitTest {
     @Test
     @DisplayName("merge() should preserve current schemaUrl when incoming schemaUrl is null and entities are absent")
     void mergeShouldPreserveCurrentSchemaUrlWhenIncomingSchemaUrlIsNullAndEntitiesAreAbsent() {
-        Resource base = ResourceFactory.create("https://base.example/schema", null);
-        Resource incoming = ResourceFactory.create(null, Collections.<KeyValue>emptyList());
+        Resource base = ResourceFactory.create("https://base.example/schema", null, null);
+        Resource incoming = ResourceFactory.create(null, null, Collections.<KeyValue>emptyList());
 
         Resource merged = base.merge(incoming);
 
@@ -352,28 +356,28 @@ class ResourceFactoryUnitTest {
         Entity baseService = EntityFactory.create(
                 "service",
                 "https://opentelemetry.io/schemas/1.27.0",
-                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-1"))),
-                Collections.singletonList(new KeyValueImpl("service.name", AnyValueImpl.ofString("billing"))));
+                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1"))),
+                Collections.singletonList(new KeyValueImpl("service.name", AnyValueFactory.ofString("billing"))));
 
         Entity incomingService = EntityFactory.create(
                 "service",
                 "https://opentelemetry.io/schemas/1.27.0",
-                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-1"))),
-                Collections.singletonList(new KeyValueImpl("deployment.environment", AnyValueImpl.ofString("prod"))));
+                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1"))),
+                Collections.singletonList(new KeyValueImpl("deployment.environment", AnyValueFactory.ofString("prod"))));
 
         Resource base = ResourceFactory.create(
                 null,
                 Collections.singletonList(baseService),
                 Arrays.asList(
-                        new KeyValueImpl("service.name", AnyValueImpl.ofString("from-resource")),
-                        new KeyValueImpl("resource.only", AnyValueImpl.ofString("base"))));
+                        new KeyValueImpl("service.name", AnyValueFactory.ofString("from-resource")),
+                        new KeyValueImpl("resource.only", AnyValueFactory.ofString("base"))));
 
         Resource incoming = ResourceFactory.create(
                 null,
                 Collections.singletonList(incomingService),
                 Arrays.asList(
-                        new KeyValueImpl("deployment.environment", AnyValueImpl.ofString("from-resource")),
-                        new KeyValueImpl("resource.only", AnyValueImpl.ofString("incoming"))));
+                        new KeyValueImpl("deployment.environment", AnyValueFactory.ofString("from-resource")),
+                        new KeyValueImpl("resource.only", AnyValueFactory.ofString("incoming"))));
 
         Resource merged = base.merge(incoming);
 
@@ -397,7 +401,7 @@ class ResourceFactoryUnitTest {
                 Collections.singletonList(EntityFactory.create(
                         "service",
                         "https://opentelemetry.io/schemas/1.27.0",
-                        Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("i-1"))),
+                        Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("i-1"))),
                         null)),
                 null);
 
@@ -406,7 +410,7 @@ class ResourceFactoryUnitTest {
                 Collections.singletonList(EntityFactory.create(
                         "host",
                         "https://opentelemetry.io/schemas/1.28.0",
-                        Collections.singletonList(new KeyValueImpl("host.id", AnyValueImpl.ofString("h-1"))),
+                        Collections.singletonList(new KeyValueImpl("host.id", AnyValueFactory.ofString("h-1"))),
                         null)),
                 null);
 
@@ -421,7 +425,8 @@ class ResourceFactoryUnitTest {
     void legacyResourceImplConstructorShouldDelegate() {
         ResourceImpl resource = new ResourceImpl(
                 "https://opentelemetry.io/schemas/1.26.0",
-                Collections.singletonList(new KeyValueImpl("service.name", AnyValueImpl.ofString("billing"))));
+                null,
+                Collections.singletonList(new KeyValueImpl("service.name", AnyValueFactory.ofString("billing"))));
 
         assertEquals("https://opentelemetry.io/schemas/1.26.0", resource.getSchemaUrl());
         assertTrue(resource.getEntities().isEmpty());

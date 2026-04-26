@@ -34,21 +34,21 @@ class OpenTelemetryAttributeValidatorUnitTest {
     @DisplayName("copyAndValidateKeyValues() should return an independent copy")
     void copyAndValidateKeyValuesShouldReturnIndependentCopy() {
         List<KeyValue> source = new ArrayList<>(Collections.singletonList(
-                new KeyValueImpl("k1", AnyValueImpl.ofString("v1"))
+                new KeyValueImpl("k1", AnyValueFactory.ofString("v1"))
         ));
 
         List<KeyValue> copy = OpenTelemetryAttributeValidator.copyAndValidateKeyValues(source, "attrs");
         assertNotSame(source, copy);
         assertEquals(1, copy.size());
 
-        source.add(new KeyValueImpl("k2", AnyValueImpl.ofString("v2")));
+        source.add(new KeyValueImpl("k2", AnyValueFactory.ofString("v2")));
         assertEquals(1, copy.size());
     }
 
     @Test
     @DisplayName("copyAndValidateKeyValues() should reject null elements")
     void copyAndValidateKeyValuesShouldRejectNullElements() {
-        List<KeyValue> source = Arrays.asList(new KeyValueImpl("k1", AnyValueImpl.ofString("v1")), null);
+        List<KeyValue> source = Arrays.asList(new KeyValueImpl("k1", AnyValueFactory.ofString("v1")), null);
         NullPointerException ex = assertThrows(
                 NullPointerException.class,
                 () -> OpenTelemetryAttributeValidator.copyAndValidateKeyValues(source, "attrs"));
@@ -68,7 +68,7 @@ class OpenTelemetryAttributeValidatorUnitTest {
 
             @Override
             public AnyValue getValue() {
-                return AnyValueImpl.ofString("v");
+                return AnyValueFactory.ofString("v");
             }
         };
 
@@ -91,7 +91,7 @@ class OpenTelemetryAttributeValidatorUnitTest {
 
             @Override
             public AnyValue getValue() {
-                return AnyValueImpl.ofString("v");
+                return AnyValueFactory.ofString("v");
             }
         };
 
@@ -130,8 +130,8 @@ class OpenTelemetryAttributeValidatorUnitTest {
     @DisplayName("copyAndValidateKeyValues() should reject duplicate keys")
     void copyAndValidateKeyValuesShouldRejectDuplicateKeys() {
         List<KeyValue> source = Arrays.asList(
-                new KeyValueImpl("dup", AnyValueImpl.ofString("v1")),
-                new KeyValueImpl("dup", AnyValueImpl.ofString("v2"))
+                new KeyValueImpl("dup", AnyValueFactory.ofString("v1")),
+                new KeyValueImpl("dup", AnyValueFactory.ofString("v2"))
         );
         IllegalArgumentException ex = assertThrows(
                 IllegalArgumentException.class,
@@ -145,8 +145,8 @@ class OpenTelemetryAttributeValidatorUnitTest {
     @DisplayName("copyAndValidateKeyValues() should accept valid unique key-values")
     void copyAndValidateKeyValuesShouldAcceptValidUniqueValues() {
         assertDoesNotThrow(() -> OpenTelemetryAttributeValidator.copyAndValidateKeyValues(Arrays.asList(
-                new KeyValueImpl("a", AnyValueImpl.ofString("1")),
-                new KeyValueImpl("b", AnyValueImpl.ofLong(2))
+                new KeyValueImpl("a", AnyValueFactory.ofString("1")),
+                new KeyValueImpl("b", AnyValueFactory.ofLong(2))
         ), "attrs"));
     }
 }

@@ -31,9 +31,9 @@ class EntityFactoryUnitTest {
     @DisplayName("create(type, schemaUrl, id, description) should store values and expose unmodifiable lists")
     void createWithSchemaUrlShouldStoreValuesAndExposeUnmodifiableLists() {
         List<KeyValue> id = new ArrayList<>(Collections.singletonList(
-                new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-1"))));
+                new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1"))));
         List<KeyValue> description = new ArrayList<>(Collections.singletonList(
-                new KeyValueImpl("service.name", AnyValueImpl.ofString("billing"))));
+                new KeyValueImpl("service.name", AnyValueFactory.ofString("billing"))));
 
         Entity entity = EntityFactory.create(
                 "service",
@@ -48,22 +48,23 @@ class EntityFactoryUnitTest {
         assertEquals(1, entity.getDescription().size());
         assertEquals("service.name", entity.getDescription().get(0).getKey());
         assertThrows(UnsupportedOperationException.class,
-                () -> entity.getId().add(new KeyValueImpl("x", AnyValueImpl.ofString("y"))));
+                () -> entity.getId().add(new KeyValueImpl("x", AnyValueFactory.ofString("y"))));
         assertThrows(UnsupportedOperationException.class,
-                () -> entity.getDescription().add(new KeyValueImpl("x", AnyValueImpl.ofString("y"))));
+                () -> entity.getDescription().add(new KeyValueImpl("x", AnyValueFactory.ofString("y"))));
 
-        id.add(new KeyValueImpl("service.version", AnyValueImpl.ofString("1.0.0")));
-        description.add(new KeyValueImpl("host.name", AnyValueImpl.ofString("host-a")));
+        id.add(new KeyValueImpl("service.version", AnyValueFactory.ofString("1.0.0")));
+        description.add(new KeyValueImpl("host.name", AnyValueFactory.ofString("host-a")));
         assertEquals(1, entity.getId().size());
         assertEquals(1, entity.getDescription().size());
     }
 
     @Test
-    @DisplayName("create(type, id, description) should set schemaUrl to null and accept null description")
+    @DisplayName("create(type, null, id, description) should set schemaUrl to null and accept null description")
     void createWithoutSchemaUrlShouldSetSchemaUrlNullAndAcceptNullDescription() {
         Entity entity = EntityFactory.create(
                 "service",
-                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-2"))),
+                null,
+                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-2"))),
                 null);
 
         assertEquals("service", entity.getType());
@@ -76,27 +77,27 @@ class EntityFactoryUnitTest {
     @DisplayName("create() should reject null and blank type")
     void createShouldRejectNullAndBlankType() {
         List<KeyValue> id = Collections.singletonList(
-                new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-1")));
+                new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1")));
 
-        assertThrows(NullPointerException.class, () -> EntityFactory.create(null, id, null));
-        assertThrows(IllegalArgumentException.class, () -> EntityFactory.create("", id, null));
-        assertThrows(IllegalArgumentException.class, () -> EntityFactory.create("   ", id, null));
+        assertThrows(NullPointerException.class, () -> EntityFactory.create(null, null, id, null));
+        assertThrows(IllegalArgumentException.class, () -> EntityFactory.create("", null, id, null));
+        assertThrows(IllegalArgumentException.class, () -> EntityFactory.create("   ", null, id, null));
     }
 
     @Test
     @DisplayName("create() should reject null or empty entity id")
     void createShouldRejectNullOrEmptyEntityId() {
-        assertThrows(IllegalArgumentException.class, () -> EntityFactory.create("service", null, null));
-        assertThrows(IllegalArgumentException.class, () -> EntityFactory.create("service", Collections.<KeyValue>emptyList(), null));
+        assertThrows(IllegalArgumentException.class, () -> EntityFactory.create("service", null, null, null));
+        assertThrows(IllegalArgumentException.class, () -> EntityFactory.create("service", null, Collections.<KeyValue>emptyList(), null));
     }
 
     @Test
     @DisplayName("create() should reject invalid id entries")
     void createShouldRejectInvalidIdEntries() {
         List<KeyValue> duplicateId = Arrays.asList(
-                new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("i1")),
-                new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("i2")));
-        assertThrows(IllegalArgumentException.class, () -> EntityFactory.create("service", duplicateId, null));
+                new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("i1")),
+                new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("i2")));
+        assertThrows(IllegalArgumentException.class, () -> EntityFactory.create("service", null, duplicateId, null));
 
         KeyValue nullKey = new KeyValue() {
             @Override
@@ -106,7 +107,7 @@ class EntityFactoryUnitTest {
 
             @Override
             public AnyValue getValue() {
-                return AnyValueImpl.ofString("x");
+                return AnyValueFactory.ofString("x");
             }
         };
         KeyValue nullValue = new KeyValue() {
@@ -121,22 +122,22 @@ class EntityFactoryUnitTest {
             }
         };
 
-        assertThrows(NullPointerException.class, () -> EntityFactory.create("service", Collections.singletonList(null), null));
-        assertThrows(NullPointerException.class, () -> EntityFactory.create("service", Collections.singletonList(nullKey), null));
-        assertThrows(NullPointerException.class, () -> EntityFactory.create("service", Collections.singletonList(nullValue), null));
+        assertThrows(NullPointerException.class, () -> EntityFactory.create("service", null, Collections.singletonList(null), null));
+        assertThrows(NullPointerException.class, () -> EntityFactory.create("service", null, Collections.singletonList(nullKey), null));
+        assertThrows(NullPointerException.class, () -> EntityFactory.create("service", null, Collections.singletonList(nullValue), null));
     }
 
     @Test
     @DisplayName("create() should reject invalid description entries")
     void createShouldRejectInvalidDescriptionEntries() {
         List<KeyValue> id = Collections.singletonList(
-                new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-3")));
+                new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-3")));
 
         List<KeyValue> duplicateDescription = Arrays.asList(
-                new KeyValueImpl("service.name", AnyValueImpl.ofString("a")),
-                new KeyValueImpl("service.name", AnyValueImpl.ofString("b")));
+                new KeyValueImpl("service.name", AnyValueFactory.ofString("a")),
+                new KeyValueImpl("service.name", AnyValueFactory.ofString("b")));
         assertThrows(IllegalArgumentException.class,
-                () -> EntityFactory.create("service", id, duplicateDescription));
+                () -> EntityFactory.create("service", null, id, duplicateDescription));
     }
 
     @Test
@@ -144,7 +145,8 @@ class EntityFactoryUnitTest {
     void mergeShouldRejectNullEntity() {
         Entity entity = EntityFactory.create(
                 "service",
-                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-1"))),
+                null,
+                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1"))),
                 null);
 
         assertThrows(NullPointerException.class, () -> entity.merge(null));
@@ -156,28 +158,28 @@ class EntityFactoryUnitTest {
         Entity base = EntityFactory.create(
                 "service",
                 "https://opentelemetry.io/schemas/1.27.0",
-                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-1"))),
-                Collections.singletonList(new KeyValueImpl("service.name", AnyValueImpl.ofString("billing"))));
+                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1"))),
+                Collections.singletonList(new KeyValueImpl("service.name", AnyValueFactory.ofString("billing"))));
 
         Entity differentType = EntityFactory.create(
                 "host",
                 "https://opentelemetry.io/schemas/1.27.0",
-                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-1"))),
-                Collections.singletonList(new KeyValueImpl("host.name", AnyValueImpl.ofString("host-a"))));
+                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1"))),
+                Collections.singletonList(new KeyValueImpl("host.name", AnyValueFactory.ofString("host-a"))));
         assertSame(base, base.merge(differentType));
 
         Entity differentSchema = EntityFactory.create(
                 "service",
                 "https://opentelemetry.io/schemas/1.28.0",
-                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-1"))),
-                Collections.singletonList(new KeyValueImpl("service.name", AnyValueImpl.ofString("x"))));
+                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1"))),
+                Collections.singletonList(new KeyValueImpl("service.name", AnyValueFactory.ofString("x"))));
         assertSame(base, base.merge(differentSchema));
 
         Entity differentId = EntityFactory.create(
                 "service",
                 "https://opentelemetry.io/schemas/1.27.0",
-                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-2"))),
-                Collections.singletonList(new KeyValueImpl("service.name", AnyValueImpl.ofString("x"))));
+                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-2"))),
+                Collections.singletonList(new KeyValueImpl("service.name", AnyValueFactory.ofString("x"))));
         assertSame(base, base.merge(differentId));
     }
 
@@ -186,12 +188,14 @@ class EntityFactoryUnitTest {
     void mergeShouldReturnSameInstanceWhenOtherDescriptionIsEmpty() {
         Entity base = EntityFactory.create(
                 "service",
-                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-1"))),
-                Collections.singletonList(new KeyValueImpl("service.name", AnyValueImpl.ofString("billing"))));
+                null,
+                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1"))),
+                Collections.singletonList(new KeyValueImpl("service.name", AnyValueFactory.ofString("billing"))));
 
         Entity other = EntityFactory.create(
                 "service",
-                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-1"))),
+                null,
+                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1"))),
                 Collections.emptyList());
 
         assertSame(base, base.merge(other));
@@ -202,17 +206,19 @@ class EntityFactoryUnitTest {
     void mergeShouldReturnSameInstanceWhenCompatibleDescriptionsAreEquivalent() {
         Entity base = EntityFactory.create(
                 "service",
+                null,
                 Arrays.asList(
-                        new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-1")),
-                        new KeyValueImpl("service.namespace", AnyValueImpl.ofString("payments"))),
-                Collections.singletonList(new KeyValueImpl("service.name", AnyValueImpl.ofString("billing"))));
+                        new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1")),
+                        new KeyValueImpl("service.namespace", AnyValueFactory.ofString("payments"))),
+                Collections.singletonList(new KeyValueImpl("service.name", AnyValueFactory.ofString("billing"))));
 
         Entity other = EntityFactory.create(
                 "service",
+                null,
                 Arrays.asList(
-                        new KeyValueImpl("service.namespace", AnyValueImpl.ofString("payments")),
-                        new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-1"))),
-                Collections.singletonList(new KeyValueImpl("service.name", AnyValueImpl.ofString("billing"))));
+                        new KeyValueImpl("service.namespace", AnyValueFactory.ofString("payments")),
+                        new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1"))),
+                Collections.singletonList(new KeyValueImpl("service.name", AnyValueFactory.ofString("billing"))));
 
         assertSame(base, base.merge(other));
     }
@@ -224,21 +230,21 @@ class EntityFactoryUnitTest {
                 "service",
                 "https://opentelemetry.io/schemas/1.27.0",
                 Arrays.asList(
-                        new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-1")),
-                        new KeyValueImpl("service.namespace", AnyValueImpl.ofString("payments"))),
+                        new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1")),
+                        new KeyValueImpl("service.namespace", AnyValueFactory.ofString("payments"))),
                 Arrays.asList(
-                        new KeyValueImpl("service.name", AnyValueImpl.ofString("billing")),
-                        new KeyValueImpl("deployment.environment", AnyValueImpl.ofString("dev"))));
+                        new KeyValueImpl("service.name", AnyValueFactory.ofString("billing")),
+                        new KeyValueImpl("deployment.environment", AnyValueFactory.ofString("dev"))));
 
         Entity incoming = EntityFactory.create(
                 "service",
                 "https://opentelemetry.io/schemas/1.27.0",
                 Arrays.asList(
-                        new KeyValueImpl("service.namespace", AnyValueImpl.ofString("payments")),
-                        new KeyValueImpl("service.instance.id", AnyValueImpl.ofString("instance-1"))),
+                        new KeyValueImpl("service.namespace", AnyValueFactory.ofString("payments")),
+                        new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1"))),
                 Arrays.asList(
-                        new KeyValueImpl("deployment.environment", AnyValueImpl.ofString("prod")),
-                        new KeyValueImpl("host.name", AnyValueImpl.ofString("host-a"))));
+                        new KeyValueImpl("deployment.environment", AnyValueFactory.ofString("prod")),
+                        new KeyValueImpl("host.name", AnyValueFactory.ofString("host-a"))));
 
         Entity merged = base.merge(incoming);
 
