@@ -33,7 +33,7 @@ class InstrumentationScopeBuilderImpl extends KeyValueBuilderImpl implements Ins
     @Override
     public InstrumentationScopeBuilderStepBuild withScopeUrl(String scopeUrl) {
         this.scopeUrl = scopeUrl;
-        return null;
+        return this;
     }
 
     public InstrumentationScope build() {
