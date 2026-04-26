@@ -138,7 +138,7 @@ public enum Names {
     ATTR_PROCESS_COMMAND_ARGS("process.command_args"),
     ATTR_PROCESS_COMMAND_LINE("process.command_line"),
     ATTR_PROCESS_CONTEXT_SWITCH_TYPE("process.context_switch.type"),
-    ATTR_PROCESS_CREATION_TIME("process.creation_time"),
+    ATTR_PROCESS_CREATION_TIME("process.creation.time"),
     // ???
     ATTR_PROCESS_ENVIRONMENT_VARIABLE("process.environment_variable."),
     ATTR_PROCESS_EXECUTABLE_BUILD_ID_GNU("process.executable.build_id.gnu"),
@@ -376,7 +376,7 @@ public enum Names {
     // ---------------------------------------------------------------------
     ATTR_DEVICE_ID("device.id"),
     ATTR_DEVICE_MANUFACTURER("device.manufacturer"),
-    ATTR_DEVICE_MOEL_IDENTIFIER("device.model.indentifier"),
+    ATTR_DEVICE_MODEL_IDENTIFIER("device.model.identifier"),
     ATTR_DEVICE_MODEL_NAME("device.model.name");
 
     private final String value;
