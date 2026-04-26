@@ -32,7 +32,7 @@ public class ResourceBuilderImpl extends KeyValueBuilderImpl implements Resource
         if (serviceName == null || serviceName.isEmpty()) {
             serviceName = "unknown_service";
         }
-        overridingAttributes.put(Names.ATTR_SERVICE_NAME.getValue(), serviceName);
+        overridingAttributes.put(OTelTags.SERVICE_NAME.getValue(), serviceName);
         return this;
     }
 
@@ -41,7 +41,7 @@ public class ResourceBuilderImpl extends KeyValueBuilderImpl implements Resource
         if (serviceNamespace == null || serviceNamespace.isEmpty()) {
             return this;
         }
-        overridingAttributes.put(Names.ATTR_SERVICE_NAMESPACE.getValue(), serviceNamespace);
+        overridingAttributes.put(OTelTags.SERVICE_NAMESPACE.getValue(), serviceNamespace);
         return this;
     }
 
@@ -55,7 +55,7 @@ public class ResourceBuilderImpl extends KeyValueBuilderImpl implements Resource
         if (serviceVersion == null || serviceVersion.isEmpty()) {
             return this;
         }
-        overridingAttributes.put(Names.ATTR_SERVICE_VERSION.getValue(), serviceVersion);
+        overridingAttributes.put(OTelTags.SERVICE_VERSION.getValue(), serviceVersion);
         return this;
     }
 
@@ -69,7 +69,7 @@ public class ResourceBuilderImpl extends KeyValueBuilderImpl implements Resource
         if (serviceInstanceId == null || serviceInstanceId.isEmpty()) {
             return this;
         }
-        overridingAttributes.put(Names.ATTR_SERVICE_INSTANCE_ID.getValue(), serviceInstanceId);
+        overridingAttributes.put(OTelTags.SERVICE_INSTANCE_ID.getValue(), serviceInstanceId);
         return this;
     }
 
@@ -83,7 +83,7 @@ public class ResourceBuilderImpl extends KeyValueBuilderImpl implements Resource
         if (deploymentEnvironmentName == null || deploymentEnvironmentName.isEmpty()) {
             return this;
         }
-        overridingAttributes.put(Names.ATTR_DEPLOYMENT_ENVIRONMENT_NAME.getValue(), deploymentEnvironmentName);
+        overridingAttributes.put(OTelTags.DEPLOYMENT_ENVIRONMENT_NAME.getValue(), deploymentEnvironmentName);
         return this;
     }
 

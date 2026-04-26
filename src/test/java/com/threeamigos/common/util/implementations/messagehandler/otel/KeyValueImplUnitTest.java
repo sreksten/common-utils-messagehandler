@@ -37,16 +37,16 @@ class KeyValueImplUnitTest {
     }
 
     @Test
-    @DisplayName("constructor should reject null Names key")
-    void constructorShouldRejectNullNamesKey() {
-        assertThrows(NullPointerException.class, () -> new KeyValueImpl((Names) null, AnyValueFactory.ofString("v")));
+    @DisplayName("constructor should reject null OTelTags key")
+    void constructorShouldRejectNullOtelTagsKey() {
+        assertThrows(NullPointerException.class, () -> new KeyValueImpl((OTelTags) null, AnyValueFactory.ofString("v")));
     }
 
     @Test
-    @DisplayName("constructor should accept Names key")
-    void constructorShouldAcceptNamesKey() {
+    @DisplayName("constructor should accept OTelTags key")
+    void constructorShouldAcceptOtelTagsKey() {
         AnyValue value = AnyValueFactory.ofString("service-a");
-        KeyValue kv = new KeyValueImpl(Names.ATTR_SERVICE_NAME, value);
+        KeyValue kv = new KeyValueImpl(OTelTags.SERVICE_NAME, value);
         assertEquals("service.name", kv.getKey());
         assertSame(value, kv.getValue());
     }
@@ -73,10 +73,10 @@ class KeyValueImplUnitTest {
     }
 
     @Test
-    @DisplayName("factory should accept Names key")
-    void factoryShouldAcceptNamesKey() {
+    @DisplayName("factory should accept OTelTags key")
+    void factoryShouldAcceptOtelTagsKey() {
         AnyValue value = AnyValueFactory.ofString("200");
-        KeyValue kv = KeyValueFactory.of(Names.ATTR_HTTP_RESPONSE_STATUS_CODE, value);
+        KeyValue kv = KeyValueFactory.of(OTelTags.HTTP_RESPONSE_STATUS_CODE, value);
         assertEquals("http.response.status_code", kv.getKey());
         assertSame(value, kv.getValue());
     }

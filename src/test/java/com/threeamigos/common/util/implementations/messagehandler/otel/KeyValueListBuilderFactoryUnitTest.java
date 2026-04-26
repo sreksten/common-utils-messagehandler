@@ -39,21 +39,21 @@ class KeyValueListBuilderFactoryUnitTest {
 
         KeyValueListBuilderInterface result = builder
                 .withEmpty("empty.string")
-                .withEmpty(Names.ATTR_SERVICE_NAME)
+                .withEmpty(OTelTags.SERVICE_NAME)
                 .withString("string.string", "v")
-                .withString(Names.ATTR_SERVICE_VERSION, "1.0.0")
+                .withString(OTelTags.SERVICE_VERSION, "1.0.0")
                 .withBoolean("bool.string", true)
-                .withBoolean(Names.ATTR_TELEMETRY_SDK_LANGUAGE, false)
+                .withBoolean(OTelTags.TELEMETRY_SDK_LANGUAGE, false)
                 .withLong("long.string", 123L)
-                .withLong(Names.ATTR_HTTP_RESPONSE_STATUS_CODE, 200L)
+                .withLong(OTelTags.HTTP_RESPONSE_STATUS_CODE, 200L)
                 .withDouble("double.string", 1.25)
-                .withDouble(Names.ATTR_TELEMETRY_SDK_VERSION, 2.5)
+                .withDouble(OTelTags.TELEMETRY_SDK_VERSION, 2.5)
                 .withArray("array.string", array)
-                .withArray(Names.ATTR_TELEMETRY_SDK_NAME, array)
+                .withArray(OTelTags.TELEMETRY_SDK_NAME, array)
                 .withKeyValueList("kvlist.string", kvList)
-                .withKeyValueList(Names.ATTR_EXCEPTION_TYPE, kvList)
+                .withKeyValueList(OTelTags.EXCEPTION_TYPE, kvList)
                 .withBytes("bytes.string", new byte[] {1, 2, 3})
-                .withBytes(Names.ATTR_SERVICE_NAMESPACE, new byte[] {4, 5, 6});
+                .withBytes(OTelTags.SERVICE_NAMESPACE, new byte[] {4, 5, 6});
 
         assertSame(builder, result);
 

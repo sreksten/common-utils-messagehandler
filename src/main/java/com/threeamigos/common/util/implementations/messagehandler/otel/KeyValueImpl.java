@@ -33,12 +33,12 @@ final class KeyValueImpl implements KeyValue {
     }
 
     /**
-     * Creates a key-value pair using a known OpenTelemetry {@link Names} key.
+     * Creates a key-value pair using a known OpenTelemetry {@link OTelTags} key.
      *
      * @param name  known OpenTelemetry attribute/resource name
      * @param value attribute value
      */
-    public KeyValueImpl(final Names name, final AnyValue value) {
+    public KeyValueImpl(final OTelTags name, final AnyValue value) {
         this(Objects.requireNonNull(name, MessageHandlerResourceBundle.get("keyMustNotBeNull")).getValue(), value);
     }
 

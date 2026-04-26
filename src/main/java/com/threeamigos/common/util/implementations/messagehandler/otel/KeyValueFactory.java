@@ -17,7 +17,7 @@ public final class KeyValueFactory {
         return new KeyValueImpl(key, value);
     }
 
-    public static KeyValue of(final Names name, final AnyValue value) {
+    public static KeyValue of(final OTelTags name, final AnyValue value) {
         return new KeyValueImpl(name, value);
     }
 }

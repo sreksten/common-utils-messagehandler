@@ -63,13 +63,13 @@ public class LogRecordFactoryImpl implements LogRecordFactory {
     }
 
     private static void addThrowableDetails(final LogRecordImpl logRecord, final Throwable throwable) {
-        logRecord.setEventName(Names.EVENT_EXCEPTION.getValue());
+        logRecord.setEventName(OTelTags.EVENT_EXCEPTION.getValue());
         List<KeyValue> attributes = new ArrayList<>(3);
-        attributes.add(KeyValueFactory.of(Names.ATTR_EXCEPTION_TYPE, AnyValueFactory.ofString(throwable.getClass().getName())));
+        attributes.add(KeyValueFactory.of(OTelTags.EXCEPTION_TYPE, AnyValueFactory.ofString(throwable.getClass().getName())));
         if (throwable.getMessage() != null) {
-            attributes.add(KeyValueFactory.of(Names.ATTR_EXCEPTION_MESSAGE, AnyValueFactory.ofString(throwable.getMessage())));
+            attributes.add(KeyValueFactory.of(OTelTags.EXCEPTION_MESSAGE, AnyValueFactory.ofString(throwable.getMessage())));
         }
-        attributes.add(KeyValueFactory.of(Names.ATTR_EXCEPTION_STACKTRACE, AnyValueFactory.ofString(stackTraceAsString(throwable))));
+        attributes.add(KeyValueFactory.of(OTelTags.EXCEPTION_STACKTRACE, AnyValueFactory.ofString(stackTraceAsString(throwable))));
         logRecord.setAttributes(attributes);
     }
 

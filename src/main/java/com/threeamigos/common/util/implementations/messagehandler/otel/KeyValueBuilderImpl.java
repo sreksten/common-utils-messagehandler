@@ -21,7 +21,7 @@ class KeyValueBuilderImpl implements KeyValueBuilderInterface {
     }
 
     @Override
-    public KeyValueBuilderInterface withEmpty(Names name) {
+    public KeyValueBuilderInterface withEmpty(OTelTags name) {
         attributes.add(KeyValueFactory.of(name, AnyValueFactory.empty()));
         return this;
     }
@@ -33,7 +33,7 @@ class KeyValueBuilderImpl implements KeyValueBuilderInterface {
     }
 
     @Override
-    public KeyValueBuilderInterface withString(Names name, String value) {
+    public KeyValueBuilderInterface withString(OTelTags name, String value) {
         attributes.add(KeyValueFactory.of(name, AnyValueFactory.ofNullableString(value)));
         return this;
     }
@@ -45,7 +45,7 @@ class KeyValueBuilderImpl implements KeyValueBuilderInterface {
     }
 
     @Override
-    public KeyValueBuilderInterface withBoolean(Names name, boolean value) {
+    public KeyValueBuilderInterface withBoolean(OTelTags name, boolean value) {
         attributes.add(KeyValueFactory.of(name, AnyValueFactory.ofBoolean(value)));
         return this;
     }
@@ -57,7 +57,7 @@ class KeyValueBuilderImpl implements KeyValueBuilderInterface {
     }
 
     @Override
-    public KeyValueBuilderInterface withLong(Names name, long value) {
+    public KeyValueBuilderInterface withLong(OTelTags name, long value) {
         attributes.add(KeyValueFactory.of(name, AnyValueFactory.ofLong(value)));
         return this;
     }
@@ -69,7 +69,7 @@ class KeyValueBuilderImpl implements KeyValueBuilderInterface {
     }
 
     @Override
-    public KeyValueBuilderInterface withDouble(Names name, double value) {
+    public KeyValueBuilderInterface withDouble(OTelTags name, double value) {
         attributes.add(KeyValueFactory.of(name, AnyValueFactory.ofDouble(value)));
         return this;
     }
@@ -81,7 +81,7 @@ class KeyValueBuilderImpl implements KeyValueBuilderInterface {
     }
 
     @Override
-    public KeyValueBuilderInterface withArray(Names name, List<AnyValue> value) {
+    public KeyValueBuilderInterface withArray(OTelTags name, List<AnyValue> value) {
         attributes.add(KeyValueFactory.of(name, AnyValueFactory.ofArray(value)));
         return this;
     }
@@ -93,7 +93,7 @@ class KeyValueBuilderImpl implements KeyValueBuilderInterface {
     }
 
     @Override
-    public KeyValueBuilderInterface withKeyValueList(Names name, List<KeyValue> value) {
+    public KeyValueBuilderInterface withKeyValueList(OTelTags name, List<KeyValue> value) {
         attributes.add(KeyValueFactory.of(name, AnyValueFactory.ofKvList(value)));
         return this;
     }
@@ -105,7 +105,7 @@ class KeyValueBuilderImpl implements KeyValueBuilderInterface {
     }
 
     @Override
-    public KeyValueBuilderInterface withBytes(Names name, byte[] value) {
+    public KeyValueBuilderInterface withBytes(OTelTags name, byte[] value) {
         attributes.add(KeyValueFactory.of(name, AnyValueFactory.ofBytes(value)));
         return this;
     }

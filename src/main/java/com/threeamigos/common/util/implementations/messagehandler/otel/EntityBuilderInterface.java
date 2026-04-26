@@ -166,71 +166,71 @@ public interface EntityBuilderInterface {
         EntityBuilderStepAttributes withId(List<KeyValue> id);
 
         EntityBuilderStepIdOrAttributes withIdString(String name, String value);
-        EntityBuilderStepIdOrAttributes withIdString(Names name, String value);
+        EntityBuilderStepIdOrAttributes withIdString(OTelTags name, String value);
 
         EntityBuilderStepIdOrAttributes withIdBoolean(String name, boolean value);
-        EntityBuilderStepIdOrAttributes withIdBoolean(Names name, boolean value);
+        EntityBuilderStepIdOrAttributes withIdBoolean(OTelTags name, boolean value);
 
         EntityBuilderStepIdOrAttributes withIdLong(String name, long value);
-        EntityBuilderStepIdOrAttributes withIdLong(Names name, long value);
+        EntityBuilderStepIdOrAttributes withIdLong(OTelTags name, long value);
 
         EntityBuilderStepIdOrAttributes withIdDouble(String name, double value);
-        EntityBuilderStepIdOrAttributes withIdDouble(Names name, double value);
+        EntityBuilderStepIdOrAttributes withIdDouble(OTelTags name, double value);
 
         EntityBuilderStepIdOrAttributes withIdArray(String name, final List<AnyValue> value);
-        EntityBuilderStepIdOrAttributes withIdArray(Names name, final List<AnyValue> value);
+        EntityBuilderStepIdOrAttributes withIdArray(OTelTags name, final List<AnyValue> value);
 
         EntityBuilderStepIdOrAttributes withIdKeyValueList(String name, final List<KeyValue> value);
-        EntityBuilderStepIdOrAttributes withIdKeyValueList(Names name, final List<KeyValue> value);
+        EntityBuilderStepIdOrAttributes withIdKeyValueList(OTelTags name, final List<KeyValue> value);
 
         EntityBuilderStepIdOrAttributes withIdBytes(String name, final byte[] value);
-        EntityBuilderStepIdOrAttributes withIdBytes(Names name, final byte[] value);
+        EntityBuilderStepIdOrAttributes withIdBytes(OTelTags name, final byte[] value);
     }
 
     interface EntityBuilderStepIdOrAttributes {
         EntityBuilderStepIdOrAttributes withIdString(String name, String value);
-        EntityBuilderStepIdOrAttributes withIdString(Names name, String value);
+        EntityBuilderStepIdOrAttributes withIdString(OTelTags name, String value);
 
         EntityBuilderStepIdOrAttributes withIdBoolean(String name, boolean value);
-        EntityBuilderStepIdOrAttributes withIdBoolean(Names name, boolean value);
+        EntityBuilderStepIdOrAttributes withIdBoolean(OTelTags name, boolean value);
 
         EntityBuilderStepIdOrAttributes withIdLong(String name, long value);
-        EntityBuilderStepIdOrAttributes withIdLong(Names name, long value);
+        EntityBuilderStepIdOrAttributes withIdLong(OTelTags name, long value);
 
         EntityBuilderStepIdOrAttributes withIdDouble(String name, double value);
-        EntityBuilderStepIdOrAttributes withIdDouble(Names name, double value);
+        EntityBuilderStepIdOrAttributes withIdDouble(OTelTags name, double value);
 
         EntityBuilderStepIdOrAttributes withIdArray(String name, final List<AnyValue> value);
-        EntityBuilderStepIdOrAttributes withIdArray(Names name, final List<AnyValue> value);
+        EntityBuilderStepIdOrAttributes withIdArray(OTelTags name, final List<AnyValue> value);
 
         EntityBuilderStepIdOrAttributes withIdKeyValueList(String name, final List<KeyValue> value);
-        EntityBuilderStepIdOrAttributes withIdKeyValueList(Names name, final List<KeyValue> value);
+        EntityBuilderStepIdOrAttributes withIdKeyValueList(OTelTags name, final List<KeyValue> value);
 
         EntityBuilderStepIdOrAttributes withIdBytes(String name, final byte[] value);
-        EntityBuilderStepIdOrAttributes withIdBytes(Names name, final byte[] value);
+        EntityBuilderStepIdOrAttributes withIdBytes(OTelTags name, final byte[] value);
 
         EntityBuilderBuildStep withDescription(List<KeyValue> description);
 
         EntityBuilderStepAttributes withDescriptionString(String name, String value);
-        EntityBuilderStepAttributes withDescriptionString(Names name, String value);
+        EntityBuilderStepAttributes withDescriptionString(OTelTags name, String value);
 
         EntityBuilderStepAttributes withDescriptionBoolean(String name, boolean value);
-        EntityBuilderStepAttributes withDescriptionBoolean(Names name, boolean value);
+        EntityBuilderStepAttributes withDescriptionBoolean(OTelTags name, boolean value);
 
         EntityBuilderStepAttributes withDescriptionLong(String name, long value);
-        EntityBuilderStepAttributes withDescriptionLong(Names name, long value);
+        EntityBuilderStepAttributes withDescriptionLong(OTelTags name, long value);
 
         EntityBuilderStepAttributes withDescriptionDouble(String name, double value);
-        EntityBuilderStepAttributes withDescriptionDouble(Names name, double value);
+        EntityBuilderStepAttributes withDescriptionDouble(OTelTags name, double value);
 
         EntityBuilderStepAttributes withDescriptionArray(String name, final List<AnyValue> value);
-        EntityBuilderStepAttributes withDescriptionArray(Names name, final List<AnyValue> value);
+        EntityBuilderStepAttributes withDescriptionArray(OTelTags name, final List<AnyValue> value);
 
         EntityBuilderStepAttributes withDescriptionKeyValueList(String name, final List<KeyValue> value);
-        EntityBuilderStepAttributes withDescriptionKeyValueList(Names name, final List<KeyValue> value);
+        EntityBuilderStepAttributes withDescriptionKeyValueList(OTelTags name, final List<KeyValue> value);
 
         EntityBuilderStepAttributes withDescriptionBytes(String name, final byte[] value);
-        EntityBuilderStepAttributes withDescriptionBytes(Names name, final byte[] value);
+        EntityBuilderStepAttributes withDescriptionBytes(OTelTags name, final byte[] value);
 
         Entity build();
     }
@@ -239,25 +239,25 @@ public interface EntityBuilderInterface {
         EntityBuilderBuildStep withDescription(List<KeyValue> description);
 
         EntityBuilderStepAttributes withDescriptionString(String name, String value);
-        EntityBuilderStepAttributes withDescriptionString(Names name, String value);
+        EntityBuilderStepAttributes withDescriptionString(OTelTags name, String value);
 
         EntityBuilderStepAttributes withDescriptionBoolean(String name, boolean value);
-        EntityBuilderStepAttributes withDescriptionBoolean(Names name, boolean value);
+        EntityBuilderStepAttributes withDescriptionBoolean(OTelTags name, boolean value);
 
         EntityBuilderStepAttributes withDescriptionLong(String name, long value);
-        EntityBuilderStepAttributes withDescriptionLong(Names name, long value);
+        EntityBuilderStepAttributes withDescriptionLong(OTelTags name, long value);
 
         EntityBuilderStepAttributes withDescriptionDouble(String name, double value);
-        EntityBuilderStepAttributes withDescriptionDouble(Names name, double value);
+        EntityBuilderStepAttributes withDescriptionDouble(OTelTags name, double value);
 
         EntityBuilderStepAttributes withDescriptionArray(String name, final List<AnyValue> value);
-        EntityBuilderStepAttributes withDescriptionArray(Names name, final List<AnyValue> value);
+        EntityBuilderStepAttributes withDescriptionArray(OTelTags name, final List<AnyValue> value);
 
         EntityBuilderStepAttributes withDescriptionKeyValueList(String name, final List<KeyValue> value);
-        EntityBuilderStepAttributes withDescriptionKeyValueList(Names name, final List<KeyValue> value);
+        EntityBuilderStepAttributes withDescriptionKeyValueList(OTelTags name, final List<KeyValue> value);
 
         EntityBuilderStepAttributes withDescriptionBytes(String name, final byte[] value);
-        EntityBuilderStepAttributes withDescriptionBytes(Names name, final byte[] value);
+        EntityBuilderStepAttributes withDescriptionBytes(OTelTags name, final byte[] value);
 
         Entity build();
     }

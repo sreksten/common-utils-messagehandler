@@ -12,26 +12,26 @@ import java.util.*;
 interface KeyValueBuilderInterface {
 
     KeyValueBuilderInterface withEmpty(String name);
-    KeyValueBuilderInterface withEmpty(Names name);
+    KeyValueBuilderInterface withEmpty(OTelTags name);
 
     KeyValueBuilderInterface withString(String name, String value);
-    KeyValueBuilderInterface withString(Names name, String value);
+    KeyValueBuilderInterface withString(OTelTags name, String value);
 
     KeyValueBuilderInterface withBoolean(String name, boolean value);
-    KeyValueBuilderInterface withBoolean(Names name, boolean value);
+    KeyValueBuilderInterface withBoolean(OTelTags name, boolean value);
 
     KeyValueBuilderInterface withLong(String name, long value);
-    KeyValueBuilderInterface withLong(Names name, long value);
+    KeyValueBuilderInterface withLong(OTelTags name, long value);
 
     KeyValueBuilderInterface withDouble(String name, double value);
-    KeyValueBuilderInterface withDouble(Names name, double value);
+    KeyValueBuilderInterface withDouble(OTelTags name, double value);
 
     KeyValueBuilderInterface withArray(String name, final List<AnyValue> value);
-    KeyValueBuilderInterface withArray(Names name, final List<AnyValue> value);
+    KeyValueBuilderInterface withArray(OTelTags name, final List<AnyValue> value);
 
     KeyValueBuilderInterface withKeyValueList(String name, final List<KeyValue> value);
-    KeyValueBuilderInterface withKeyValueList(Names name, final List<KeyValue> value);
+    KeyValueBuilderInterface withKeyValueList(OTelTags name, final List<KeyValue> value);
 
     KeyValueBuilderInterface withBytes(String name, final byte[] value);
-    KeyValueBuilderInterface withBytes(Names name, final byte[] value);
+    KeyValueBuilderInterface withBytes(OTelTags name, final byte[] value);
 }

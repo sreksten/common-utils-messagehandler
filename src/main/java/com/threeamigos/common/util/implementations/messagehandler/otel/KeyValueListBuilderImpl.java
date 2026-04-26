@@ -20,7 +20,7 @@ class KeyValueListBuilderImpl extends KeyValueBuilderImpl implements KeyValueLis
     }
 
     @Override
-    public KeyValueListBuilderInterface withEmpty(final Names name) {
+    public KeyValueListBuilderInterface withEmpty(final OTelTags name) {
         super.withEmpty(name);
         return this;
     }
@@ -32,7 +32,7 @@ class KeyValueListBuilderImpl extends KeyValueBuilderImpl implements KeyValueLis
     }
 
     @Override
-    public KeyValueListBuilderInterface withString(final Names name, final String value) {
+    public KeyValueListBuilderInterface withString(final OTelTags name, final String value) {
         super.withString(name, value);
         return this;
     }
@@ -44,7 +44,7 @@ class KeyValueListBuilderImpl extends KeyValueBuilderImpl implements KeyValueLis
     }
 
     @Override
-    public KeyValueListBuilderInterface withBoolean(final Names name, final boolean value) {
+    public KeyValueListBuilderInterface withBoolean(final OTelTags name, final boolean value) {
         super.withBoolean(name, value);
         return this;
     }
@@ -56,7 +56,7 @@ class KeyValueListBuilderImpl extends KeyValueBuilderImpl implements KeyValueLis
     }
 
     @Override
-    public KeyValueListBuilderInterface withLong(final Names name, final long value) {
+    public KeyValueListBuilderInterface withLong(final OTelTags name, final long value) {
         super.withLong(name, value);
         return this;
     }
@@ -68,7 +68,7 @@ class KeyValueListBuilderImpl extends KeyValueBuilderImpl implements KeyValueLis
     }
 
     @Override
-    public KeyValueListBuilderInterface withDouble(final Names name, final double value) {
+    public KeyValueListBuilderInterface withDouble(final OTelTags name, final double value) {
         super.withDouble(name, value);
         return this;
     }
@@ -80,7 +80,7 @@ class KeyValueListBuilderImpl extends KeyValueBuilderImpl implements KeyValueLis
     }
 
     @Override
-    public KeyValueListBuilderInterface withArray(final Names name, final List<AnyValue> value) {
+    public KeyValueListBuilderInterface withArray(final OTelTags name, final List<AnyValue> value) {
         super.withArray(name, value);
         return this;
     }
@@ -92,7 +92,7 @@ class KeyValueListBuilderImpl extends KeyValueBuilderImpl implements KeyValueLis
     }
 
     @Override
-    public KeyValueListBuilderInterface withKeyValueList(final Names name, final List<KeyValue> value) {
+    public KeyValueListBuilderInterface withKeyValueList(final OTelTags name, final List<KeyValue> value) {
         super.withKeyValueList(name, value);
         return this;
     }
@@ -104,7 +104,7 @@ class KeyValueListBuilderImpl extends KeyValueBuilderImpl implements KeyValueLis
     }
 
     @Override
-    public KeyValueListBuilderInterface withBytes(final Names name, final byte[] value) {
+    public KeyValueListBuilderInterface withBytes(final OTelTags name, final byte[] value) {
         super.withBytes(name, value);
         return this;
     }

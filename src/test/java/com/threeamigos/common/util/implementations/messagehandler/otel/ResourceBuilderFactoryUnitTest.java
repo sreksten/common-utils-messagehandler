@@ -38,11 +38,11 @@ class ResourceBuilderFactoryUnitTest {
         builder.withSchemaUrl("https://opentelemetry.io/schemas/1.27.0");
         builder.withNoEntity();
 
-        builder.withString(Names.ATTR_SERVICE_NAME.getValue(), "old-name");
-        builder.withString(Names.ATTR_SERVICE_NAMESPACE.getValue(), "old-namespace");
-        builder.withString(Names.ATTR_SERVICE_VERSION.getValue(), "old-version");
-        builder.withString(Names.ATTR_SERVICE_INSTANCE_ID.getValue(), "old-instance");
-        builder.withString(Names.ATTR_DEPLOYMENT_ENVIRONMENT_NAME.getValue(), "old-env");
+        builder.withString(OTelTags.SERVICE_NAME.getValue(), "old-name");
+        builder.withString(OTelTags.SERVICE_NAMESPACE.getValue(), "old-namespace");
+        builder.withString(OTelTags.SERVICE_VERSION.getValue(), "old-version");
+        builder.withString(OTelTags.SERVICE_INSTANCE_ID.getValue(), "old-instance");
+        builder.withString(OTelTags.DEPLOYMENT_ENVIRONMENT_NAME.getValue(), "old-env");
         builder.withString("custom.attribute", "custom-value");
 
         Resource resource = builder.build();
@@ -50,16 +50,16 @@ class ResourceBuilderFactoryUnitTest {
 
         assertEquals("https://opentelemetry.io/schemas/1.27.0", resource.getSchemaUrl());
         assertTrue(resource.getEntities().isEmpty());
-        assertEquals("checkout", attributes.get(Names.ATTR_SERVICE_NAME.getValue()));
-        assertEquals("payments", attributes.get(Names.ATTR_SERVICE_NAMESPACE.getValue()));
-        assertEquals("1.2.3", attributes.get(Names.ATTR_SERVICE_VERSION.getValue()));
-        assertEquals("instance-1", attributes.get(Names.ATTR_SERVICE_INSTANCE_ID.getValue()));
-        assertEquals("prod", attributes.get(Names.ATTR_DEPLOYMENT_ENVIRONMENT_NAME.getValue()));
+        assertEquals("checkout", attributes.get(OTelTags.SERVICE_NAME.getValue()));
+        assertEquals("payments", attributes.get(OTelTags.SERVICE_NAMESPACE.getValue()));
+        assertEquals("1.2.3", attributes.get(OTelTags.SERVICE_VERSION.getValue()));
+        assertEquals("instance-1", attributes.get(OTelTags.SERVICE_INSTANCE_ID.getValue()));
+        assertEquals("prod", attributes.get(OTelTags.DEPLOYMENT_ENVIRONMENT_NAME.getValue()));
         assertEquals("custom-value", attributes.get("custom.attribute"));
 
-        assertEquals("java", attributes.get(Names.ATTR_TELEMETRY_SDK_LANGUAGE.getValue()));
-        assertEquals("message-handler", attributes.get(Names.ATTR_TELEMETRY_SDK_NAME.getValue()));
-        assertEquals("1.0.0", attributes.get(Names.ATTR_TELEMETRY_SDK_VERSION.getValue()));
+        assertEquals("java", attributes.get(OTelTags.TELEMETRY_SDK_LANGUAGE.getValue()));
+        assertEquals("message-handler", attributes.get(OTelTags.TELEMETRY_SDK_NAME.getValue()));
+        assertEquals("1.0.0", attributes.get(OTelTags.TELEMETRY_SDK_VERSION.getValue()));
     }
 
     @Test
@@ -78,11 +78,11 @@ class ResourceBuilderFactoryUnitTest {
         Map<String, String> nullAttributes = stringValuesByKey(nullResource.getAttributes());
 
         assertNull(nullResource.getSchemaUrl());
-        assertEquals("unknown_service", nullAttributes.get(Names.ATTR_SERVICE_NAME.getValue()));
-        assertFalse(nullAttributes.containsKey(Names.ATTR_SERVICE_NAMESPACE.getValue()));
-        assertFalse(nullAttributes.containsKey(Names.ATTR_SERVICE_VERSION.getValue()));
-        assertFalse(nullAttributes.containsKey(Names.ATTR_SERVICE_INSTANCE_ID.getValue()));
-        assertFalse(nullAttributes.containsKey(Names.ATTR_DEPLOYMENT_ENVIRONMENT_NAME.getValue()));
+        assertEquals("unknown_service", nullAttributes.get(OTelTags.SERVICE_NAME.getValue()));
+        assertFalse(nullAttributes.containsKey(OTelTags.SERVICE_NAMESPACE.getValue()));
+        assertFalse(nullAttributes.containsKey(OTelTags.SERVICE_VERSION.getValue()));
+        assertFalse(nullAttributes.containsKey(OTelTags.SERVICE_INSTANCE_ID.getValue()));
+        assertFalse(nullAttributes.containsKey(OTelTags.DEPLOYMENT_ENVIRONMENT_NAME.getValue()));
 
         ResourceBuilderImpl emptyBuilder = new ResourceBuilderImpl();
         emptyBuilder.withServiceName("");
@@ -97,11 +97,11 @@ class ResourceBuilderFactoryUnitTest {
         Map<String, String> emptyAttributes = stringValuesByKey(emptyResource.getAttributes());
 
         assertNull(emptyResource.getSchemaUrl());
-        assertEquals("unknown_service", emptyAttributes.get(Names.ATTR_SERVICE_NAME.getValue()));
-        assertFalse(emptyAttributes.containsKey(Names.ATTR_SERVICE_NAMESPACE.getValue()));
-        assertFalse(emptyAttributes.containsKey(Names.ATTR_SERVICE_VERSION.getValue()));
-        assertFalse(emptyAttributes.containsKey(Names.ATTR_SERVICE_INSTANCE_ID.getValue()));
-        assertFalse(emptyAttributes.containsKey(Names.ATTR_DEPLOYMENT_ENVIRONMENT_NAME.getValue()));
+        assertEquals("unknown_service", emptyAttributes.get(OTelTags.SERVICE_NAME.getValue()));
+        assertFalse(emptyAttributes.containsKey(OTelTags.SERVICE_NAMESPACE.getValue()));
+        assertFalse(emptyAttributes.containsKey(OTelTags.SERVICE_VERSION.getValue()));
+        assertFalse(emptyAttributes.containsKey(OTelTags.SERVICE_INSTANCE_ID.getValue()));
+        assertFalse(emptyAttributes.containsKey(OTelTags.DEPLOYMENT_ENVIRONMENT_NAME.getValue()));
     }
 
     @Test
@@ -130,7 +130,7 @@ class ResourceBuilderFactoryUnitTest {
         assertEquals("https://opentelemetry.io/schemas/1.27.0", resource.getSchemaUrl());
         assertEquals(1, resource.getEntities().size());
         assertEquals("service", resource.getEntities().get(0).getType());
-        assertFalse(attributes.containsKey(Names.ATTR_SERVICE_NAME.getValue()));
+        assertFalse(attributes.containsKey(OTelTags.SERVICE_NAME.getValue()));
     }
 
     private static Map<String, String> stringValuesByKey(final java.util.List<KeyValue> keyValues) {

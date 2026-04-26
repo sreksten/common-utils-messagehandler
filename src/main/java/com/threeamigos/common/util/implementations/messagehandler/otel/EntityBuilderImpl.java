@@ -55,7 +55,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
 
     @Override
     public EntityBuilderSchemaUrlStep withServiceName(String serviceName) {
-        id.add(KeyValueFactory.of(Names.ATTR_SERVICE_NAME, AnyValueFactory.ofString(serviceName)));
+        id.add(KeyValueFactory.of(OTelTags.SERVICE_NAME, AnyValueFactory.ofString(serviceName)));
         return this;
     }
 
@@ -67,13 +67,13 @@ class EntityBuilderImpl implements EntityBuilderInterface,
 
     @Override
     public EntityBuilderProcessStartTimeSubstep withProcessPid(long pid) {
-        id.add(KeyValueFactory.of(Names.ATTR_PROCESS_PID, AnyValueFactory.ofLong(pid)));
+        id.add(KeyValueFactory.of(OTelTags.PROCESS_PID, AnyValueFactory.ofLong(pid)));
         return this;
     }
 
     @Override
     public EntityBuilderSchemaUrlStep withProcessStartTime(long timestamp) {
-        id.add(KeyValueFactory.of(Names.ATTR_PROCESS_CREATION_TIME, AnyValueFactory.ofLong(timestamp)));
+        id.add(KeyValueFactory.of(OTelTags.PROCESS_CREATION_TIME, AnyValueFactory.ofLong(timestamp)));
         return this;
     }
 
@@ -92,13 +92,13 @@ class EntityBuilderImpl implements EntityBuilderInterface,
 
     @Override
     public EntityBuilderSchemaUrlStep withHostId(String hostId) {
-        id.add(KeyValueFactory.of(Names.ATTR_HOST_ID, AnyValueFactory.ofString(hostId)));
+        id.add(KeyValueFactory.of(OTelTags.HOST_ID, AnyValueFactory.ofString(hostId)));
         return this;
     }
 
     @Override
     public EntityBuilderSchemaUrlStep withHostName(String hostName) {
-        id.add(KeyValueFactory.of(Names.ATTR_HOST_NAME, AnyValueFactory.ofString(hostName)));
+        id.add(KeyValueFactory.of(OTelTags.HOST_NAME, AnyValueFactory.ofString(hostName)));
         return this;
     }
 
@@ -110,7 +110,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
 
     @Override
     public EntityBuilderSchemaUrlStep withContainerId(String containerId) {
-        id.add(KeyValueFactory.of(Names.ATTR_CONTAINER_ID, AnyValueFactory.ofString(containerId)));
+        id.add(KeyValueFactory.of(OTelTags.CONTAINER_ID, AnyValueFactory.ofString(containerId)));
         return this;
     }
 
@@ -122,7 +122,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
 
     @Override
     public EntityBuilderSchemaUrlStep withClusterName(String clusterName) {
-        id.add(KeyValueFactory.of(Names.ATTR_K8S_CLUSTER_NAME, AnyValueFactory.ofString(clusterName)));
+        id.add(KeyValueFactory.of(OTelTags.K8S_CLUSTER_NAME, AnyValueFactory.ofString(clusterName)));
         return this;
     }
 
@@ -134,7 +134,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
 
     @Override
     public EntityBuilderSchemaUrlStep withNodeUid(String nodeUid) {
-        id.add(KeyValueFactory.of(Names.ATTR_K8S_NODE_UID, AnyValueFactory.ofString(nodeUid)));
+        id.add(KeyValueFactory.of(OTelTags.K8S_NODE_UID, AnyValueFactory.ofString(nodeUid)));
         return this;
     }
 
@@ -146,7 +146,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
 
     @Override
     public EntityBuilderK8sClusterStep withNamespaceName(String namespaceName) {
-        id.add(KeyValueFactory.of(Names.ATTR_K8S_NAMESPACE_NAME, AnyValueFactory.ofString(namespaceName)));
+        id.add(KeyValueFactory.of(OTelTags.K8S_NAMESPACE_NAME, AnyValueFactory.ofString(namespaceName)));
         return this;
     }
 
@@ -158,7 +158,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
 
     @Override
     public EntityBuilderSchemaUrlStep withPodUid(String podUid) {
-        id.add(KeyValueFactory.of(Names.ATTR_K8S_POD_UID, AnyValueFactory.ofString(podUid)));
+        id.add(KeyValueFactory.of(OTelTags.K8S_POD_UID, AnyValueFactory.ofString(podUid)));
         return this;
     }
 
@@ -170,7 +170,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
 
     @Override
     public EntityBuilderK8sNamespaceStep withDeploymentName(String deploymentName) {
-        id.add(KeyValueFactory.of(Names.ATTR_K8S_DEPLOYMENT_NAME, AnyValueFactory.ofString(deploymentName)));
+        id.add(KeyValueFactory.of(OTelTags.K8S_DEPLOYMENT_NAME, AnyValueFactory.ofString(deploymentName)));
         return this;
     }
 
@@ -182,13 +182,13 @@ class EntityBuilderImpl implements EntityBuilderInterface,
 
     @Override
     public EntityBuilderCloudAccountStep withCloudProvider(String cloudProvider) {
-        id.add(KeyValueFactory.of(Names.ATTR_CLOUD_PROVIDER, AnyValueFactory.ofString(cloudProvider)));
+        id.add(KeyValueFactory.of(OTelTags.CLOUD_PROVIDER, AnyValueFactory.ofString(cloudProvider)));
         return this;
     }
 
     @Override
     public EntityBuilderSchemaUrlStep withCloudPlatform(String cloudPlatform) {
-        id.add(KeyValueFactory.of(Names.ATTR_CLOUD_PLATFORM, AnyValueFactory.ofString(cloudPlatform)));
+        id.add(KeyValueFactory.of(OTelTags.CLOUD_PLATFORM, AnyValueFactory.ofString(cloudPlatform)));
         return this;
     }
 
@@ -200,7 +200,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
 
     @Override
     public EntityBuilderCloudRegionCloudProviderSubstep withCloudRegion(String cloudRegion) {
-        id.add(KeyValueFactory.of(Names.ATTR_CLOUD_REGION, AnyValueFactory.ofString(cloudRegion)));
+        id.add(KeyValueFactory.of(OTelTags.CLOUD_REGION, AnyValueFactory.ofString(cloudRegion)));
         return this;
     }
 
@@ -212,7 +212,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
 
     @Override
     public EntityBuilderSchemaUrlStep withCloudAccountId(String cloudAccountId) {
-        id.add(KeyValueFactory.of(Names.ATTR_CLOUD_ACCOUNT_ID, AnyValueFactory.ofString(cloudAccountId)));
+        id.add(KeyValueFactory.of(OTelTags.CLOUD_ACCOUNT_ID, AnyValueFactory.ofString(cloudAccountId)));
         return this;
     }
 
@@ -224,13 +224,13 @@ class EntityBuilderImpl implements EntityBuilderInterface,
 
     @Override
     public EntityBuilderBrowserPlatformSubstep withBrowserBrands(String browserBrands) {
-        id.add(KeyValueFactory.of(Names.ATTR_BROWSER_BRANDS, AnyValueFactory.ofString(browserBrands)));
+        id.add(KeyValueFactory.of(OTelTags.BROWSER_BRANDS, AnyValueFactory.ofString(browserBrands)));
         return this;
     }
 
     @Override
     public EntityBuilderStepId withBrowserPlatform(String browserPlatform) {
-        id.add(KeyValueFactory.of(Names.ATTR_BROWSER_PLATFORM, AnyValueFactory.ofString(browserPlatform)));
+        id.add(KeyValueFactory.of(OTelTags.BROWSER_PLATFORM, AnyValueFactory.ofString(browserPlatform)));
         return this;
     }
 
@@ -242,7 +242,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
 
     @Override
     public EntityBuilderSchemaUrlStep withDeviceId(String deviceId) {
-        id.add(KeyValueFactory.of(Names.ATTR_DEVICE_ID, AnyValueFactory.ofString(deviceId)));
+        id.add(KeyValueFactory.of(OTelTags.DEVICE_ID, AnyValueFactory.ofString(deviceId)));
         return this;
     }
 
@@ -270,7 +270,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
     }
 
     @Override
-    public EntityBuilderStepIdOrAttributes withIdString(Names name, String value) {
+    public EntityBuilderStepIdOrAttributes withIdString(OTelTags name, String value) {
         id.add(KeyValueFactory.of(name, AnyValueFactory.ofString(value)));
         return this;
     }
@@ -282,7 +282,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
     }
 
     @Override
-    public EntityBuilderStepIdOrAttributes withIdBoolean(Names name, boolean value) {
+    public EntityBuilderStepIdOrAttributes withIdBoolean(OTelTags name, boolean value) {
         id.add(KeyValueFactory.of(name, AnyValueFactory.ofBoolean(value)));
         return this;
     }
@@ -294,7 +294,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
     }
 
     @Override
-    public EntityBuilderStepIdOrAttributes withIdLong(Names name, long value) {
+    public EntityBuilderStepIdOrAttributes withIdLong(OTelTags name, long value) {
         id.add(KeyValueFactory.of(name, AnyValueFactory.ofLong(value)));
         return this;
     }
@@ -306,7 +306,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
     }
 
     @Override
-    public EntityBuilderStepIdOrAttributes withIdDouble(Names name, double value) {
+    public EntityBuilderStepIdOrAttributes withIdDouble(OTelTags name, double value) {
         id.add(KeyValueFactory.of(name, AnyValueFactory.ofDouble(value)));
         return this;
     }
@@ -318,7 +318,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
     }
 
     @Override
-    public EntityBuilderStepIdOrAttributes withIdArray(Names name, List<AnyValue> value) {
+    public EntityBuilderStepIdOrAttributes withIdArray(OTelTags name, List<AnyValue> value) {
         id.add(KeyValueFactory.of(name, AnyValueFactory.ofArray(value)));
         return this;
     }
@@ -330,7 +330,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
     }
 
     @Override
-    public EntityBuilderStepIdOrAttributes withIdKeyValueList(Names name, List<KeyValue> value) {
+    public EntityBuilderStepIdOrAttributes withIdKeyValueList(OTelTags name, List<KeyValue> value) {
         id.add(KeyValueFactory.of(name, AnyValueFactory.ofKvList(value)));
         return this;
     }
@@ -342,7 +342,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
     }
 
     @Override
-    public EntityBuilderStepIdOrAttributes withIdBytes(Names name, byte[] value) {
+    public EntityBuilderStepIdOrAttributes withIdBytes(OTelTags name, byte[] value) {
         id.add(KeyValueFactory.of(name, AnyValueFactory.ofBytes(value)));
         return this;
     }
@@ -360,7 +360,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
     }
 
     @Override
-    public EntityBuilderStepAttributes withDescriptionString(Names name, String value) {
+    public EntityBuilderStepAttributes withDescriptionString(OTelTags name, String value) {
         description.add(KeyValueFactory.of(name, AnyValueFactory.ofString(value)));
         return this;
     }
@@ -372,7 +372,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
     }
 
     @Override
-    public EntityBuilderStepAttributes withDescriptionBoolean(Names name, boolean value) {
+    public EntityBuilderStepAttributes withDescriptionBoolean(OTelTags name, boolean value) {
         description.add(KeyValueFactory.of(name, AnyValueFactory.ofBoolean(value)));
         return this;
     }
@@ -384,7 +384,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
     }
 
     @Override
-    public EntityBuilderStepAttributes withDescriptionLong(Names name, long value) {
+    public EntityBuilderStepAttributes withDescriptionLong(OTelTags name, long value) {
         description.add(KeyValueFactory.of(name, AnyValueFactory.ofLong(value)));
         return this;
     }
@@ -396,7 +396,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
     }
 
     @Override
-    public EntityBuilderStepAttributes withDescriptionDouble(Names name, double value) {
+    public EntityBuilderStepAttributes withDescriptionDouble(OTelTags name, double value) {
         description.add(KeyValueFactory.of(name, AnyValueFactory.ofDouble(value)));
         return this;
     }
@@ -408,7 +408,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
     }
 
     @Override
-    public EntityBuilderStepAttributes withDescriptionArray(Names name, List<AnyValue> value) {
+    public EntityBuilderStepAttributes withDescriptionArray(OTelTags name, List<AnyValue> value) {
         description.add(KeyValueFactory.of(name, AnyValueFactory.ofArray(value)));
         return this;
     }
@@ -420,7 +420,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
     }
 
     @Override
-    public EntityBuilderStepAttributes withDescriptionKeyValueList(Names name, List<KeyValue> value) {
+    public EntityBuilderStepAttributes withDescriptionKeyValueList(OTelTags name, List<KeyValue> value) {
         description.add(KeyValueFactory.of(name, AnyValueFactory.ofKvList(value)));
         return this;
     }
@@ -432,7 +432,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
     }
 
     @Override
-    public EntityBuilderStepAttributes withDescriptionBytes(Names name, byte[] value) {
+    public EntityBuilderStepAttributes withDescriptionBytes(OTelTags name, byte[] value) {
         description.add(KeyValueFactory.of(name, AnyValueFactory.ofBytes(value)));
         return this;
     }

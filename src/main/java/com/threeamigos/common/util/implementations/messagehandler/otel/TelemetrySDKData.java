@@ -14,9 +14,9 @@ public final class TelemetrySDKData {
     private static final List<KeyValue> DEFAULT_ATTRIBUTES =
             Collections.unmodifiableList(
                 KeyValueListBuilderFactory.getBuilder()
-                        .withString(Names.ATTR_TELEMETRY_SDK_LANGUAGE, "java")
-                        .withString(Names.ATTR_TELEMETRY_SDK_NAME, "message-handler")
-                        .withString(Names.ATTR_TELEMETRY_SDK_VERSION, "1.0.0")
+                        .withString(OTelTags.TELEMETRY_SDK_LANGUAGE, "java")
+                        .withString(OTelTags.TELEMETRY_SDK_NAME, "message-handler")
+                        .withString(OTelTags.TELEMETRY_SDK_VERSION, "1.0.0")
                         .build()
             );
 
