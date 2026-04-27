@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
+import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Entity;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Resource;
@@ -8,13 +9,14 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
  *
  * @author Stefano Reksten
  */
-public class ResourceBuilderImpl extends KeyValueBuilderImpl implements ResourceBuilderInterface,
+class ResourceBuilderImpl extends KeyValueBuilderImpl implements ResourceBuilderInterface,
         ResourceBuilderInterface.ResourceBuilderStepServiceName,
         ResourceBuilderInterface.ResourceBuilderStepServiceNamespace,
         ResourceBuilderInterface.ResourceBuilderStepServiceVersion,
@@ -29,19 +31,17 @@ public class ResourceBuilderImpl extends KeyValueBuilderImpl implements Resource
     private final List<Entity> entities = new ArrayList<>();
 
     public ResourceBuilderStepServiceNamespace withServiceName(String serviceName) {
-        if (serviceName == null || serviceName.isEmpty()) {
-            serviceName = "unknown_service";
-        }
-        overridingAttributes.put(OTelTags.SERVICE_NAME.getValue(), serviceName);
+        overridingAttributes.put(OTelTags.SERVICE_NAME.getValue(), BuilderValidationUtils.requireNonBlank(
+                serviceName,
+                OTelTags.SERVICE_NAME.getValue()));
         return this;
     }
 
     @Override
     public ResourceBuilderStepServiceVersion withServiceNamespace(String serviceNamespace) {
-        if (serviceNamespace == null || serviceNamespace.isEmpty()) {
-            return this;
-        }
-        overridingAttributes.put(OTelTags.SERVICE_NAMESPACE.getValue(), serviceNamespace);
+        overridingAttributes.put(OTelTags.SERVICE_NAMESPACE.getValue(), BuilderValidationUtils.requireNonBlank(
+                serviceNamespace,
+                OTelTags.SERVICE_NAMESPACE.getValue()));
         return this;
     }
 
@@ -52,10 +52,9 @@ public class ResourceBuilderImpl extends KeyValueBuilderImpl implements Resource
 
     @Override
     public ResourceBuilderStepServiceInstanceId withServiceVersion(String serviceVersion) {
-        if (serviceVersion == null || serviceVersion.isEmpty()) {
-            return this;
-        }
-        overridingAttributes.put(OTelTags.SERVICE_VERSION.getValue(), serviceVersion);
+        overridingAttributes.put(OTelTags.SERVICE_VERSION.getValue(), BuilderValidationUtils.requireNonBlank(
+                serviceVersion,
+                OTelTags.SERVICE_VERSION.getValue()));
         return this;
     }
 
@@ -66,10 +65,9 @@ public class ResourceBuilderImpl extends KeyValueBuilderImpl implements Resource
 
     @Override
     public ResourceBuilderStepDeploymentEnvironmentName withServiceInstanceId(String serviceInstanceId) {
-        if (serviceInstanceId == null || serviceInstanceId.isEmpty()) {
-            return this;
-        }
-        overridingAttributes.put(OTelTags.SERVICE_INSTANCE_ID.getValue(), serviceInstanceId);
+        overridingAttributes.put(OTelTags.SERVICE_INSTANCE_ID.getValue(), BuilderValidationUtils.requireNonBlank(
+                serviceInstanceId,
+                OTelTags.SERVICE_INSTANCE_ID.getValue()));
         return this;
     }
 
@@ -80,10 +78,9 @@ public class ResourceBuilderImpl extends KeyValueBuilderImpl implements Resource
 
     @Override
     public ResourceBuilderStepSchemaUrl withDeploymentEnvironmentName(String deploymentEnvironmentName) {
-        if (deploymentEnvironmentName == null || deploymentEnvironmentName.isEmpty()) {
-            return this;
-        }
-        overridingAttributes.put(OTelTags.DEPLOYMENT_ENVIRONMENT_NAME.getValue(), deploymentEnvironmentName);
+        overridingAttributes.put(OTelTags.DEPLOYMENT_ENVIRONMENT_NAME.getValue(), BuilderValidationUtils.requireNonBlank(
+                deploymentEnvironmentName,
+                OTelTags.DEPLOYMENT_ENVIRONMENT_NAME.getValue()));
         return this;
     }
 
@@ -94,10 +91,7 @@ public class ResourceBuilderImpl extends KeyValueBuilderImpl implements Resource
 
     @Override
     public ResourceBuilderStepEntity withSchemaUrl(String schemaUrl) {
-        if (schemaUrl == null || schemaUrl.isEmpty()) {
-            return this;
-        }
-        this.schemaUrl = schemaUrl;
+        this.schemaUrl = BuilderValidationUtils.requireNonBlank(schemaUrl, "schemaUrl");
         return this;
     }
 
@@ -108,7 +102,7 @@ public class ResourceBuilderImpl extends KeyValueBuilderImpl implements Resource
 
     @Override
     public ResourceBuilderStepEntity withEntity(Entity entity) {
-        entities.add(entity);
+        entities.add(Objects.requireNonNull(entity, MessageHandlerResourceBundle.get("entityMustNotBeNull")));
         return this;
     }
 

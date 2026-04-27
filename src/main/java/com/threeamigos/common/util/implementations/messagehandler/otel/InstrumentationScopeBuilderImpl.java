@@ -20,19 +20,19 @@ class InstrumentationScopeBuilderImpl extends KeyValueBuilderImpl implements Ins
 
     @Override
     public InstrumentationScopeBuilderStepVersion withName(String name) {
-        this.name = name;
+        this.name = BuilderValidationUtils.requireNonBlank(name, "name");
         return this;
     }
 
     @Override
     public InstrumentationScopeBuilderStepScopeUrl withVersion(String version) {
-        this.version = version;
+        this.version = BuilderValidationUtils.requireNonBlank(version, "version");
         return this;
     }
 
     @Override
     public InstrumentationScopeBuilderStepBuild withScopeUrl(String scopeUrl) {
-        this.scopeUrl = scopeUrl;
+        this.scopeUrl = BuilderValidationUtils.requireNonBlank(scopeUrl, "scopeUrl");
         return this;
     }
 

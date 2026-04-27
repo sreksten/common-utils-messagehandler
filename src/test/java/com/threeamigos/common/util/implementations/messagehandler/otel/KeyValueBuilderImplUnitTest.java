@@ -10,6 +10,7 @@ import java.util.Arrays;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @DisplayName("KeyValueBuilderImpl unit tests")
 @Tag("unit")
@@ -32,5 +33,13 @@ class KeyValueBuilderImplUnitTest {
         assertSame(builder, builder.withArray("a", Arrays.asList(anyValue)));
         assertSame(builder, builder.withKeyValueList("kvl", Collections.singletonList(keyValue)));
         assertSame(builder, builder.withBytes("bytes", new byte[] {1, 2}));
+    }
+
+    @Test
+    @DisplayName("withString should reject null values")
+    void withStringShouldRejectNullValues() {
+        KeyValueBuilderImpl builder = new KeyValueBuilderImpl();
+        assertThrows(NullPointerException.class, () -> builder.withString("s", null));
+        assertThrows(NullPointerException.class, () -> builder.withString(OTelTags.SERVICE_NAME, null));
     }
 }

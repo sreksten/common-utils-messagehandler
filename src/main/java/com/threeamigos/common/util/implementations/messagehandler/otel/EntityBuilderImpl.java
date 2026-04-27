@@ -43,7 +43,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
     
     @Override
     public EntityBuilderSchemaUrlStep withType(String type) {
-        this.type = type;
+        this.type = BuilderValidationUtils.requireNonBlank(type, "type");
         return this;
     }
 
@@ -248,7 +248,7 @@ class EntityBuilderImpl implements EntityBuilderInterface,
 
     @Override
     public EntityBuilderStepId withSchemaUrl(String schemaUrl) {
-        this.schemaUrl = schemaUrl;
+        this.schemaUrl = BuilderValidationUtils.requireNonBlank(schemaUrl, "schemaUrl");
         return this;
     }
 

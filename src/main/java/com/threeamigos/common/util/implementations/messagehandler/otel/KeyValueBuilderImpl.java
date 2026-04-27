@@ -28,13 +28,13 @@ class KeyValueBuilderImpl implements KeyValueBuilderInterface {
 
     @Override
     public KeyValueBuilderInterface withString(String name, String value) {
-        attributes.add(KeyValueFactory.of(name, AnyValueFactory.ofNullableString(value)));
+        attributes.add(KeyValueFactory.of(name, AnyValueFactory.ofString(value)));
         return this;
     }
 
     @Override
     public KeyValueBuilderInterface withString(OTelTags name, String value) {
-        attributes.add(KeyValueFactory.of(name, AnyValueFactory.ofNullableString(value)));
+        attributes.add(KeyValueFactory.of(name, AnyValueFactory.ofString(value)));
         return this;
     }
 

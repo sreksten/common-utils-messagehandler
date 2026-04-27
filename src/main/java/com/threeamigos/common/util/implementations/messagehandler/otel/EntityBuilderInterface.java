@@ -15,6 +15,7 @@ public interface EntityBuilderInterface {
         /**
          * Generic type
          * @param type type of Entity
+         *             must be non-null and non-blank.
          */
         EntityBuilderSchemaUrlStep withType(String type);
 
@@ -146,7 +147,14 @@ public interface EntityBuilderInterface {
     }
 
     interface EntityBuilderSchemaUrlStep {
+        /**
+         * Sets schema URL for the entity.
+         * Value must be non-null and non-blank.
+         */
         EntityBuilderStepId withSchemaUrl(String schemaUrl);
+        /**
+         * Explicitly omits schema URL.
+         */
         EntityBuilderStepId withNoSchemaUrl();
     }
 

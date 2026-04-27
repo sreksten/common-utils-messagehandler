@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("InstrumentationScopeBuilder unit tests")
@@ -40,5 +41,19 @@ class InstrumentationScopeBuilderFactoryUnitTest {
         assertEquals("https://opentelemetry.io/schemas/1.27.0", scope.getSchemaUrl());
         assertEquals(1, scope.getAttributes().size());
         assertEquals("k", scope.getAttributes().get(0).getKey());
+    }
+
+    @Test
+    @DisplayName("with... methods should reject null or blank values")
+    void withMethodsShouldRejectNullOrBlankValues() {
+        InstrumentationScopeBuilderImpl builder = new InstrumentationScopeBuilderImpl();
+        assertThrows(NullPointerException.class, () -> builder.withName(null));
+        assertThrows(IllegalArgumentException.class, () -> builder.withName("   "));
+
+        assertThrows(NullPointerException.class, () -> builder.withName("scope").withVersion(null));
+        assertThrows(IllegalArgumentException.class, () -> builder.withName("scope").withVersion(""));
+
+        assertThrows(NullPointerException.class, () -> builder.withName("scope").withScopeUrl(null));
+        assertThrows(IllegalArgumentException.class, () -> builder.withName("scope").withScopeUrl(" "));
     }
 }

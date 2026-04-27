@@ -18,6 +18,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("EntityBuilderFactory unit tests")
@@ -215,6 +216,17 @@ class EntityBuilderFactoryUnitTest {
         assertEquals(15, entity.getDescription().size());
         assertEquals(15, new HashSet<>(keys(entity.getId())).size());
         assertEquals(15, new HashSet<>(keys(entity.getDescription())).size());
+    }
+
+    @Test
+    @DisplayName("builder should reject null or blank type and schemaUrl")
+    void builderShouldRejectNullOrBlankTypeAndSchemaUrl() {
+        EntityBuilderImpl builder = new EntityBuilderImpl();
+        assertThrows(NullPointerException.class, () -> builder.withType(null));
+        assertThrows(IllegalArgumentException.class, () -> builder.withType("   "));
+
+        assertThrows(NullPointerException.class, () -> builder.withType("custom.entity").withSchemaUrl(null));
+        assertThrows(IllegalArgumentException.class, () -> builder.withType("custom.entity").withSchemaUrl(""));
     }
 
     private static void assertEntity(final String expectedType,

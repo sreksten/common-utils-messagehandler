@@ -11,7 +11,9 @@ public interface ResourceBuilderInterface {
 
     /**
      * The most critical resource attribute, defining the logical name of the service (e.g., checkout-service,
-     * frontend-api). If set with a null or empty value, will be changed to "unknown_service".
+     * frontend-api).
+     * <p>
+     * Must be non-null and non-blank.
      */
     interface ResourceBuilderStepServiceName {
         ResourceBuilderStepServiceNamespace withServiceName(String serviceName);
@@ -19,6 +21,8 @@ public interface ResourceBuilderInterface {
 
     /**
      * An optional namespace to group services (e.g., shop-production).
+     * <p>
+     * Use {@link #withNoServiceNamespace()} to intentionally omit this attribute.
      */
     interface ResourceBuilderStepServiceNamespace {
         ResourceBuilderStepServiceVersion withServiceNamespace(String schemaNamespace);
@@ -27,6 +31,8 @@ public interface ResourceBuilderInterface {
 
     /**
      * The version of the deployed service (e.g., v1.2.3 or commit hash), crucial for analyzing deployment impacts.
+     * <p>
+     * Use {@link #withNoServiceVersion()} to intentionally omit this attribute.
      */
     interface ResourceBuilderStepServiceVersion {
         ResourceBuilderStepServiceInstanceId withServiceVersion(String serviceVersion);
@@ -36,6 +42,8 @@ public interface ResourceBuilderInterface {
     /**
      * A unique identifier for the service instance (e.g., a UUID or pod name). This is required if multiple instances
      * of the same service run concurrently.
+     * <p>
+     * Use {@link #withNoServiceInstanceId()} to intentionally omit this attribute.
      */
     interface ResourceBuilderStepServiceInstanceId {
         ResourceBuilderStepDeploymentEnvironmentName withServiceInstanceId(String serviceInstanceId);
@@ -44,6 +52,8 @@ public interface ResourceBuilderInterface {
 
     /**
      * The environment where the service is running (e.g., production, staging)
+     * <p>
+     * Use {@link #withNoDeploymentEnvironmentName()} to intentionally omit this attribute.
      */
     interface ResourceBuilderStepDeploymentEnvironmentName {
         ResourceBuilderStepSchemaUrl withDeploymentEnvironmentName(String deploymentEnvironmentName);
