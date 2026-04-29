@@ -132,17 +132,6 @@ public abstract class AbstractMessageHandler implements MessageHandler {
         return disabled.toArray(new SeverityNumber[0]);
     }
 
-    /**
-     * Backward-compatible alias for {@link #getDisabledLevels()}.
-     *
-     * @return disabled levels as a new array snapshot
-     * @deprecated use {@link #getDisabledLevels()}.
-     */
-    @Deprecated
-    public SeverityNumber[] getIdsabledLevels() {
-        return getDisabledLevels();
-    }
-
     public void log(final @Nonnull SeverityNumber level, final @Nonnull Supplier<String> message) {
         if (isEnabled(level)) {
             Objects.requireNonNull(message, MessageHandlerResourceBundle.get("nullMessageSupplierProvided"));
