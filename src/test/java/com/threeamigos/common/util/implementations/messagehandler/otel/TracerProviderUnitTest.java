@@ -12,7 +12,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
-import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -25,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @DisplayName("TracerProvider unit tests")
 @Tag("unit")
 @Tag("messageHandler")
-class TracerProviderUnitTest {
+class TracerProviderUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
 
     @AfterEach
     void cleanupLenient() {
@@ -123,7 +122,7 @@ class TracerProviderUnitTest {
     void defaultResourceAndCommonAttributesShouldBeConfigurable() {
         TracerProvider provider = TracerProvider.createProvider();
         provider.setDefaultResource(ResourceFactory.create(null, null, null));
-        provider.setDefaultCommonAttributes(List.of(
+        provider.setDefaultCommonAttributes(Collections.singletonList(
                 KeyValueFactory.of("env", AnyValueFactory.ofString("test"))));
 
         assertNotNull(provider.getDefaultResource());
@@ -139,7 +138,7 @@ class TracerProviderUnitTest {
     void enrichingFactoryShouldApplyProviderDefaultsAndResolverCorrelation() {
         TracerProvider provider = TracerProvider.createProvider();
         provider.setDefaultResource(ResourceFactory.create("https://provider.schema", null, null));
-        provider.setDefaultCommonAttributes(List.of(
+        provider.setDefaultCommonAttributes(Collections.singletonList(
                 KeyValueFactory.of("env", AnyValueFactory.ofString("test"))));
         SpanContext resolverContext = new SpanContextImpl(
                 "5b8efff798038103d269b633813fc60c",

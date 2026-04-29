@@ -214,13 +214,11 @@ class AbstractMessageHandlerUnitTest {
 
         Set<SeverityNumber> enabled = new HashSet<>(Arrays.asList(sut.getEnabledLevels()));
         Set<SeverityNumber> disabled = new HashSet<>(Arrays.asList(sut.getDisabledLevels()));
-        Set<SeverityNumber> disabledAlias = new HashSet<>(Arrays.asList(sut.getIdsabledLevels()));
 
         assertTrue(enabled.contains(SeverityNumber.DEBUG));
         assertTrue(enabled.contains(SeverityNumber.TRACE));
         assertTrue(disabled.contains(SeverityNumber.INFO));
         assertTrue(disabled.contains(SeverityNumber.WARN));
-        assertEquals(disabled, disabledAlias);
     }
 
     @Test

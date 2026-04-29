@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @DisplayName("EntityFactory unit tests")
 @Tag("unit")
 @Tag("messageHandler")
-class EntityFactoryUnitTest {
+class EntityFactoryUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
 
     @Test
     @DisplayName("create(type, schemaUrl, id, description) should store values and expose unmodifiable lists")

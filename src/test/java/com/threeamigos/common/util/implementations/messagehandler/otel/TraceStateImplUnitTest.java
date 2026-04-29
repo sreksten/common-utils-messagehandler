@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @DisplayName("TraceStateImpl unit tests")
 @Tag("unit")
 @Tag("messageHandler")
-class TraceStateImplUnitTest {
+class TraceStateImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
 
     private static final boolean ORIGINAL_LENIENT = OpenTelemetryAttributeValidator.isLenientMode();
 

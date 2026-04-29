@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @DisplayName("LogRecordImpl unit tests")
 @Tag("unit")
 @Tag("messageHandler")
-class LogRecordImplUnitTest {
+class LogRecordImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
 
     @Test
     @DisplayName("defaults should match the data model defaults")

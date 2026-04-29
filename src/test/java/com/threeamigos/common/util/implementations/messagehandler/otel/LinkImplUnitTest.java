@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @DisplayName("LinkImpl unit tests")
 @Tag("unit")
 @Tag("messageHandler")
-class LinkImplUnitTest {
+class LinkImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
 
     private static final boolean ORIGINAL_LENIENT = OpenTelemetryAttributeValidator.isLenientMode();
 

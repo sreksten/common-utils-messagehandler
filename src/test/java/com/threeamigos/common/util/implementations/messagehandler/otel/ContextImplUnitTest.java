@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @DisplayName("ContextImpl unit tests")
 @Tag("unit")
 @Tag("messageHandler")
-class ContextImplUnitTest {
+class ContextImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
 
     @Test
     @DisplayName("createKey should return opaque keys and recover from null names")

@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @DisplayName("TracerImpl unit tests")
 @Tag("unit")
 @Tag("messageHandler")
-class TracerImplUnitTest {
+class TracerImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
 
     @Test
     @DisplayName("constructor should preserve provided instrumentation name in scope")

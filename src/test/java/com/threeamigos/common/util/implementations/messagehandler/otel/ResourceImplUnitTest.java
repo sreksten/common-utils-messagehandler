@@ -31,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @DisplayName("ResourceFactory unit tests")
 @Tag("unit")
 @Tag("messageHandler")
-class ResourceFactoryUnitTest {
+class ResourceFactoryUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
 
     private static final boolean ORIGINAL_LENIENT = OpenTelemetryAttributeValidator.isLenientMode();
 

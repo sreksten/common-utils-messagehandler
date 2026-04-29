@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @DisplayName("KeyValueBuilderImpl unit tests")
 @Tag("unit")
 @Tag("messageHandler")
-class KeyValueBuilderImplUnitTest {
+class KeyValueBuilderImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
 
     private static final boolean ORIGINAL_LENIENT = OpenTelemetryAttributeValidator.isLenientMode();
 
