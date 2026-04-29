@@ -1,18 +1,22 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -25,8 +29,8 @@ import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -205,6 +209,195 @@ class CompositeMessageHandlerUnitTest {
         verify(secondMessageHandler, times(1)).info(eq("after-second-add"));
         verify(secondMessageHandler, times(1)).info(eq("after-first-remove"));
         verifyNoMoreInteractions(firstMessageHandler, secondMessageHandler);
+    }
+
+    @Test
+    @DisplayName("default constructor should use COMPOSITE_ONLY level control mode")
+    void defaultConstructorShouldUseCompositeOnlyLevelControlMode() {
+        CompositeMessageHandler sut = new CompositeMessageHandler();
+        assertEquals(CompositeMessageHandler.LevelControlMode.COMPOSITE_ONLY, sut.getLevelControlMode());
+    }
+
+    @Test
+    @DisplayName("constructors should reject null level control mode")
+    void constructorsShouldRejectNullLevelControlMode() {
+        assertThrows(NullPointerException.class,
+                () -> new CompositeMessageHandler((CompositeMessageHandler.LevelControlMode) null));
+        assertThrows(NullPointerException.class,
+                () -> new CompositeMessageHandler(
+                        (CompositeMessageHandler.LevelControlMode) null,
+                        java.util.Collections.<MessageHandler>emptyList()));
+        assertThrows(NullPointerException.class,
+                () -> new CompositeMessageHandler(
+                        (CompositeMessageHandler.LevelControlMode) null,
+                        firstMessageHandler));
+    }
+
+    @Test
+    @DisplayName("COMPOSITE_ONLY mode should keep delegate level configuration untouched")
+    void compositeOnlyModeShouldKeepDelegateLevelConfigurationUntouched() {
+        InMemoryMessageHandler delegate = new InMemoryMessageHandler();
+        CompositeMessageHandler sut = new CompositeMessageHandler(CompositeMessageHandler.LevelControlMode.COMPOSITE_ONLY);
+        sut.setDebugEnabled(true);
+        sut.addMessageHandler(delegate);
+
+        assertFalse(delegate.isDebugEnabled());
+        sut.debug("dbg");
+        assertTrue(delegate.getAllDebugMessages().isEmpty());
+    }
+
+    @Test
+    @DisplayName("COMPOSITE_ONLY mode should not propagate enable disable and setEnabled")
+    void compositeOnlyModeShouldNotPropagateEnableDisableAndSetEnabled() {
+        InMemoryMessageHandler delegate = new InMemoryMessageHandler();
+        CompositeMessageHandler sut = new CompositeMessageHandler(
+                CompositeMessageHandler.LevelControlMode.COMPOSITE_ONLY,
+                delegate);
+
+        sut.enable(SeverityNumber.DEBUG);
+        sut.disable(SeverityNumber.WARN);
+        sut.setEnabled(SeverityNumber.INFO, false);
+
+        assertFalse(delegate.isDebugEnabled());
+        assertTrue(delegate.isWarnEnabled());
+        assertTrue(delegate.isInfoEnabled());
+    }
+
+    @Test
+    @DisplayName("PROPAGATE_TO_DELEGATES mode should align and propagate delegate levels")
+    void propagateToDelegatesModeShouldAlignAndPropagateDelegateLevels() {
+        InMemoryMessageHandler delegate = new InMemoryMessageHandler();
+        CompositeMessageHandler sut = new CompositeMessageHandler(CompositeMessageHandler.LevelControlMode.PROPAGATE_TO_DELEGATES);
+        sut.setInfoEnabled(false);
+        sut.setDebugEnabled(true);
+        sut.addMessageHandler(delegate);
+
+        assertFalse(delegate.isInfoEnabled());
+        assertTrue(delegate.isDebugEnabled());
+
+        sut.setDebugEnabled(false);
+        assertFalse(delegate.isDebugEnabled());
+
+        sut.enable(SeverityNumber.TRACE);
+        assertTrue(delegate.isEnabled(SeverityNumber.TRACE));
+
+        sut.disable(SeverityNumber.TRACE);
+        assertFalse(delegate.isEnabled(SeverityNumber.TRACE));
+    }
+
+    @Test
+    @DisplayName("PROPAGATE_TO_DELEGATES constructor should align already configured level-aware delegates")
+    void propagateToDelegatesConstructorShouldAlignAlreadyConfiguredLevelAwareDelegates() {
+        InMemoryMessageHandler delegate = new InMemoryMessageHandler();
+        delegate.setDebugEnabled(true);
+        delegate.setTraceEnabled(true);
+
+        CompositeMessageHandler sut = new CompositeMessageHandler(
+                CompositeMessageHandler.LevelControlMode.PROPAGATE_TO_DELEGATES,
+                delegate);
+
+        assertEquals(1, sut.getHandlerCount());
+        assertFalse(delegate.isDebugEnabled());
+        assertFalse(delegate.isTraceEnabled());
+        assertTrue(delegate.isInfoEnabled());
+        assertTrue(delegate.isWarnEnabled());
+        assertTrue(delegate.isErrorEnabled());
+        assertTrue(delegate.isFatalEnabled());
+    }
+
+    @Test
+    @DisplayName("PROPAGATE_TO_DELEGATES mode should propagate setEnabled and grouped setters")
+    void propagateToDelegatesModeShouldPropagateSetEnabledAndGroupedSetters() {
+        InMemoryMessageHandler delegate = new InMemoryMessageHandler();
+        CompositeMessageHandler sut = new CompositeMessageHandler(
+                CompositeMessageHandler.LevelControlMode.PROPAGATE_TO_DELEGATES,
+                delegate);
+
+        sut.setEnabled(SeverityNumber.DEBUG, true);
+        assertTrue(delegate.isEnabled(SeverityNumber.DEBUG));
+
+        sut.setInfoEnabled(false);
+        sut.setWarnEnabled(false);
+        sut.setErrorEnabled(false);
+        sut.setFatalEnabled(false);
+        sut.setDebugEnabled(false);
+        sut.setTraceEnabled(true);
+
+        assertFalse(delegate.isInfoEnabled());
+        assertFalse(delegate.isWarnEnabled());
+        assertFalse(delegate.isErrorEnabled());
+        assertFalse(delegate.isFatalEnabled());
+        assertFalse(delegate.isDebugEnabled());
+        assertTrue(delegate.isTraceEnabled());
+    }
+
+    @Test
+    @DisplayName("PROPAGATE_TO_DELEGATES mode should ignore non-level-aware delegates for level mutations")
+    void propagateToDelegatesModeShouldIgnoreNonLevelAwareDelegatesForLevelMutations() {
+        MessageHandler nonLevelAwareDelegate = mock(MessageHandler.class);
+        CompositeMessageHandler sut = new CompositeMessageHandler(
+                CompositeMessageHandler.LevelControlMode.PROPAGATE_TO_DELEGATES,
+                nonLevelAwareDelegate);
+
+        assertDoesNotThrow(() -> {
+            sut.setInfoEnabled(false);
+            sut.setWarnEnabled(false);
+            sut.setErrorEnabled(false);
+            sut.setFatalEnabled(false);
+            sut.setDebugEnabled(true);
+            sut.setTraceEnabled(true);
+            sut.setEnabled(SeverityNumber.INFO, true);
+            sut.enable(SeverityNumber.DEBUG);
+            sut.disable(SeverityNumber.DEBUG);
+        });
+
+        verifyNoInteractions(nonLevelAwareDelegate);
+    }
+
+    @Test
+    @DisplayName("DELEGATE_ONLY mode should throw on composite level mutators")
+    void delegateOnlyModeShouldThrowOnCompositeLevelMutators() {
+        CompositeMessageHandler sut = new CompositeMessageHandler(CompositeMessageHandler.LevelControlMode.DELEGATE_ONLY);
+
+        Map<String, Executable> mutators = new LinkedHashMap<>();
+        mutators.put("setInfoEnabled", () -> sut.setInfoEnabled(true));
+        mutators.put("setWarnEnabled", () -> sut.setWarnEnabled(true));
+        mutators.put("setErrorEnabled", () -> sut.setErrorEnabled(true));
+        mutators.put("setFatalEnabled", () -> sut.setFatalEnabled(true));
+        mutators.put("setDebugEnabled", () -> sut.setDebugEnabled(true));
+        mutators.put("setTraceEnabled", () -> sut.setTraceEnabled(true));
+        mutators.put("setEnabled", () -> sut.setEnabled(SeverityNumber.ERROR, false));
+        mutators.put("enable", () -> sut.enable(SeverityNumber.DEBUG));
+        mutators.put("disable", () -> sut.disable(SeverityNumber.INFO));
+
+        mutators.forEach((operation, invocation) -> {
+            UnsupportedOperationException ex = assertThrows(
+                    UnsupportedOperationException.class,
+                    invocation,
+                    operation + " should be unsupported in DELEGATE_ONLY mode");
+            assertTrue(ex.getMessage() != null && !ex.getMessage().isBlank());
+            assertTrue(ex.getMessage().contains(operation));
+            assertTrue(ex.getMessage().contains("DELEGATE_ONLY"));
+        });
+    }
+
+    @Test
+    @DisplayName("DELEGATE_ONLY mode should route and let delegates decide their own filtering")
+    void delegateOnlyModeShouldRouteAndLetDelegatesDecideTheirOwnFiltering() {
+        InMemoryMessageHandler debugEnabledDelegate = new InMemoryMessageHandler();
+        debugEnabledDelegate.setDebugEnabled(true);
+        InMemoryMessageHandler debugDisabledDelegate = new InMemoryMessageHandler();
+
+        CompositeMessageHandler sut = new CompositeMessageHandler(
+                CompositeMessageHandler.LevelControlMode.DELEGATE_ONLY,
+                debugEnabledDelegate,
+                debugDisabledDelegate);
+
+        sut.debug("delegate-mode");
+
+        assertEquals(1, debugEnabledDelegate.getAllDebugMessages().size());
+        assertEquals("delegate-mode", debugEnabledDelegate.getAllDebugMessages().get(0));
+        assertTrue(debugDisabledDelegate.getAllDebugMessages().isEmpty());
     }
 
     @ParameterizedTest

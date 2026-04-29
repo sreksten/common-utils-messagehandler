@@ -15,7 +15,7 @@ public class EnrichingLogRecordFactory implements LogRecordFactory {
     private final InstrumentationScope scope;
     private final List<KeyValue> commonAttributes;
 
-    EnrichingLogRecordFactory(
+    public EnrichingLogRecordFactory(
             LogRecordFactory delegate,
             Resource resource,
             InstrumentationScope scope,

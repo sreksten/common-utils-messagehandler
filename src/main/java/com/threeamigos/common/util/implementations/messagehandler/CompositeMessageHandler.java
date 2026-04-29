@@ -9,38 +9,98 @@ import java.io.StringWriter;
 import java.util.*;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
-
 /**
- * An implementation of the {@link MessageHandler} interface that forwards
- * messages and exceptions to one or more other MessageHandlers. Note that if you disable a certain message level from
- * here, no messages will be forwarded to any MessageHandler registered. The best option is to disable levels in the
- * handlers. In this way you can, for example, forward only error messages to a file, and all other messages to the
- * console.
+ * An implementation of the {@link MessageHandler} interface that forwards messages and exceptions
+ * to one or more other {@link MessageHandler}s.
+ * <p>
+ * Level control behavior is configurable via {@link LevelControlMode}:
+ * <ul>
+ *   <li>{@link LevelControlMode#COMPOSITE_ONLY}: this composite applies its own level gate only;
+ *       delegates keep their own level configuration unchanged.</li>
+ *   <li>{@link LevelControlMode#PROPAGATE_TO_DELEGATES}: this composite applies its own level gate
+ *       and forwards level changes to delegates that are {@link AbstractMessageHandler} instances.
+ *       Newly added delegates are aligned with the composite level state.</li>
+ *   <li>{@link LevelControlMode#DELEGATE_ONLY}: this composite does not own level mutators.
+ *       Calls to level-mutating APIs throw {@link UnsupportedOperationException}; routing is always
+ *       forwarded and delegates decide their own filtering.</li>
+ * </ul>
+ * <p>
+ * Default mode is {@link LevelControlMode#COMPOSITE_ONLY}.
  *
  * @author Stefano Reksten
  */
 public class CompositeMessageHandler extends AbstractMessageHandler {
+    /**
+     * Defines how level state is managed between the composite and its delegates.
+     */
+    public enum LevelControlMode {
+        /**
+         * The composite keeps its own level state and does not change delegate level state.
+         */
+        COMPOSITE_ONLY,
+        /**
+         * The composite keeps its own level state and propagates mutations to level-aware delegates.
+         */
+        PROPAGATE_TO_DELEGATES,
+        /**
+         * Level state is managed only on delegates; composite-level mutators are unsupported.
+         */
+        DELEGATE_ONLY
+    }
 
     private final List<MessageHandler> messageHandlers = new ArrayList<>();
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
     private volatile Consumer<String> errorConsumer = System.err::println;
+    private final LevelControlMode levelControlMode;
 
     public CompositeMessageHandler() {
-        this(new ArrayList<>());
+        this(LevelControlMode.COMPOSITE_ONLY, new ArrayList<>());
     }
-
+    /**
+     * Creates an empty composite with the provided level control mode.
+     *
+     * @param levelControlMode mode controlling how level state is managed
+     */
+    public CompositeMessageHandler(final @Nonnull LevelControlMode levelControlMode) {
+        this(levelControlMode, new ArrayList<>());
+    }
     /**
      * @param handlers a collection of non-null MessageHandlers
      */
     public CompositeMessageHandler(final @Nonnull Collection<MessageHandler> handlers) {
+        this(LevelControlMode.COMPOSITE_ONLY, handlers);
+    }
+    /**
+     * Creates a composite in the provided level control mode, preloaded with handlers.
+     *
+     * @param levelControlMode mode controlling how level state is managed
+     * @param handlers a collection of non-null MessageHandlers
+     */
+    public CompositeMessageHandler(final @Nonnull LevelControlMode levelControlMode,
+                                   final @Nonnull Collection<MessageHandler> handlers) {
+        this.levelControlMode = Objects.requireNonNull(
+                levelControlMode,
+                MessageHandlerResourceBundle.get("nullCompositeLevelControlModeProvided"));
         Objects.requireNonNull(handlers, MessageHandlerResourceBundle.get("noMessageHandlersProvided"));
         addMessageHandlers(handlers);
     }
-
     /**
      * @param handlers a collection of non-null MessageHandlers
      */
     public CompositeMessageHandler(final @Nonnull MessageHandler... handlers) {
+        this(LevelControlMode.COMPOSITE_ONLY, handlers);
+    }
+    /**
+     * Creates a composite in the provided level control mode, preloaded with handlers.
+     *
+     * @param levelControlMode mode controlling how level state is managed
+     * @param handlers a collection of non-null MessageHandlers
+     */
+    public CompositeMessageHandler(final @Nonnull LevelControlMode levelControlMode,
+                                   final @Nonnull MessageHandler... handlers) {
+        this.levelControlMode = Objects.requireNonNull(
+                levelControlMode,
+                MessageHandlerResourceBundle.get("nullCompositeLevelControlModeProvided"));
         Objects.requireNonNull(handlers, MessageHandlerResourceBundle.get("noMessageHandlersProvided"));
         addMessageHandlers(Arrays.asList(handlers));
     }
@@ -49,13 +109,18 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
         lock.writeLock().lock();
         try {
             for (MessageHandler handler : handlers) {
-                messageHandlers.add(Objects.requireNonNull(handler, MessageHandlerResourceBundle.get("nullMessageHandlerProvided")));
+                MessageHandler nonNullHandler = Objects.requireNonNull(
+                        handler,
+                        MessageHandlerResourceBundle.get("nullMessageHandlerProvided"));
+                if (levelControlMode == LevelControlMode.PROPAGATE_TO_DELEGATES) {
+                    alignDelegateLevels(nonNullHandler, getEnabledLevels(), getDisabledLevels());
+                }
+                messageHandlers.add(nonNullHandler);
             }
         } finally {
             lock.writeLock().unlock();
         }
     }
-
     /**
      * Adds a single {@link MessageHandler} to this composite at runtime.
      * <p>
@@ -69,12 +134,200 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
         Objects.requireNonNull(messageHandler, MessageHandlerResourceBundle.get("nullMessageHandlerProvided"));
         lock.writeLock().lock();
         try {
+            if (levelControlMode == LevelControlMode.PROPAGATE_TO_DELEGATES) {
+                alignDelegateLevels(messageHandler, getEnabledLevels(), getDisabledLevels());
+            }
             messageHandlers.add(messageHandler);
         } finally {
             lock.writeLock().unlock();
         }
     }
 
+    /**
+     * Evaluates if a level is enabled for dispatch.
+     * <p>
+     * In {@link LevelControlMode#DELEGATE_ONLY} this method always returns {@code true}
+     * (after null validation) so that delegates perform the filtering.
+     */
+    @Override
+    public boolean isEnabled(final @Nonnull SeverityNumber level) {
+        if (levelControlMode == LevelControlMode.DELEGATE_ONLY) {
+            Objects.requireNonNull(level, MessageHandlerResourceBundle.get("nullLevelProvided"));
+            return true;
+        }
+        return super.isEnabled(level);
+    }
+
+    /**
+     * Enables the provided levels on this composite.
+     * <p>
+     * In {@link LevelControlMode#PROPAGATE_TO_DELEGATES}, changes are also forwarded to
+     * level-aware delegates.
+     *
+     * @throws UnsupportedOperationException when mode is {@link LevelControlMode#DELEGATE_ONLY}
+     */
+    @Override
+    public void enable(final SeverityNumber... levels) {
+        assertLevelMutatorAllowed("enable");
+        super.enable(levels);
+        if (levelControlMode == LevelControlMode.PROPAGATE_TO_DELEGATES) {
+            forEachLevelAwareDelegate(delegate -> delegate.enable(levels));
+        }
+    }
+
+    /**
+     * Disables the provided levels on this composite.
+     * <p>
+     * In {@link LevelControlMode#PROPAGATE_TO_DELEGATES}, changes are also forwarded to
+     * level-aware delegates.
+     *
+     * @throws UnsupportedOperationException when mode is {@link LevelControlMode#DELEGATE_ONLY}
+     */
+    @Override
+    public void disable(final SeverityNumber... levels) {
+        assertLevelMutatorAllowed("disable");
+        super.disable(levels);
+        if (levelControlMode == LevelControlMode.PROPAGATE_TO_DELEGATES) {
+            forEachLevelAwareDelegate(delegate -> delegate.disable(levels));
+        }
+    }
+
+    /**
+     * Enables or disables a single level on this composite.
+     * <p>
+     * In {@link LevelControlMode#PROPAGATE_TO_DELEGATES}, changes are also forwarded to
+     * level-aware delegates.
+     *
+     * @throws UnsupportedOperationException when mode is {@link LevelControlMode#DELEGATE_ONLY}
+     */
+    @Override
+    public void setEnabled(final @Nonnull SeverityNumber level, final boolean enabled) {
+        assertLevelMutatorAllowed("setEnabled");
+        super.setEnabled(level, enabled);
+        if (levelControlMode == LevelControlMode.PROPAGATE_TO_DELEGATES) {
+            forEachLevelAwareDelegate(delegate -> delegate.setEnabled(level, enabled));
+        }
+    }
+
+    /**
+     * Enables or disables all {@code INFO*} levels on this composite.
+     * <p>
+     * In {@link LevelControlMode#PROPAGATE_TO_DELEGATES}, changes are also forwarded to
+     * level-aware delegates.
+     *
+     * @throws UnsupportedOperationException when mode is {@link LevelControlMode#DELEGATE_ONLY}
+     */
+    @Override
+    public void setInfoEnabled(final boolean infoEnabled) {
+        assertLevelMutatorAllowed("setInfoEnabled");
+        super.setEnabled(SeverityNumber.INFO, infoEnabled);
+        super.setEnabled(SeverityNumber.INFO2, infoEnabled);
+        super.setEnabled(SeverityNumber.INFO3, infoEnabled);
+        super.setEnabled(SeverityNumber.INFO4, infoEnabled);
+        if (levelControlMode == LevelControlMode.PROPAGATE_TO_DELEGATES) {
+            forEachLevelAwareDelegate(delegate -> delegate.setInfoEnabled(infoEnabled));
+        }
+    }
+
+    /**
+     * Enables or disables all {@code WARN*} levels on this composite.
+     * <p>
+     * In {@link LevelControlMode#PROPAGATE_TO_DELEGATES}, changes are also forwarded to
+     * level-aware delegates.
+     *
+     * @throws UnsupportedOperationException when mode is {@link LevelControlMode#DELEGATE_ONLY}
+     */
+    @Override
+    public void setWarnEnabled(final boolean warnEnabled) {
+        assertLevelMutatorAllowed("setWarnEnabled");
+        super.setEnabled(SeverityNumber.WARN, warnEnabled);
+        super.setEnabled(SeverityNumber.WARN2, warnEnabled);
+        super.setEnabled(SeverityNumber.WARN3, warnEnabled);
+        super.setEnabled(SeverityNumber.WARN4, warnEnabled);
+        if (levelControlMode == LevelControlMode.PROPAGATE_TO_DELEGATES) {
+            forEachLevelAwareDelegate(delegate -> delegate.setWarnEnabled(warnEnabled));
+        }
+    }
+
+    /**
+     * Enables or disables all {@code ERROR*} levels on this composite.
+     * <p>
+     * In {@link LevelControlMode#PROPAGATE_TO_DELEGATES}, changes are also forwarded to
+     * level-aware delegates.
+     *
+     * @throws UnsupportedOperationException when mode is {@link LevelControlMode#DELEGATE_ONLY}
+     */
+    @Override
+    public void setErrorEnabled(final boolean errorEnabled) {
+        assertLevelMutatorAllowed("setErrorEnabled");
+        super.setEnabled(SeverityNumber.ERROR, errorEnabled);
+        super.setEnabled(SeverityNumber.ERROR2, errorEnabled);
+        super.setEnabled(SeverityNumber.ERROR3, errorEnabled);
+        super.setEnabled(SeverityNumber.ERROR4, errorEnabled);
+        if (levelControlMode == LevelControlMode.PROPAGATE_TO_DELEGATES) {
+            forEachLevelAwareDelegate(delegate -> delegate.setErrorEnabled(errorEnabled));
+        }
+    }
+
+    /**
+     * Enables or disables all {@code FATAL*} levels on this composite.
+     * <p>
+     * In {@link LevelControlMode#PROPAGATE_TO_DELEGATES}, changes are also forwarded to
+     * level-aware delegates.
+     *
+     * @throws UnsupportedOperationException when mode is {@link LevelControlMode#DELEGATE_ONLY}
+     */
+    @Override
+    public void setFatalEnabled(final boolean fatalEnabled) {
+        assertLevelMutatorAllowed("setFatalEnabled");
+        super.setEnabled(SeverityNumber.FATAL, fatalEnabled);
+        super.setEnabled(SeverityNumber.FATAL2, fatalEnabled);
+        super.setEnabled(SeverityNumber.FATAL3, fatalEnabled);
+        super.setEnabled(SeverityNumber.FATAL4, fatalEnabled);
+        if (levelControlMode == LevelControlMode.PROPAGATE_TO_DELEGATES) {
+            forEachLevelAwareDelegate(delegate -> delegate.setFatalEnabled(fatalEnabled));
+        }
+    }
+
+    /**
+     * Enables or disables all {@code DEBUG*} levels on this composite.
+     * <p>
+     * In {@link LevelControlMode#PROPAGATE_TO_DELEGATES}, changes are also forwarded to
+     * level-aware delegates.
+     *
+     * @throws UnsupportedOperationException when mode is {@link LevelControlMode#DELEGATE_ONLY}
+     */
+    @Override
+    public void setDebugEnabled(final boolean debugEnabled) {
+        assertLevelMutatorAllowed("setDebugEnabled");
+        super.setEnabled(SeverityNumber.DEBUG, debugEnabled);
+        super.setEnabled(SeverityNumber.DEBUG2, debugEnabled);
+        super.setEnabled(SeverityNumber.DEBUG3, debugEnabled);
+        super.setEnabled(SeverityNumber.DEBUG4, debugEnabled);
+        if (levelControlMode == LevelControlMode.PROPAGATE_TO_DELEGATES) {
+            forEachLevelAwareDelegate(delegate -> delegate.setDebugEnabled(debugEnabled));
+        }
+    }
+
+    /**
+     * Enables or disables all {@code TRACE*} levels on this composite.
+     * <p>
+     * In {@link LevelControlMode#PROPAGATE_TO_DELEGATES}, changes are also forwarded to
+     * level-aware delegates.
+     *
+     * @throws UnsupportedOperationException when mode is {@link LevelControlMode#DELEGATE_ONLY}
+     */
+    @Override
+    public void setTraceEnabled(final boolean traceEnabled) {
+        assertLevelMutatorAllowed("setTraceEnabled");
+        super.setEnabled(SeverityNumber.TRACE, traceEnabled);
+        super.setEnabled(SeverityNumber.TRACE2, traceEnabled);
+        super.setEnabled(SeverityNumber.TRACE3, traceEnabled);
+        super.setEnabled(SeverityNumber.TRACE4, traceEnabled);
+        if (levelControlMode == LevelControlMode.PROPAGATE_TO_DELEGATES) {
+            forEachLevelAwareDelegate(delegate -> delegate.setTraceEnabled(traceEnabled));
+        }
+    }
     /**
      * Removes a previously registered {@link MessageHandler} from this composite.
      * <p>
@@ -94,7 +347,6 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
             lock.writeLock().unlock();
         }
     }
-
     /**
      * Returns the number of {@link MessageHandler}s currently registered in this composite.
      * <p>
@@ -112,7 +364,6 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
             lock.readLock().unlock();
         }
     }
-
     /**
      * Returns a point-in-time snapshot of the registered handlers as an unmodifiable collection.
      * <p>
@@ -128,6 +379,12 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
         } finally {
             lock.readLock().unlock();
         }
+    }
+    /**
+     * @return the configured level-control mode of this composite.
+     */
+    public LevelControlMode getLevelControlMode() {
+        return levelControlMode;
     }
 
     /**
@@ -198,7 +455,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
         });
     }
 
-    private void forEachHandler(java.util.function.Consumer<MessageHandler> consumer) {
+    private void forEachHandler(Consumer<MessageHandler> consumer) {
         List<MessageHandler> snapshot;
         lock.readLock().lock();
         try {
@@ -216,6 +473,33 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
                 t.printStackTrace(new PrintWriter(sw, true));
                 errorConsumer.accept(msg + System.lineSeparator() + sw);
             }
+        }
+    }
+
+    private void assertLevelMutatorAllowed(final String operation) {
+        if (levelControlMode == LevelControlMode.DELEGATE_ONLY) {
+            throw new UnsupportedOperationException(MessageHandlerResourceBundle.format(
+                    "compositeLevelMutationUnsupportedForMode",
+                    operation,
+                    levelControlMode));
+        }
+    }
+
+    private void forEachLevelAwareDelegate(final Consumer<AbstractMessageHandler> consumer) {
+        forEachHandler(handler -> {
+            if (handler instanceof AbstractMessageHandler) {
+                consumer.accept((AbstractMessageHandler) handler);
+            }
+        });
+    }
+
+    private static void alignDelegateLevels(final MessageHandler delegate,
+                                            final SeverityNumber[] enabledLevels,
+                                            final SeverityNumber[] disabledLevels) {
+        if (delegate instanceof AbstractMessageHandler) {
+            AbstractMessageHandler levelAwareHandler = (AbstractMessageHandler) delegate;
+            levelAwareHandler.enable(enabledLevels);
+            levelAwareHandler.disable(disabledLevels);
         }
     }
 

@@ -4,6 +4,9 @@ import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 import jakarta.annotation.Nonnull;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
 import java.util.function.Supplier;
 
@@ -51,10 +54,26 @@ public abstract class AbstractMessageHandler implements MessageHandler {
         return 1 << level.getValue();
     }
 
+    public void enable(final Collection<SeverityNumber> levels) {
+        int newEnabledLevels = enabledLevels;
+        for (SeverityNumber level : levels) {
+            newEnabledLevels |= levelMask(level);
+        }
+        enabledLevels = newEnabledLevels;
+    }
+
     public void enable(final SeverityNumber ... levels) {
         int newEnabledLevels = enabledLevels;
         for (SeverityNumber level : levels) {
             newEnabledLevels |= levelMask(level);
+        }
+        enabledLevels = newEnabledLevels;
+    }
+
+    public void disable(final Collection<SeverityNumber> levels) {
+        int newEnabledLevels = enabledLevels;
+        for (SeverityNumber level : levels) {
+            newEnabledLevels &= ~levelMask(level);
         }
         enabledLevels = newEnabledLevels;
     }
@@ -81,6 +100,47 @@ public abstract class AbstractMessageHandler implements MessageHandler {
             newEnabledLevels &= ~levelMask(level);
         }
         enabledLevels = newEnabledLevels;
+    }
+
+    /**
+     * Returns the currently enabled severity levels.
+     *
+     * @return enabled levels as a new array snapshot
+     */
+    public SeverityNumber[] getEnabledLevels() {
+        List<SeverityNumber> enabled = new ArrayList<>(SeverityNumber.values().length);
+        for (SeverityNumber level : SeverityNumber.values()) {
+            if ((enabledLevels & levelMask(level)) != 0) {
+                enabled.add(level);
+            }
+        }
+        return enabled.toArray(new SeverityNumber[0]);
+    }
+
+    /**
+     * Returns the currently disabled severity levels.
+     *
+     * @return disabled levels as a new array snapshot
+     */
+    public SeverityNumber[] getDisabledLevels() {
+        List<SeverityNumber> disabled = new ArrayList<>(SeverityNumber.values().length);
+        for (SeverityNumber level : SeverityNumber.values()) {
+            if ((enabledLevels & levelMask(level)) == 0) {
+                disabled.add(level);
+            }
+        }
+        return disabled.toArray(new SeverityNumber[0]);
+    }
+
+    /**
+     * Backward-compatible alias for {@link #getDisabledLevels()}.
+     *
+     * @return disabled levels as a new array snapshot
+     * @deprecated use {@link #getDisabledLevels()}.
+     */
+    @Deprecated
+    public SeverityNumber[] getIdsabledLevels() {
+        return getDisabledLevels();
     }
 
     public void log(final @Nonnull SeverityNumber level, final @Nonnull Supplier<String> message) {

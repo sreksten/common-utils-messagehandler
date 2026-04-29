@@ -6,6 +6,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -194,5 +197,36 @@ class AbstractMessageHandlerUnitTest {
         assertTrue(sut.isInfoEnabled());
 
         assertThrows(NullPointerException.class, () -> sut.setEnabled(null, true));
+    }
+
+    @Test
+    @DisplayName("collection enable/disable should update levels and snapshots consistently")
+    void collectionEnableDisableShouldUpdateLevelsAndSnapshotsConsistently() {
+        ProbeMessageHandler sut = new ProbeMessageHandler();
+
+        sut.disable(Arrays.asList(SeverityNumber.INFO, SeverityNumber.WARN));
+        sut.enable(Arrays.asList(SeverityNumber.DEBUG, SeverityNumber.TRACE));
+
+        assertFalse(sut.isInfoEnabled());
+        assertFalse(sut.isWarnEnabled());
+        assertTrue(sut.isDebugEnabled());
+        assertTrue(sut.isTraceEnabled());
+
+        Set<SeverityNumber> enabled = new HashSet<>(Arrays.asList(sut.getEnabledLevels()));
+        Set<SeverityNumber> disabled = new HashSet<>(Arrays.asList(sut.getDisabledLevels()));
+        Set<SeverityNumber> disabledAlias = new HashSet<>(Arrays.asList(sut.getIdsabledLevels()));
+
+        assertTrue(enabled.contains(SeverityNumber.DEBUG));
+        assertTrue(enabled.contains(SeverityNumber.TRACE));
+        assertTrue(disabled.contains(SeverityNumber.INFO));
+        assertTrue(disabled.contains(SeverityNumber.WARN));
+        assertEquals(disabled, disabledAlias);
+    }
+
+    @Test
+    @DisplayName("isEnabled should reject null level")
+    void isEnabledShouldRejectNullLevel() {
+        ProbeMessageHandler sut = new ProbeMessageHandler();
+        assertThrows(NullPointerException.class, () -> sut.isEnabled(null));
     }
 }
