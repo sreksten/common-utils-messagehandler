@@ -6,6 +6,8 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Entity;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -13,20 +15,30 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Pattern;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Immutable implementation of {@link Entity}.
  * All fields are set at construction time.
+ * <p>
+ * Specification references:
+ * <a href="https://opentelemetry.io/docs/specs/otel/entities/data-model/">OpenTelemetry Entity Data Model</a>,
+ * <a href="https://opentelemetry.io/docs/specs/otel/common/">OpenTelemetry Common Concepts (Attribute)</a>,
+ * <a href="https://opentelemetry.io/docs/specs/otel/entities/sdk/">OpenTelemetry Entities SDK</a>.
  *
  * @author Stefano Reksten
  */
 final class EntityImpl implements Entity {
 
+    private static final Logger LOGGER = Logger.getLogger(EntityImpl.class.getName());
     private static final RawJsonRecordFormatter RAW_JSON_RECORD_FORMATTER = new RawJsonRecordFormatter();
     private static final Instant CANONICAL_TIMESTAMP = Instant.EPOCH;
     private static final String UNKNOWN_TYPE = "unknown";
     private static final String UNKNOWN_ID_KEY = "unknown_id";
     private static final String UNKNOWN_ID_VALUE = "unknown";
+    private static final Pattern ENTITY_TYPE_PATTERN = Pattern.compile("[A-Za-z][A-Za-z0-9._-]*");
 
     private final String type;
     private final String schemaUrl;
@@ -91,7 +103,7 @@ final class EntityImpl implements Entity {
                     MessageHandlerResourceBundle.get("entityDescriptionFieldName"),
                     false);
         } catch (RuntimeException e) {
-            OpenTelemetryAttributeValidator.handle(e.getMessage());
+            logWarning(e.getMessage());
             return this;
         }
 
@@ -157,45 +169,70 @@ final class EntityImpl implements Entity {
 
     private static String normalizeType(final String rawType) {
         if (rawType == null) {
-            OpenTelemetryAttributeValidator.handleBundled("entityTypeMustNotBeNull");
+            logBundledWarning("entityTypeMustNotBeNull");
             return UNKNOWN_TYPE;
         }
-        if (rawType.trim().isEmpty()) {
-            OpenTelemetryAttributeValidator.handleBundled("entityTypeMustNotBeEmpty");
+        String normalizedType = rawType.trim();
+        if (normalizedType.isEmpty()) {
+            logBundledWarning("entityTypeMustNotBeEmpty");
             return UNKNOWN_TYPE;
         }
-        return rawType;
+        if (!ENTITY_TYPE_PATTERN.matcher(normalizedType).matches()) {
+            logWarning("Invalid entity type \"" + normalizedType
+                    + "\". Falling back to \"" + UNKNOWN_TYPE + "\".");
+            return UNKNOWN_TYPE;
+        }
+        return normalizedType;
     }
 
     private static String normalizeTypeForComparison(final String rawType) {
         if (rawType == null || rawType.trim().isEmpty()) {
             return null;
         }
-        return rawType;
+        String normalizedType = rawType.trim();
+        return ENTITY_TYPE_PATTERN.matcher(normalizedType).matches() ? normalizedType : null;
     }
 
     private static String normalizeSchemaUrl(final String rawSchemaUrl) {
         if (rawSchemaUrl == null) {
             return null;
         }
-        if (rawSchemaUrl.trim().isEmpty()) {
-            OpenTelemetryAttributeValidator.handle(MessageHandlerResourceBundle.format(
-                    "builderFieldMustNotBeBlank",
-                    "schemaUrl"));
+        String normalizedSchemaUrl = rawSchemaUrl.trim();
+        if (normalizedSchemaUrl.isEmpty()) {
+            logWarning(MessageHandlerResourceBundle.format("builderFieldMustNotBeBlank", "schemaUrl"));
             return null;
         }
-        return rawSchemaUrl;
+        try {
+            new URI(normalizedSchemaUrl);
+        } catch (URISyntaxException e) {
+            logWarning("Invalid entity schemaUrl \"" + normalizedSchemaUrl
+                    + "\". It must be a valid URI. Treating schemaUrl as absent.");
+            return null;
+        }
+        return normalizedSchemaUrl;
     }
 
     private static List<KeyValue> sanitizeKeyValues(final List<KeyValue> keyValues,
                                                     final String fieldName,
                                                     final boolean enforceNonEmpty) {
-        List<KeyValue> copy = OpenTelemetryAttributeValidator.copyAndValidateKeyValues(keyValues, fieldName);
+        List<KeyValue> copy = OpenTelemetryAttributeValidator.copyAndValidateKeyValuesLenient(keyValues, fieldName);
 
         if (enforceNonEmpty && copy.isEmpty()) {
-            OpenTelemetryAttributeValidator.handleBundled("entityIdMustNotBeEmpty");
+            logBundledWarning("entityIdMustNotBeEmpty");
             copy.add(KeyValueFactory.of(UNKNOWN_ID_KEY, AnyValueFactory.ofString(UNKNOWN_ID_VALUE)));
         }
         return copy;
+    }
+
+    private static void logBundledWarning(final String messageKey) {
+        try {
+            logWarning(MessageHandlerResourceBundle.get(messageKey));
+        } catch (RuntimeException e) {
+            logWarning(messageKey);
+        }
+    }
+
+    private static void logWarning(final String message) {
+        LOGGER.log(Level.WARNING, message);
     }
 }

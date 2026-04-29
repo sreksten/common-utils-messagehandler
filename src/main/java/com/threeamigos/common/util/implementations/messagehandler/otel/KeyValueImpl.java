@@ -8,6 +8,10 @@ import java.util.Objects;
 
 /**
  * Immutable implementation of {@link KeyValue}.
+ * <p>
+ * Specification references:
+ * <a href="https://opentelemetry.io/docs/specs/otel/common/#attribute">OpenTelemetry Common: Attribute</a>,
+ * <a href="https://github.com/open-telemetry/opentelemetry-proto/blob/main/opentelemetry/proto/common/v1/common.proto">OTLP common.proto (KeyValue)</a>.
  *
  * @author Stefano Reksten
  */
@@ -23,13 +27,8 @@ final class KeyValueImpl implements KeyValue {
      * @param value attribute value
      */
     KeyValueImpl(final String key, final AnyValue value) {
-        Objects.requireNonNull(key, MessageHandlerResourceBundle.get("keyMustNotBeNull"));
-        if (key.isEmpty()) {
-            throw new IllegalArgumentException(MessageHandlerResourceBundle.get("keyMustNotBeEmpty"));
-        }
-        Objects.requireNonNull(value, MessageHandlerResourceBundle.get("valueMustNotBeNull"));
-        this.key = key;
-        this.value = value;
+        this.key = normalizeKey(key);
+        this.value = normalizeValue(value);
     }
 
     /**
@@ -39,7 +38,7 @@ final class KeyValueImpl implements KeyValue {
      * @param value attribute value
      */
     public KeyValueImpl(final OTelTags name, final AnyValue value) {
-        this(Objects.requireNonNull(name, MessageHandlerResourceBundle.get("keyMustNotBeNull")).getValue(), value);
+        this(resolveTagValue(name), value);
     }
 
     @Override
@@ -49,6 +48,51 @@ final class KeyValueImpl implements KeyValue {
 
     @Override
     public AnyValue getValue() {
+        return value;
+    }
+
+    @Override
+    public boolean equals(final Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (!(obj instanceof KeyValueImpl)) {
+            return false;
+        }
+        KeyValueImpl other = (KeyValueImpl) obj;
+        return Objects.equals(key, other.key) && Objects.equals(value, other.value);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(key, value);
+    }
+
+    private static String resolveTagValue(final OTelTags name) {
+        if (name == null) {
+            OpenTelemetryAttributeValidator.handleBundled("keyMustNotBeNull");
+            return "unknown";
+        }
+        return normalizeKey(name.getValue());
+    }
+
+    private static String normalizeKey(final String key) {
+        if (key == null) {
+            OpenTelemetryAttributeValidator.handleBundled("keyMustNotBeNull");
+            return "unknown";
+        }
+        if (key.trim().isEmpty()) {
+            OpenTelemetryAttributeValidator.handleBundled("keyMustNotBeEmpty");
+            return "unknown";
+        }
+        return key;
+    }
+
+    private static AnyValue normalizeValue(final AnyValue value) {
+        if (value == null) {
+            OpenTelemetryAttributeValidator.handleBundled("valueMustNotBeNull");
+            return AnyValueFactory.empty();
+        }
         return value;
     }
 }

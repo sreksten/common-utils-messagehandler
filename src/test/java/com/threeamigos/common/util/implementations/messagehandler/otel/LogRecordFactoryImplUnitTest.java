@@ -43,8 +43,8 @@ class LogRecordFactoryImplUnitTest {
     @Test
     @DisplayName("create(SeverityNumber, String) should reject null inputs")
     void createSeverityMessageShouldRejectNullInputs() {
-        assertThrows(NullPointerException.class, () -> factory.create(null, "x"));
-        assertThrows(NullPointerException.class, () -> factory.create(SeverityNumber.INFO, null));
+        assertThrows(IllegalArgumentException.class, () -> factory.create(null, "x"));
+        assertThrows(IllegalArgumentException.class, () -> factory.create(SeverityNumber.INFO, null));
     }
 
     @Test
@@ -100,7 +100,7 @@ class LogRecordFactoryImplUnitTest {
     @Test
     @DisplayName("throwable-based factories should reject null throwable")
     void throwableFactoriesShouldRejectNullThrowable() {
-        assertThrows(NullPointerException.class, () -> factory.create((Throwable) null));
-        assertThrows(NullPointerException.class, () -> factory.create("prefix", null));
+        assertThrows(IllegalArgumentException.class, () -> factory.create((Throwable) null));
+        assertThrows(IllegalArgumentException.class, () -> factory.create("prefix", null));
     }
 }

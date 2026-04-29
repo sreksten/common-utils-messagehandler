@@ -1,7 +1,9 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel.formatters;
 
 import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
+import com.threeamigos.common.util.implementations.messagehandler.otel.AnyValueFactory;
 import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordImpl;
+import com.threeamigos.common.util.implementations.messagehandler.otel.OpenTelemetryAttributeValidator;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
@@ -13,7 +15,6 @@ import java.math.BigInteger;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
-import java.util.Objects;
 
 /**
  * A {@link LogRecordFormatter} that serializes a {@link LogRecord} as a naked JSON object
@@ -53,42 +54,69 @@ public class RawJsonRecordFormatter implements LogRecordFormatter {
     @Nonnull
     @Override
     public String format(@Nonnull final LogRecord logRecord) {
-        Objects.requireNonNull(logRecord, MessageHandlerResourceBundle.get("logRecordMustNotBeNull"));
-        StringBuilder sb = new StringBuilder("{");
-        boolean first;
-        first = appendTimeNanos(sb, true, F_TIME_UNIX_NANO, logRecord.getTimestamp());
-        first = appendTimeNanos(sb, first, F_OBSERVED_TIME_UNIX_NANO, logRecord.getObservedTimestamp());
-        first = appendString(sb, first, F_TRACE_ID, logRecord.getTraceId());
-        first = appendString(sb, first, F_SPAN_ID, logRecord.getSpanId());
-        if (logRecord.getTraceFlags() != 0) {
-            first = appendInt(sb, first, F_FLAGS, logRecord.getTraceFlags());
+        if (logRecord == null) {
+            OpenTelemetryAttributeValidator.handleBundled("logRecordMustNotBeNull");
+            return "{}";
         }
-        first = appendString(sb, first, F_SEVERITY_TEXT, logRecord.getSeverityText());
-        SeverityNumber severityNumber = logRecord.getSeverityNumber();
-        if (severityNumber != null && severityNumber != SeverityNumber.UNSPECIFIED) {
-            first = appendInt(sb, first, F_SEVERITY_NUMBER, severityNumber.getValue());
+        try {
+            StringBuilder sb = new StringBuilder("{");
+            boolean first;
+            first = appendTimeNanos(sb, true, F_TIME_UNIX_NANO, logRecord.getTimestamp());
+            first = appendTimeNanos(sb, first, F_OBSERVED_TIME_UNIX_NANO, logRecord.getObservedTimestamp());
+            first = appendString(sb, first, F_TRACE_ID, logRecord.getTraceId());
+            first = appendString(sb, first, F_SPAN_ID, logRecord.getSpanId());
+            if (logRecord.getTraceFlags() != 0) {
+                first = appendInt(sb, first, F_FLAGS, logRecord.getTraceFlags());
+            }
+            first = appendString(sb, first, F_SEVERITY_TEXT, logRecord.getSeverityText());
+            SeverityNumber severityNumber = logRecord.getSeverityNumber();
+            if (severityNumber != null && severityNumber != SeverityNumber.UNSPECIFIED) {
+                first = appendInt(sb, first, F_SEVERITY_NUMBER, severityNumber.getValue());
+            }
+            first = appendBody(sb, first, logRecord.getBody());
+            first = appendKeyValueArray(sb, first, logRecord.getAttributes());
+            int droppedAttributesCount = droppedAttributesCount(logRecord);
+            if (droppedAttributesCount != 0) {
+                first = appendInt(sb, first, F_DROPPED_ATTRIBUTES_COUNT, droppedAttributesCount);
+            }
+            appendString(sb, first, F_EVENT_NAME, logRecord.getEventName());
+            sb.append('}');
+            return sb.toString();
+        } catch (RuntimeException ex) {
+            OpenTelemetryAttributeValidator.handle("Failed to format raw JSON log record: " + ex.getMessage());
+            return "{}";
         }
-        first = appendBody(sb, first, logRecord.getBody());
-        first = appendKeyValueArray(sb, first, logRecord.getAttributes());
-        int droppedAttributesCount = droppedAttributesCount(logRecord);
-        if (droppedAttributesCount != 0) {
-            first = appendInt(sb, first, F_DROPPED_ATTRIBUTES_COUNT, droppedAttributesCount);
-        }
-        appendString(sb, first, F_EVENT_NAME, logRecord.getEventName());
-        sb.append('}');
-        return sb.toString();
     }
 
     static void appendKeyValueArrayInline(final StringBuilder sb, final List<KeyValue> attrs) {
+        if (attrs == null) {
+            OpenTelemetryAttributeValidator.handle("Null attribute list provided to formatter.");
+            sb.append("[]");
+            return;
+        }
         sb.append('[');
         boolean firstEntry = true;
         for (KeyValue keyValue : attrs) {
+            if (keyValue == null) {
+                OpenTelemetryAttributeValidator.handle("Null KeyValue entry provided to formatter.");
+                continue;
+            }
             if (!firstEntry) {
                 sb.append(',');
             }
-            sb.append("{\"").append(F_KEY).append("\":\"").append(escape(keyValue.getKey()))
+            String key = keyValue.getKey();
+            if (key == null) {
+                OpenTelemetryAttributeValidator.handle("Null KeyValue key provided to formatter.");
+                key = "unknown";
+            }
+            AnyValue value = keyValue.getValue();
+            if (value == null) {
+                OpenTelemetryAttributeValidator.handle("Null KeyValue value provided to formatter.");
+                value = AnyValueFactory.empty();
+            }
+            sb.append("{\"").append(F_KEY).append("\":\"").append(escape(key))
                     .append("\",\"").append(F_VALUE).append("\":");
-            appendAnyValue(sb, keyValue.getValue());
+            appendAnyValue(sb, value);
             sb.append('}');
             firstEntry = false;
         }
@@ -96,6 +124,10 @@ public class RawJsonRecordFormatter implements LogRecordFormatter {
     }
 
     static String escape(final String value) {
+        if (value == null) {
+            OpenTelemetryAttributeValidator.handleBundled("valueMustNotBeNull");
+            return "";
+        }
         StringBuilder sb = new StringBuilder(value.length() + 16);
         for (int i = 0; i < value.length(); i++) {
             char c = value.charAt(i);
@@ -131,6 +163,9 @@ public class RawJsonRecordFormatter implements LogRecordFormatter {
             return first;
         }
         String nanos = toUnixNanosDecimalString(value);
+        if (nanos == null) {
+            return first;
+        }
         separator(sb, first);
         sb.append('"').append(key).append("\":\"").append(nanos).append('"');
         return false;
@@ -141,10 +176,12 @@ public class RawJsonRecordFormatter implements LogRecordFormatter {
                 .multiply(NANOS_PER_SECOND)
                 .add(BigInteger.valueOf(value.getNano()));
         if (nanos.signum() < 0) {
-            throw new IllegalArgumentException(MessageHandlerResourceBundle.get("otlpTimestampMustBeUnsigned"));
+            OpenTelemetryAttributeValidator.handleBundled("otlpTimestampMustBeUnsigned");
+            return null;
         }
         if (nanos.compareTo(UINT64_MAX) > 0) {
-            throw new IllegalArgumentException(MessageHandlerResourceBundle.get("otlpTimestampMustFitUint64"));
+            OpenTelemetryAttributeValidator.handleBundled("otlpTimestampMustFitUint64");
+            return null;
         }
         return nanos.toString();
     }
@@ -192,9 +229,16 @@ public class RawJsonRecordFormatter implements LogRecordFormatter {
     }
 
     private static void appendAnyValue(final StringBuilder sb, final AnyValue value) {
+        if (value == null) {
+            OpenTelemetryAttributeValidator.handleBundled("valueMustNotBeNull");
+            sb.append("{}");
+            return;
+        }
         AnyValue.Type type = value.getType();
         if (type == null) {
-            throw new IllegalArgumentException(MessageHandlerResourceBundle.get("anyValueTypeMustNotBeNull"));
+            OpenTelemetryAttributeValidator.handleBundled("anyValueTypeMustNotBeNull");
+            sb.append("{}");
+            return;
         }
 
         if (type == AnyValue.Type.EMPTY) {

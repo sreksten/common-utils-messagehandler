@@ -8,14 +8,25 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Resource;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 
+import java.math.BigInteger;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Pattern;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * A mutable implementation of the {@link LogRecord} interface.
+ * <p>
+ * Specification references:
+ * <a href="https://opentelemetry.io/docs/specs/otel/logs/data-model/">OpenTelemetry Logs Data Model</a>,
+ * <a href="https://github.com/open-telemetry/opentelemetry-proto/blob/main/opentelemetry/proto/logs/v1/logs.proto">OTLP logs.proto (LogRecord)</a>,
+ * <a href="https://www.w3.org/TR/trace-context/">W3C Trace Context</a>.
+ * <p>
  * {@code timestamp} defaults to {@link Instant#now()} at construction time, reflecting the moment
  * the log record is created. All other fields default to {@code null} / {@code 0} / an empty list
  * and may be set via the corresponding setters.
@@ -34,8 +45,11 @@ import java.util.regex.Pattern;
  */
 public class LogRecordImpl implements LogRecord {
 
+    private static final Logger LOGGER = Logger.getLogger(LogRecordImpl.class.getName());
     private static final Pattern TRACE_ID_PATTERN = Pattern.compile("(?!0{32})[0-9a-f]{32}");
     private static final Pattern SPAN_ID_PATTERN  = Pattern.compile("(?!0{16})[0-9a-f]{16}");
+    private static final BigInteger NANOS_PER_SECOND = BigInteger.valueOf(1_000_000_000L);
+    private static final BigInteger UINT64_MAX = BigInteger.ONE.shiftLeft(64).subtract(BigInteger.ONE);
 
     private Instant timestamp = Instant.now();
     private Instant observedTimestamp;
@@ -57,10 +71,17 @@ public class LogRecordImpl implements LogRecord {
     }
 
     public void setTimestamp(final Instant timestamp) {
-        if (timestamp == null) {
-            throw new IllegalArgumentException(MessageHandlerResourceBundle.get("timestampMustNotBeNull"));
+        try {
+            if (timestamp == null) {
+                handleBundledNonBlocking("timestampMustNotBeNull");
+                this.timestamp = Instant.now();
+                return;
+            }
+            this.timestamp = normalizeTimestamp(timestamp, Instant.now());
+        } catch (RuntimeException ex) {
+            handleNonBlocking("Failed to set timestamp: " + ex.getMessage());
+            this.timestamp = Instant.now();
         }
-        this.timestamp = timestamp;
     }
 
     @Override
@@ -69,7 +90,16 @@ public class LogRecordImpl implements LogRecord {
     }
 
     public void setObservedTimestamp(final Instant observedTimestamp) {
-        this.observedTimestamp = observedTimestamp;
+        try {
+            if (observedTimestamp == null) {
+                this.observedTimestamp = null;
+                return;
+            }
+            this.observedTimestamp = normalizeTimestamp(observedTimestamp, null);
+        } catch (RuntimeException ex) {
+            handleNonBlocking("Failed to set observedTimestamp: " + ex.getMessage());
+            this.observedTimestamp = null;
+        }
     }
 
     @Override
@@ -78,12 +108,24 @@ public class LogRecordImpl implements LogRecord {
     }
 
     public void setTraceId(final String traceId) {
-        if (traceId != null && !TRACE_ID_PATTERN.matcher(traceId).matches()) {
-            throw new IllegalArgumentException(MessageHandlerResourceBundle.format(
-                    "traceIdInvalid",
-                    traceId));
+        try {
+            if (traceId == null) {
+                this.traceId = null;
+                return;
+            }
+            String normalizedTraceId = traceId.trim().toLowerCase(Locale.ROOT);
+            if (!TRACE_ID_PATTERN.matcher(normalizedTraceId).matches()) {
+                handleNonBlocking(safeBundleFormat(
+                        "traceIdInvalid",
+                        traceId));
+                this.traceId = null;
+                return;
+            }
+            this.traceId = normalizedTraceId;
+        } catch (RuntimeException ex) {
+            handleNonBlocking("Failed to set traceId: " + ex.getMessage());
+            this.traceId = null;
         }
-        this.traceId = traceId;
     }
 
     @Override
@@ -92,12 +134,24 @@ public class LogRecordImpl implements LogRecord {
     }
 
     public void setSpanId(final String spanId) {
-        if (spanId != null && !SPAN_ID_PATTERN.matcher(spanId).matches()) {
-            throw new IllegalArgumentException(MessageHandlerResourceBundle.format(
-                    "spanIdInvalid",
-                    spanId));
+        try {
+            if (spanId == null) {
+                this.spanId = null;
+                return;
+            }
+            String normalizedSpanId = spanId.trim().toLowerCase(Locale.ROOT);
+            if (!SPAN_ID_PATTERN.matcher(normalizedSpanId).matches()) {
+                handleNonBlocking(safeBundleFormat(
+                        "spanIdInvalid",
+                        spanId));
+                this.spanId = null;
+                return;
+            }
+            this.spanId = normalizedSpanId;
+        } catch (RuntimeException ex) {
+            handleNonBlocking("Failed to set spanId: " + ex.getMessage());
+            this.spanId = null;
         }
-        this.spanId = spanId;
     }
 
     @Override
@@ -106,12 +160,19 @@ public class LogRecordImpl implements LogRecord {
     }
 
     public void setTraceFlags(final int traceFlags) {
-        if (traceFlags < 0 || traceFlags > 0xFF) {
-            throw new IllegalArgumentException(MessageHandlerResourceBundle.format(
-                    "traceFlagsOutOfRange",
-                    traceFlags));
+        try {
+            if (traceFlags < 0 || traceFlags > 0xFF) {
+                handleNonBlocking(safeBundleFormat(
+                        "traceFlagsOutOfRange",
+                        traceFlags));
+                this.traceFlags = traceFlags & 0xFF;
+                return;
+            }
+            this.traceFlags = traceFlags;
+        } catch (RuntimeException ex) {
+            handleNonBlocking("Failed to set traceFlags: " + ex.getMessage());
+            this.traceFlags = 0;
         }
-        this.traceFlags = traceFlags;
     }
 
     @Override
@@ -125,11 +186,26 @@ public class LogRecordImpl implements LogRecord {
     }
 
     public void setSeverityText(final String severityText) {
-        this.severityText = severityText;
+        try {
+            if (severityText == null) {
+                this.severityText = null;
+                return;
+            }
+            String normalizedSeverityText = severityText.trim();
+            this.severityText = normalizedSeverityText.isEmpty() ? null : normalizedSeverityText;
+        } catch (RuntimeException ex) {
+            handleNonBlocking("Failed to set severityText: " + ex.getMessage());
+            this.severityText = null;
+        }
     }
 
     public void setSeverityNumber(final SeverityNumber severityNumber) {
-        this.severityNumber = severityNumber != null ? severityNumber : SeverityNumber.UNSPECIFIED;
+        try {
+            this.severityNumber = severityNumber != null ? severityNumber : SeverityNumber.UNSPECIFIED;
+        } catch (RuntimeException ex) {
+            handleNonBlocking("Failed to set severityNumber: " + ex.getMessage());
+            this.severityNumber = SeverityNumber.UNSPECIFIED;
+        }
     }
 
     @Override
@@ -165,13 +241,19 @@ public class LogRecordImpl implements LogRecord {
     }
 
     public void setAttributes(final List<KeyValue> attributes) {
-        OpenTelemetryAttributeValidator.ValidationResult validationResult =
-                OpenTelemetryAttributeValidator.copyValidateAndLimitKeyValues(
-                attributes,
-                MessageHandlerResourceBundle.get("logRecordAttributesFieldName")
-                );
-        this.attributes = validationResult.getAttributes();
-        this.droppedAttributesCount = validationResult.getDroppedAttributesCount();
+        try {
+            OpenTelemetryAttributeValidator.ValidationResult validationResult =
+                    OpenTelemetryAttributeValidator.copyValidateAndLimitKeyValuesLenient(
+                    attributes,
+                    safeBundleGet("logRecordAttributesFieldName", "logRecord attributes")
+                    );
+            this.attributes = validationResult.getAttributes();
+            this.droppedAttributesCount = validationResult.getDroppedAttributesCount();
+        } catch (RuntimeException ex) {
+            handleNonBlocking("Failed to set logRecord attributes: " + ex.getMessage());
+            this.attributes = new ArrayList<>();
+            this.droppedAttributesCount = 0;
+        }
     }
 
     public int getDroppedAttributesCount() {
@@ -184,6 +266,71 @@ public class LogRecordImpl implements LogRecord {
     }
 
     public void setEventName(final String eventName) {
-        this.eventName = eventName;
+        try {
+            if (eventName == null) {
+                this.eventName = null;
+                return;
+            }
+            String normalizedEventName = eventName.trim();
+            this.eventName = normalizedEventName.isEmpty() ? null : normalizedEventName;
+        } catch (RuntimeException ex) {
+            handleNonBlocking("Failed to set eventName: " + ex.getMessage());
+            this.eventName = null;
+        }
+    }
+
+    private static Instant normalizeTimestamp(final Instant input, final Instant fallback) {
+        if (!isUint64NanoTimestamp(input)) {
+            handleNonBlocking("Timestamp is outside OTLP uint64 nanoseconds range: " + input);
+            return fallback;
+        }
+        return input;
+    }
+
+    private static boolean isUint64NanoTimestamp(final Instant value) {
+        BigInteger nanos = BigInteger.valueOf(value.getEpochSecond())
+                .multiply(NANOS_PER_SECOND)
+                .add(BigInteger.valueOf(value.getNano()));
+        return nanos.signum() >= 0 && nanos.compareTo(UINT64_MAX) <= 0;
+    }
+
+    private static void handleBundledNonBlocking(final String messageKey) {
+        try {
+            OpenTelemetryAttributeValidator.handleBundled(messageKey);
+        } catch (RuntimeException ex) {
+            safeLog(Level.SEVERE, messageKey, ex);
+        }
+    }
+
+    private static void handleNonBlocking(final String message) {
+        try {
+            OpenTelemetryAttributeValidator.handle(message);
+        } catch (RuntimeException ex) {
+            safeLog(Level.SEVERE, message, ex);
+        }
+    }
+
+    private static String safeBundleFormat(final String key, final Object... args) {
+        try {
+            return MessageHandlerResourceBundle.format(key, args);
+        } catch (RuntimeException ex) {
+            return key + " " + Arrays.toString(args);
+        }
+    }
+
+    private static String safeBundleGet(final String key, final String fallback) {
+        try {
+            return MessageHandlerResourceBundle.get(key);
+        } catch (RuntimeException ex) {
+            return fallback;
+        }
+    }
+
+    private static void safeLog(final Level level, final String message, final Throwable throwable) {
+        try {
+            LOGGER.log(level, message, throwable);
+        } catch (RuntimeException ignored) {
+            // Intentionally swallow logging failures to keep setters non-blocking.
+        }
     }
 }

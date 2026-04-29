@@ -5,9 +5,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import sun.misc.Unsafe;
 
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Handler;
@@ -27,29 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("messageHandler")
 class OpenTelemetryAttributeValidatorErrorHandlingUnitTest {
 
-    private static final Field LENIENT_FIELD;
-    private static final Unsafe UNSAFE;
-    private static final Object LENIENT_BASE;
-    private static final long LENIENT_OFFSET;
-    private static final boolean ORIGINAL_LENIENT;
-
-    static {
-        try {
-            LENIENT_FIELD = OpenTelemetryAttributeValidator.class.getDeclaredField("lenient");
-            LENIENT_FIELD.setAccessible(true);
-
-            Field unsafeField = Unsafe.class.getDeclaredField("theUnsafe");
-            unsafeField.setAccessible(true);
-            UNSAFE = (Unsafe) unsafeField.get(null);
-
-            LENIENT_BASE = UNSAFE.staticFieldBase(LENIENT_FIELD);
-            LENIENT_OFFSET = UNSAFE.staticFieldOffset(LENIENT_FIELD);
-
-            ORIGINAL_LENIENT = LENIENT_FIELD.getBoolean(null);
-        } catch (ReflectiveOperationException e) {
-            throw new RuntimeException(e);
-        }
-    }
+    private static final boolean ORIGINAL_LENIENT = OpenTelemetryAttributeValidator.isLenientMode();
 
     @AfterEach
     void restoreLenientMode() {
@@ -103,15 +79,15 @@ class OpenTelemetryAttributeValidatorErrorHandlingUnitTest {
 
     @Test
     @DisplayName("test helper should be able to switch lenient flag")
-    void testHelperShouldSwitchLenientFlag() throws Exception {
+    void testHelperShouldSwitchLenientFlag() {
         setLenient(false);
-        assertFalse(LENIENT_FIELD.getBoolean(null));
+        assertFalse(OpenTelemetryAttributeValidator.isLenientMode());
         setLenient(true);
-        assertTrue(LENIENT_FIELD.getBoolean(null));
+        assertTrue(OpenTelemetryAttributeValidator.isLenientMode());
     }
 
     private static void setLenient(final boolean value) {
-        UNSAFE.putBoolean(LENIENT_BASE, LENIENT_OFFSET, value);
+        OpenTelemetryAttributeValidator.setLenientModeForTests(value);
     }
 
     private static List<LogRecord> captureLogs(final Runnable call) {

@@ -2,6 +2,8 @@ package com.threeamigos.common.util.implementations.messagehandler.otel;
 
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -21,8 +23,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("messageHandler")
 class InstrumentationScopeImplUnitTest {
 
+    private static final boolean ORIGINAL_LENIENT = OpenTelemetryAttributeValidator.isLenientMode();
+
+    @BeforeEach
+    void enforceLenientModeForSanitizationTests() {
+        setLenient(true);
+    }
+
+    @AfterEach
+    void restoreLenientMode() {
+        setLenient(ORIGINAL_LENIENT);
+    }
+
     @Test
-    @DisplayName("defaults should be null name/version/schemaUrl, empty attributes and zero dropped count")
+    @DisplayName("defaults should keep optional fields null")
     void defaultsShouldBeExpectedValues() {
         InstrumentationScopeImpl scope = new InstrumentationScopeImpl(null, null, null, null);
         assertNull(scope.getName());
@@ -69,6 +83,28 @@ class InstrumentationScopeImplUnitTest {
         InstrumentationScopeImpl scope = new InstrumentationScopeImpl(
                 null, null, null, null);
         assertTrue(scope.getAttributes().isEmpty());
+    }
+
+    @Test
+    @DisplayName("constructor should normalize blank scalar fields to null")
+    void constructorShouldSanitizeBlankScalarFields() {
+        InstrumentationScopeImpl scope = new InstrumentationScopeImpl(" ", "   ", "   ", null);
+        assertNull(scope.getName());
+        assertNull(scope.getVersion());
+        assertNull(scope.getSchemaUrl());
+    }
+
+    @Test
+    @DisplayName("constructor should trim non-blank scalar fields")
+    void constructorShouldTrimNonBlankScalarFields() {
+        InstrumentationScopeImpl scope = new InstrumentationScopeImpl(
+                " com.example.lib ",
+                " 1.2.3 ",
+                " https://opentelemetry.io/schemas/1.26.0 ",
+                null);
+        assertEquals("com.example.lib", scope.getName());
+        assertEquals("1.2.3", scope.getVersion());
+        assertEquals("https://opentelemetry.io/schemas/1.26.0", scope.getSchemaUrl());
     }
 
     @Test
@@ -131,5 +167,9 @@ class InstrumentationScopeImplUnitTest {
         assertEquals(128, scope.getAttributes().size());
         assertEquals(1, scope.getDroppedAttributesCount());
         assertEquals("k127", scope.getAttributes().get(127).getKey());
+    }
+
+    private static void setLenient(final boolean value) {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(value);
     }
 }

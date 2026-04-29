@@ -2,14 +2,12 @@ package com.threeamigos.common.util.implementations.messagehandler.otel;
 
 import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.Link;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.Event;
+import com.threeamigos.common.util.implementations.messagehandler.tracecontext.TraceContextGenerator;
 
 import java.util.Collection;
-import java.util.Objects;
+import java.util.Collections;
 
 /**
  *
@@ -36,26 +34,14 @@ public class TracerImpl implements Tracer {
 
     @Override
     public Span createSpan(final String name) {
-        Objects.requireNonNull(name, "name");
-        return new NoOpSpan();
-    }
-
-    private static final class NoOpSpan implements Span {
-
-        @Override
-        public void end() {
-        }
-
-        @Override
-        public void addAttribute(final String key, final AnyValue value) {
-        }
-
-        @Override
-        public void addEvent(final Event event) {
-        }
-
-        @Override
-        public void addLink(final Link link) {
-        }
+        String normalizedName = OpenTelemetryAttributeValidator.requireNonBlank(name, "spanName");
+        return new SpanImpl(
+                normalizedName,
+                new SpanContextImpl(
+                        TraceContextGenerator.generateTraceId(),
+                        TraceContextGenerator.generateParentId(),
+                        (byte) 0x00,
+                        false,
+                        Collections.<KeyValue>emptyList()));
     }
 }

@@ -6,11 +6,23 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
- * An immutable implementation of {@link AnyValue}. Instances are created through {@link AnyValueFactory}.<br/>
+ * An immutable implementation of {@link AnyValue}. Instances are created through
+ * {@link AnyValueFactory}.
+ * <p>
+ * Specification references used for this implementation:
+ * <ul>
+ *     <li><a href="https://opentelemetry.io/docs/specs/otel/common/#anyvalue">OpenTelemetry
+ *     Common: AnyValue</a></li>
+ *     <li><a href="https://github.com/open-telemetry/opentelemetry-proto/blob/main/opentelemetry/proto/common/v1/common.proto">
+ *     OTLP Common Protobuf: AnyValue / ArrayValue / KeyValueList</a></li>
+ * </ul>
+ * <p>
  * If the user tries to access a value of a different type, and we are running in lenient mode, default values are
  * returned in order not to have a crash in a production environment due to the logging system. Otherwise, an exception
  * is thrown. See also {@link OpenTelemetryAttributeValidator}.
@@ -36,14 +48,14 @@ final class AnyValueImpl implements AnyValue {
                  final List<AnyValue> arrayValue,
                  final List<KeyValue> kvListValue,
                  final byte[] bytesValue) {
-        this.type = type;
-        this.stringValue = stringValue;
+        this.type = type != null ? type : Type.EMPTY;
+        this.stringValue = stringValue != null ? stringValue : "";
         this.boolValue = boolValue;
         this.longValue = longValue;
         this.doubleValue = doubleValue;
-        this.arrayValue = arrayValue;
-        this.kvListValue = kvListValue;
-        this.bytesValue = bytesValue;
+        this.arrayValue = arrayValue != null ? arrayValue : Collections.emptyList();
+        this.kvListValue = kvListValue != null ? kvListValue : Collections.emptyList();
+        this.bytesValue = bytesValue != null ? bytesValue : new byte[0];
     }
 
     @Override
@@ -124,19 +136,93 @@ final class AnyValueImpl implements AnyValue {
             return false;
         }
         AnyValueImpl other = (AnyValueImpl) obj;
-        return Objects.equals(this.type, other.type)
-                && Objects.equals(this.stringValue, other.stringValue)
-                && Objects.equals(this.boolValue, other.boolValue)
-                && Objects.equals(this.longValue, other.longValue)
-                && Objects.equals(this.doubleValue, other.doubleValue)
-                && Objects.equals(this.arrayValue, other.arrayValue)
-                && Objects.equals(this.kvListValue, other.kvListValue)
-                && Arrays.equals(this.bytesValue, other.bytesValue);
+        if (!Objects.equals(this.type, other.type)) {
+            return false;
+        }
+        if (this.type == Type.EMPTY) {
+            return true;
+        }
+        if (this.type == Type.STRING) {
+            return Objects.equals(this.stringValue, other.stringValue);
+        }
+        if (this.type == Type.BOOL) {
+            return this.boolValue == other.boolValue;
+        }
+        if (this.type == Type.INT) {
+            return this.longValue == other.longValue;
+        }
+        if (this.type == Type.DOUBLE) {
+            return Double.compare(this.doubleValue, other.doubleValue) == 0;
+        }
+        if (this.type == Type.ARRAY) {
+            return Objects.equals(this.arrayValue, other.arrayValue);
+        }
+        if (this.type == Type.KVLIST) {
+            return kvListEquals(this.kvListValue, other.kvListValue);
+        }
+        return Arrays.equals(this.bytesValue, other.bytesValue);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(type, stringValue, boolValue, longValue, doubleValue, arrayValue, kvListValue,
-                Arrays.hashCode(bytesValue));
+        if (type == Type.EMPTY) {
+            return Objects.hash(type);
+        }
+        if (type == Type.STRING) {
+            return Objects.hash(type, stringValue);
+        }
+        if (type == Type.BOOL) {
+            return Objects.hash(type, boolValue);
+        }
+        if (type == Type.INT) {
+            return Objects.hash(type, longValue);
+        }
+        if (type == Type.DOUBLE) {
+            return Objects.hash(type, Double.hashCode(doubleValue));
+        }
+        if (type == Type.ARRAY) {
+            return Objects.hash(type, arrayValue);
+        }
+        if (type == Type.KVLIST) {
+            return Objects.hash(type, kvListHash(kvListValue));
+        }
+        return Objects.hash(type, Arrays.hashCode(bytesValue));
+    }
+
+    private static boolean kvListEquals(final List<KeyValue> left, final List<KeyValue> right) {
+        if (left == right) {
+            return true;
+        }
+        if (left == null || right == null || left.size() != right.size()) {
+            return false;
+        }
+        Map<String, AnyValue> leftMap = toUniqueMap(left);
+        Map<String, AnyValue> rightMap = toUniqueMap(right);
+        if (leftMap == null || rightMap == null) {
+            return left.equals(right);
+        }
+        return leftMap.equals(rightMap);
+    }
+
+    private static int kvListHash(final List<KeyValue> values) {
+        Map<String, AnyValue> map = toUniqueMap(values);
+        return map != null ? map.hashCode() : values.hashCode();
+    }
+
+    private static Map<String, AnyValue> toUniqueMap(final List<KeyValue> values) {
+        if (values == null) {
+            return null;
+        }
+        Map<String, AnyValue> map = new LinkedHashMap<>(values.size());
+        for (KeyValue kv : values) {
+            if (kv == null || kv.getKey() == null) {
+                return null;
+            }
+            if (map.containsKey(kv.getKey())) {
+                return null;
+            }
+            map.put(kv.getKey(), kv.getValue());
+        }
+        return map;
     }
 }

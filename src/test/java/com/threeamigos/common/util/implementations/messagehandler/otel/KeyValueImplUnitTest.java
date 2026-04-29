@@ -10,6 +10,7 @@ import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -21,7 +22,7 @@ class KeyValueImplUnitTest {
     @Test
     @DisplayName("constructor should reject null key")
     void constructorShouldRejectNullKey() {
-        assertThrows(NullPointerException.class, () -> new KeyValueImpl((String) null, AnyValueFactory.ofString("v")));
+        assertThrows(IllegalArgumentException.class, () -> new KeyValueImpl((String) null, AnyValueFactory.ofString("v")));
     }
 
     @Test
@@ -33,13 +34,13 @@ class KeyValueImplUnitTest {
     @Test
     @DisplayName("constructor should reject null value")
     void constructorShouldRejectNullValue() {
-        assertThrows(NullPointerException.class, () -> new KeyValueImpl("k", null));
+        assertThrows(IllegalArgumentException.class, () -> new KeyValueImpl("k", null));
     }
 
     @Test
     @DisplayName("constructor should reject null OTelTags key")
     void constructorShouldRejectNullOtelTagsKey() {
-        assertThrows(NullPointerException.class, () -> new KeyValueImpl((OTelTags) null, AnyValueFactory.ofString("v")));
+        assertThrows(IllegalArgumentException.class, () -> new KeyValueImpl((OTelTags) null, AnyValueFactory.ofString("v")));
     }
 
     @Test
@@ -88,5 +89,21 @@ class KeyValueImplUnitTest {
         KeyValue kv = KeyValueFactory.of("custom.key", value);
         assertEquals("custom.key", kv.getKey());
         assertSame(value, kv.getValue());
+    }
+
+    @Test
+    @DisplayName("equals and hashCode should compare key and value")
+    void equalsAndHashCodeShouldCompareKeyAndValue() {
+        KeyValueImpl left = new KeyValueImpl("service.name", AnyValueFactory.ofString("checkout"));
+        KeyValueImpl same = new KeyValueImpl("service.name", AnyValueFactory.ofString("checkout"));
+        KeyValueImpl differentKey = new KeyValueImpl("service.namespace", AnyValueFactory.ofString("checkout"));
+        KeyValueImpl differentValue = new KeyValueImpl("service.name", AnyValueFactory.ofString("payments"));
+
+        assertEquals(left, same);
+        assertEquals(left.hashCode(), same.hashCode());
+        assertNotEquals(left, differentKey);
+        assertNotEquals(left, differentValue);
+        assertNotEquals(left, null);
+        assertNotEquals(left, "service.name=checkout");
     }
 }

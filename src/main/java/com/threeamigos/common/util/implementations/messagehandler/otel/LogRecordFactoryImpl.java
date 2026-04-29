@@ -10,7 +10,6 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 /**
  * An implementation of {@link LogRecordFactory} that creates {@link LogRecord} instances.
@@ -26,8 +25,14 @@ public class LogRecordFactoryImpl implements LogRecordFactory {
 
     @Override
     public LogRecord create(SeverityNumber severityNumber, String message) {
-        Objects.requireNonNull(severityNumber, MessageHandlerResourceBundle.get("valueMustNotBeNull"));
-        Objects.requireNonNull(message, MessageHandlerResourceBundle.get("nullMessageProvided"));
+        if (severityNumber == null) {
+            OpenTelemetryAttributeValidator.handleBundled("valueMustNotBeNull");
+            severityNumber = SeverityNumber.UNSPECIFIED;
+        }
+        if (message == null) {
+            OpenTelemetryAttributeValidator.handleBundled("nullMessageProvided");
+            message = "";
+        }
         LogRecordImpl logRecord = new LogRecordImpl();
         logRecord.setSeverityNumber(severityNumber);
         logRecord.setSeverityText(severityNumber.name());
@@ -37,18 +42,31 @@ public class LogRecordFactoryImpl implements LogRecordFactory {
 
     @Override
     public LogRecord create(String message, Throwable throwable) {
-        Objects.requireNonNull(message, MessageHandlerResourceBundle.get("nullMessageProvided"));
-        Objects.requireNonNull(throwable, MessageHandlerResourceBundle.get("nullThrowableProvided"));
+        if (message == null) {
+            OpenTelemetryAttributeValidator.handleBundled("nullMessageProvided");
+            message = "";
+        }
+        if (throwable == null) {
+            OpenTelemetryAttributeValidator.handleBundled("nullThrowableProvided");
+        }
         LogRecordImpl logRecord = new LogRecordImpl();
         setErrorSeverity(logRecord);
         logRecord.setBody(AnyValueFactory.ofString(message));
-        addThrowableDetails(logRecord, throwable);
+        if (throwable != null) {
+            addThrowableDetails(logRecord, throwable);
+        }
         return logRecord;
     }
 
     @Override
     public LogRecord create(Throwable throwable) {
-        Objects.requireNonNull(throwable, MessageHandlerResourceBundle.get("nullThrowableProvided"));
+        if (throwable == null) {
+            OpenTelemetryAttributeValidator.handleBundled("nullThrowableProvided");
+            LogRecordImpl fallback = new LogRecordImpl();
+            setErrorSeverity(fallback);
+            fallback.setBody(AnyValueFactory.ofString(""));
+            return fallback;
+        }
         LogRecordImpl logRecord = new LogRecordImpl();
         setErrorSeverity(logRecord);
         String throwableMessage = throwable.getMessage() != null ? throwable.getMessage() : throwable.toString();

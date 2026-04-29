@@ -37,6 +37,6 @@ class InstrumentationScopeBuilderImpl extends KeyValueBuilderImpl implements Ins
     }
 
     public InstrumentationScope build() {
-        return InstrumentationScopeFactory.create(name, version, scopeUrl, attributes);
+        return new InstrumentationScopeImpl(name, version, scopeUrl, attributes);
     }
 }

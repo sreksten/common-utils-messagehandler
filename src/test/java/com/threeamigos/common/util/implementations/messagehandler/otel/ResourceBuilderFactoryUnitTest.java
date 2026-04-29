@@ -3,6 +3,8 @@ package com.threeamigos.common.util.implementations.messagehandler.otel;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Entity;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Resource;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -20,6 +22,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("unit")
 @Tag("messageHandler")
 class ResourceBuilderFactoryUnitTest {
+
+    private static final boolean ORIGINAL_LENIENT = OpenTelemetryAttributeValidator.isLenientMode();
+
+    @BeforeEach
+    void enforceStrictModeForValidationChecks() {
+        setLenient(false);
+    }
+
+    @AfterEach
+    void restoreLenientMode() {
+        setLenient(ORIGINAL_LENIENT);
+    }
 
     @Test
     @DisplayName("getBuilder() should return ResourceBuilderImpl")
@@ -64,8 +78,33 @@ class ResourceBuilderFactoryUnitTest {
     }
 
     @Test
-    @DisplayName("builder should normalize null or blank values in with... methods")
-    void builderShouldNormalizeNullOrBlankValuesInWithMethods() {
+    @DisplayName("builder should reject null or blank values in strict mode")
+    void builderShouldRejectNullOrBlankValuesInStrictMode() {
+        ResourceBuilderImpl builder = new ResourceBuilderImpl();
+        assertThrows(IllegalArgumentException.class, () -> builder
+                .withServiceName(null)
+                .withServiceNamespace("")
+                .withServiceVersion(" ")
+                .withServiceInstanceId(null)
+                .withDeploymentEnvironmentName("")
+                .withSchemaUrl("   ")
+                .withNoEntity()
+                .build());
+
+        assertThrows(IllegalArgumentException.class, () -> new ResourceBuilderImpl()
+                .withServiceName("checkout")
+                .withNoServiceNamespace()
+                .withNoServiceVersion()
+                .withNoServiceInstanceId()
+                .withNoDeploymentEnvironmentName()
+                .withNoSchemaUrl()
+                .withEntity(null));
+    }
+
+    @Test
+    @DisplayName("builder should normalize null or blank values in lenient mode")
+    void builderShouldNormalizeNullOrBlankValuesInLenientMode() {
+        setLenient(true);
         ResourceBuilderImpl builder = new ResourceBuilderImpl();
         assertDoesNotThrow(() -> builder
                 .withServiceName(null)
@@ -86,15 +125,6 @@ class ResourceBuilderFactoryUnitTest {
         assertEquals("unknown", attributes.get(OTelTags.SERVICE_INSTANCE_ID.getValue()));
         assertEquals("unknown", attributes.get(OTelTags.DEPLOYMENT_ENVIRONMENT_NAME.getValue()));
         assertEquals("unknown", resource.getSchemaUrl());
-
-        assertThrows(NullPointerException.class, () -> new ResourceBuilderImpl()
-                .withServiceName("checkout")
-                .withNoServiceNamespace()
-                .withNoServiceVersion()
-                .withNoServiceInstanceId()
-                .withNoDeploymentEnvironmentName()
-                .withNoSchemaUrl()
-                .withEntity(null));
     }
 
     @Test
@@ -132,5 +162,9 @@ class ResourceBuilderFactoryUnitTest {
             out.put(keyValue.getKey(), keyValue.getValue().asString());
         }
         return out;
+    }
+
+    private static void setLenient(final boolean value) {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(value);
     }
 }

@@ -29,7 +29,7 @@ class ConsoleLogRecordFormatterUnitTest {
     @Test
     @DisplayName("format() should reject null log records")
     void formatShouldRejectNullLogRecord() {
-        assertThrows(NullPointerException.class, () -> formatter.format(null));
+        assertThrows(IllegalArgumentException.class, () -> formatter.format(null));
     }
 
     @Test
@@ -80,7 +80,7 @@ class ConsoleLogRecordFormatterUnitTest {
         record.setSeverityText("INFO");
         record.setBody(AnyValueFactory.ofString("hello"));
         InstrumentationScope scope = InstrumentationScopeFactory.create(
-                "com.example.Foo", null, null, null);
+                "com.example.Foo", "1.0.0", null, null);
         record.setInstrumentationScope(scope);
 
         String result = formatter.format(record);
@@ -97,7 +97,7 @@ class ConsoleLogRecordFormatterUnitTest {
         record.setSeverityText("INFO");
         record.setBody(AnyValueFactory.ofString("hello"));
         InstrumentationScope scope = InstrumentationScopeFactory.create(
-                "com.example.Foo", null, null, null);
+                "com.example.Foo", "1.0.0", null, null);
         record.setInstrumentationScope(scope);
 
         String result = reducedFormatter.format(record);
@@ -125,7 +125,32 @@ class ConsoleLogRecordFormatterUnitTest {
         withNullName.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
         withNullName.setSeverityText("INFO");
         withNullName.setBody(AnyValueFactory.ofString("hello"));
-        withNullName.setInstrumentationScope(InstrumentationScopeFactory.create(null, null, null, null));
+        withNullName.setInstrumentationScope(new InstrumentationScope() {
+            @Override
+            public String getName() {
+                return null;
+            }
+
+            @Override
+            public String getVersion() {
+                return null;
+            }
+
+            @Override
+            public String getSchemaUrl() {
+                return null;
+            }
+
+            @Override
+            public List<KeyValue> getAttributes() {
+                return Collections.emptyList();
+            }
+
+            @Override
+            public int getDroppedAttributesCount() {
+                return 0;
+            }
+        });
 
         String nullNameResult = formatter.format(withNullName);
         assertEquals("2026-04-21T08:30:00Z [INFO  ] hello", nullNameResult);
@@ -134,8 +159,32 @@ class ConsoleLogRecordFormatterUnitTest {
         withBlankName.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
         withBlankName.setSeverityText("INFO");
         withBlankName.setBody(AnyValueFactory.ofString("hello"));
-        InstrumentationScope blankScope = InstrumentationScopeFactory.create(
-                "   ", null, null, null);
+        InstrumentationScope blankScope = new InstrumentationScope() {
+            @Override
+            public String getName() {
+                return "   ";
+            }
+
+            @Override
+            public String getVersion() {
+                return null;
+            }
+
+            @Override
+            public String getSchemaUrl() {
+                return null;
+            }
+
+            @Override
+            public List<KeyValue> getAttributes() {
+                return Collections.emptyList();
+            }
+
+            @Override
+            public int getDroppedAttributesCount() {
+                return 0;
+            }
+        };
         withBlankName.setInstrumentationScope(blankScope);
 
         String blankNameResult = formatter.format(withBlankName);
@@ -282,7 +331,7 @@ class ConsoleLogRecordFormatterUnitTest {
             public String getEventName() { return null; }
         };
 
-        assertThrows(NullPointerException.class, () -> formatter.format(record));
+        assertThrows(IllegalArgumentException.class, () -> formatter.format(record));
     }
 
     @Test

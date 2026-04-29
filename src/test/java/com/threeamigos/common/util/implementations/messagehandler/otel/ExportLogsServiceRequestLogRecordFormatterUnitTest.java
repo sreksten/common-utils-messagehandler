@@ -39,13 +39,13 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
     @Test
     @DisplayName("format() should reject null log records")
     void formatRecordShouldRejectNull() {
-        assertThrows(NullPointerException.class, () -> rawFormatter.format(null));
+        assertThrows(IllegalArgumentException.class, () -> rawFormatter.format(null));
     }
 
     @Test
     @DisplayName("format() should reject null log records")
     void formatShouldRejectNull() {
-        assertThrows(NullPointerException.class, () -> formatter.format(null));
+        assertThrows(IllegalArgumentException.class, () -> formatter.format(null));
     }
 
     @Test
@@ -358,18 +358,18 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
     }
 
     @Test
-    @DisplayName("format() should reject negative timestamps")
+    @DisplayName("format() should reject negative timestamps from external LogRecord implementations")
     void formatRecordShouldRejectNegativeTimestamps() {
-        LogRecordImpl record = new LogRecordImpl();
-        record.setTimestamp(Instant.parse("1969-12-31T23:59:59.999999999Z"));
+        StubLogRecord record = new StubLogRecord();
+        record.timestamp = Instant.parse("1969-12-31T23:59:59.999999999Z");
         assertThrows(IllegalArgumentException.class, () -> rawFormatter.format(record));
     }
 
     @Test
-    @DisplayName("format() should reject timestamps that overflow uint64 nanoseconds")
+    @DisplayName("format() should reject timestamps that overflow uint64 nanoseconds from external LogRecord implementations")
     void formatRecordShouldRejectTimestampsBeyondUint64() {
-        LogRecordImpl record = new LogRecordImpl();
-        record.setTimestamp(Instant.ofEpochSecond(18_446_744_074L));
+        StubLogRecord record = new StubLogRecord();
+        record.timestamp = Instant.ofEpochSecond(18_446_744_074L);
         assertThrows(IllegalArgumentException.class, () -> rawFormatter.format(record));
     }
 

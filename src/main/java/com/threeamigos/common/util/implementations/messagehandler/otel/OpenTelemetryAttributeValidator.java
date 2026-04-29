@@ -12,10 +12,10 @@ import java.util.Set;
 /**
  * Shared validation helpers for OTel key-value collections.
  */
-final class OpenTelemetryAttributeValidator {
+public final class OpenTelemetryAttributeValidator {
 
     static final int DEFAULT_ATTRIBUTE_COUNT_LIMIT = 128;
-    private static final boolean lenient;
+    private static volatile boolean lenient;
 
     static {
         lenient = "true".equalsIgnoreCase(System.getenv("OTEL_ERROR_HANDLER_LENIENT"));
@@ -24,7 +24,7 @@ final class OpenTelemetryAttributeValidator {
     private OpenTelemetryAttributeValidator() {
     }
 
-    static void handle(final String message) {
+    public static void handle(final String message) {
         if (lenient) {
             logWithStackTrace(message, new IllegalArgumentException(message));
         } else {
@@ -32,7 +32,7 @@ final class OpenTelemetryAttributeValidator {
         }
     }
 
-    static void handleBundled(final String errorMessage) {
+    public static void handleBundled(final String errorMessage) {
         String message;
         try {
             message = MessageHandlerResourceBundle.get(errorMessage);
@@ -51,6 +51,14 @@ final class OpenTelemetryAttributeValidator {
         }
     }
 
+    public static boolean isLenientMode() {
+        return lenient;
+    }
+
+    static void setLenientModeForTests(final boolean value) {
+        lenient = value;
+    }
+
     static String requireNonBlank(final String value, final String fieldName) {
         if (value == null) {
             OpenTelemetryAttributeValidator.handle(MessageHandlerResourceBundle.format(
@@ -66,6 +74,16 @@ final class OpenTelemetryAttributeValidator {
     }
 
     static List<KeyValue> copyAndValidateKeyValues(final List<KeyValue> keyValues, final String fieldName) {
+        return copyAndValidateKeyValues(keyValues, fieldName, false);
+    }
+
+    static List<KeyValue> copyAndValidateKeyValuesLenient(final List<KeyValue> keyValues, final String fieldName) {
+        return copyAndValidateKeyValues(keyValues, fieldName, true);
+    }
+
+    private static List<KeyValue> copyAndValidateKeyValues(final List<KeyValue> keyValues,
+                                                           final String fieldName,
+                                                           final boolean forceLenient) {
         if (keyValues == null) {
             return new ArrayList<>();
         }
@@ -75,43 +93,43 @@ final class OpenTelemetryAttributeValidator {
         for (int index = 0; index < keyValues.size(); index++) {
             KeyValue kv = keyValues.get(index);
             if (kv == null) {
-                OpenTelemetryAttributeValidator.handle(MessageHandlerResourceBundle.format(
+                handle(MessageHandlerResourceBundle.format(
                         "fieldContainsNullElementAtIndex",
                         fieldName,
-                        index));
+                        index), forceLenient);
                 continue;
             }
 
             String key = kv.getKey();
             if (key == null) {
-                OpenTelemetryAttributeValidator.handle(MessageHandlerResourceBundle.format(
+                handle(MessageHandlerResourceBundle.format(
                         "fieldKeyMustNotBeNullAtIndex",
                         fieldName,
-                        index));
+                        index), forceLenient);
                 continue;
             }
             if (key.trim().isEmpty()) {
-                OpenTelemetryAttributeValidator.handle(MessageHandlerResourceBundle.format(
+                handle(MessageHandlerResourceBundle.format(
                         "fieldKeyMustNotBeEmptyAtIndex",
                         fieldName,
-                        index));
+                        index), forceLenient);
                 continue;
             }
 
             if (!keys.add(key)) {
-                OpenTelemetryAttributeValidator.handle(MessageHandlerResourceBundle.format(
+                handle(MessageHandlerResourceBundle.format(
                         "fieldContainsDuplicateKey",
                         fieldName,
-                        key));
+                        key), forceLenient);
                 continue;
             }
 
             AnyValue value = kv.getValue();
             if (value == null) {
-                OpenTelemetryAttributeValidator.handle(MessageHandlerResourceBundle.format(
+                handle(MessageHandlerResourceBundle.format(
                         "fieldValueMustNotBeNullAtIndex",
                         fieldName,
-                        index));
+                        index), forceLenient);
                 value = AnyValueFactory.empty();
             }
 
@@ -120,12 +138,34 @@ final class OpenTelemetryAttributeValidator {
         return copy;
     }
 
+    private static void handle(final String message, final boolean forceLenient) {
+        if (forceLenient || lenient) {
+            logWithStackTrace(message, new IllegalArgumentException(message));
+        } else {
+            throw new IllegalArgumentException(message);
+        }
+    }
+
     static ValidationResult copyValidateAndLimitKeyValues(final List<KeyValue> keyValues,
                                                           final String fieldName) {
-        List<KeyValue> validated = copyAndValidateKeyValues(keyValues, fieldName);
+        return copyValidateAndLimitKeyValues(keyValues, fieldName, false);
+    }
+
+    static ValidationResult copyValidateAndLimitKeyValuesLenient(final List<KeyValue> keyValues,
+                                                                 final String fieldName) {
+        return copyValidateAndLimitKeyValues(keyValues, fieldName, true);
+    }
+
+    private static ValidationResult copyValidateAndLimitKeyValues(final List<KeyValue> keyValues,
+                                                                  final String fieldName,
+                                                                  final boolean forceLenient) {
+        List<KeyValue> validated = forceLenient
+                ? copyAndValidateKeyValuesLenient(keyValues, fieldName)
+                : copyAndValidateKeyValues(keyValues, fieldName);
         if (OpenTelemetryAttributeValidator.DEFAULT_ATTRIBUTE_COUNT_LIMIT <= 0) {
-            OpenTelemetryAttributeValidator.handle(
-                    "maxAttributeCount must be positive, got: " + OpenTelemetryAttributeValidator.DEFAULT_ATTRIBUTE_COUNT_LIMIT);
+            handle(
+                    "maxAttributeCount must be positive, got: " + OpenTelemetryAttributeValidator.DEFAULT_ATTRIBUTE_COUNT_LIMIT,
+                    forceLenient);
             return new ValidationResult(new ArrayList<>(), validated.size());
         }
         if (validated.size() <= OpenTelemetryAttributeValidator.DEFAULT_ATTRIBUTE_COUNT_LIMIT) {

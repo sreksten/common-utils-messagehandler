@@ -2,6 +2,8 @@ package com.threeamigos.common.util.implementations.messagehandler.otel;
 
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -21,6 +23,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("unit")
 @Tag("messageHandler")
 class AnyValueFactoryUnitTest {
+
+    private static final boolean ORIGINAL_LENIENT = OpenTelemetryAttributeValidator.isLenientMode();
+
+    @BeforeEach
+    void enforceLenientModeForDefaultValueAssertions() {
+        setLenient(true);
+    }
+
+    @AfterEach
+    void restoreLenientMode() {
+        setLenient(ORIGINAL_LENIENT);
+    }
 
     @Test
     @DisplayName("empty() should return EMPTY type singleton")
@@ -57,6 +71,20 @@ class AnyValueFactoryUnitTest {
     }
 
     @Test
+    @DisplayName("typed accessors should throw on type mismatch in strict mode")
+    void typedAccessorsShouldThrowOnTypeMismatchInStrictMode() {
+        setLenient(false);
+        AnyValue stringValue = AnyValueFactory.ofString("abc");
+
+        assertThrows(IllegalArgumentException.class, stringValue::asBoolean);
+        assertThrows(IllegalArgumentException.class, stringValue::asLong);
+        assertThrows(IllegalArgumentException.class, stringValue::asDouble);
+        assertThrows(IllegalArgumentException.class, stringValue::asArray);
+        assertThrows(IllegalArgumentException.class, stringValue::asKvList);
+        assertThrows(IllegalArgumentException.class, stringValue::asBytes);
+    }
+
+    @Test
     @DisplayName("ofString() should store and return string values")
     void ofStringShouldStoreAndReturnStringValues() {
         AnyValue value = AnyValueFactory.ofString("abc");
@@ -69,6 +97,13 @@ class AnyValueFactoryUnitTest {
     void ofStringShouldRejectNull() {
         AnyValue value = AnyValueFactory.ofString(null);
         assertSame(AnyValueFactory.empty(), value);
+    }
+
+    @Test
+    @DisplayName("ofString() should throw on null in strict mode")
+    void ofStringShouldThrowOnNullInStrictMode() {
+        setLenient(false);
+        assertThrows(IllegalArgumentException.class, () -> AnyValueFactory.ofString(null));
     }
 
     @Test
@@ -134,6 +169,13 @@ class AnyValueFactoryUnitTest {
     }
 
     @Test
+    @DisplayName("ofArray() should throw on null list in strict mode")
+    void ofArrayShouldThrowOnNullListInStrictMode() {
+        setLenient(false);
+        assertThrows(IllegalArgumentException.class, () -> AnyValueFactory.ofArray(null));
+    }
+
+    @Test
     @DisplayName("ofKvList() should defensively copy, validate and expose unmodifiable list")
     void ofKvListShouldDefensivelyCopyValidateAndExposeUnmodifiableList() {
         java.util.List<KeyValue> source = new java.util.ArrayList<>(Collections.singletonList(
@@ -179,6 +221,13 @@ class AnyValueFactoryUnitTest {
         assertEquals("k", value.asKvList().get(0).getKey());
         assertEquals("dup", value.asKvList().get(1).getKey());
         assertEquals("v1", value.asKvList().get(1).getValue().asString());
+    }
+
+    @Test
+    @DisplayName("ofKvList() should throw on null list in strict mode")
+    void ofKvListShouldThrowOnNullListInStrictMode() {
+        setLenient(false);
+        assertThrows(IllegalArgumentException.class, () -> AnyValueFactory.ofKvList(null));
     }
 
     @Test
@@ -237,5 +286,16 @@ class AnyValueFactoryUnitTest {
     @DisplayName("ofBytes() should reject null input")
     void ofBytesShouldRejectNull() {
         assertSame(AnyValueFactory.empty(), AnyValueFactory.ofBytes(null));
+    }
+
+    @Test
+    @DisplayName("ofBytes() should throw on null input in strict mode")
+    void ofBytesShouldThrowOnNullInStrictMode() {
+        setLenient(false);
+        assertThrows(IllegalArgumentException.class, () -> AnyValueFactory.ofBytes(null));
+    }
+
+    private static void setLenient(final boolean value) {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(value);
     }
 }

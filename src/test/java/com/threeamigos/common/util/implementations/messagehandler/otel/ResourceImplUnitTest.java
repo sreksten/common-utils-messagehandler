@@ -4,6 +4,8 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Entity;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Resource;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -22,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -29,6 +32,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("unit")
 @Tag("messageHandler")
 class ResourceFactoryUnitTest {
+
+    private static final boolean ORIGINAL_LENIENT = OpenTelemetryAttributeValidator.isLenientMode();
+
+    @BeforeEach
+    void enforceLenientModeForResourceNormalizationTests() {
+        setLenient(true);
+    }
+
+    @AfterEach
+    void restoreLenientMode() {
+        setLenient(ORIGINAL_LENIENT);
+    }
 
     @Test
     @DisplayName("create() should support null schemaUrl and null attributes")
@@ -104,8 +119,8 @@ class ResourceFactoryUnitTest {
     }
 
     @Test
-    @DisplayName("create() should reject null entity elements")
-    void createShouldRejectNullEntityElements() {
+    @DisplayName("create() should skip null entity elements in lenient mode")
+    void createShouldSkipNullEntityElementsInLenientMode() {
         List<Entity> entities = new ArrayList<>();
         entities.add(EntityFactory.create(
                 "service",
@@ -114,7 +129,9 @@ class ResourceFactoryUnitTest {
                 null));
         entities.add(null);
 
-        assertThrows(NullPointerException.class, () -> ResourceFactory.create(null, entities, null));
+        Resource resource = ResourceFactory.create(null, entities, null);
+        assertEquals(1, resource.getEntities().size());
+        assertEquals("service", resource.getEntities().get(0).getType());
     }
 
     @Test
@@ -309,17 +326,18 @@ class ResourceFactoryUnitTest {
     }
 
     @Test
-    @DisplayName("merge() should reject null resource")
-    void mergeShouldRejectNullResource() {
+    @DisplayName("merge() should keep current resource when incoming resource is null in lenient mode")
+    void mergeShouldKeepCurrentResourceWhenIncomingResourceIsNullInLenientMode() {
         Resource resource = ResourceFactory.create(null, null, null);
-        assertThrows(NullPointerException.class, () -> resource.merge(null));
+        Resource merged = resource.merge(null);
+        assertSame(resource, merged);
     }
 
     @Test
-    @DisplayName("merge() should override loose attributes and prefer incoming schemaUrl when entities are absent")
+    @DisplayName("merge() should override loose attributes and use incoming schemaUrl when current is absent")
     void mergeShouldOverrideLooseAttributesAndPreferIncomingSchemaUrlWithoutEntities() {
         Resource base = ResourceFactory.create(
-                "https://base.example/schema",
+                null,
                 null,
                 Arrays.asList(
                         new KeyValueImpl("service.name", AnyValueFactory.ofString("billing")),
@@ -341,6 +359,16 @@ class ResourceFactoryUnitTest {
         assertEquals("billing", mergedAttributes.get("service.name"));
         assertEquals("prod", mergedAttributes.get("deployment.environment"));
         assertEquals("host-a", mergedAttributes.get("host.name"));
+    }
+
+    @Test
+    @DisplayName("merge() should reject resources with conflicting non-empty schema URLs")
+    void mergeShouldRejectResourcesWithConflictingNonEmptySchemaUrls() {
+        setLenient(false);
+        Resource base = ResourceFactory.create("https://base.example/schema", null, null);
+        Resource incoming = ResourceFactory.create("https://incoming.example/schema", null, null);
+
+        assertThrows(IllegalArgumentException.class, () -> base.merge(incoming));
     }
 
     @Test
@@ -401,7 +429,7 @@ class ResourceFactoryUnitTest {
     @DisplayName("merge() should set schemaUrl to null when merged entities have different schema URLs")
     void mergeShouldSetSchemaUrlToNullWhenMergedEntitiesHaveDifferentSchemaUrls() {
         Resource base = ResourceFactory.create(
-                "https://base.example/schema",
+                "https://opentelemetry.io/schemas/1.27.0",
                 Collections.singletonList(EntityFactory.create(
                         "service",
                         "https://opentelemetry.io/schemas/1.27.0",
@@ -410,7 +438,7 @@ class ResourceFactoryUnitTest {
                 null);
 
         Resource incoming = ResourceFactory.create(
-                "https://incoming.example/schema",
+                "https://opentelemetry.io/schemas/1.27.0",
                 Collections.singletonList(EntityFactory.create(
                         "host",
                         "https://opentelemetry.io/schemas/1.28.0",
@@ -440,5 +468,9 @@ class ResourceFactoryUnitTest {
     private static Map<String, String> keyValuesToStringMap(final List<KeyValue> keyValues) {
         return keyValues.stream()
                 .collect(Collectors.toMap(KeyValue::getKey, kv -> kv.getValue().asString()));
+    }
+
+    private static void setLenient(final boolean value) {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(value);
     }
 }

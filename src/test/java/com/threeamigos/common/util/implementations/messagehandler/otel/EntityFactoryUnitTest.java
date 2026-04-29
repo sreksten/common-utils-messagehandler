@@ -79,10 +79,29 @@ class EntityFactoryUnitTest {
         Entity nullType = EntityFactory.create(null, null, id, null);
         Entity emptyType = EntityFactory.create("", null, id, null);
         Entity blankType = EntityFactory.create("   ", null, id, null);
+        Entity invalidType = EntityFactory.create("@invalid", null, id, null);
+        Entity trimmedType = EntityFactory.create("  service.instance  ", null, id, null);
 
         assertEquals("unknown", nullType.getType());
         assertEquals("unknown", emptyType.getType());
         assertEquals("unknown", blankType.getType());
+        assertEquals("unknown", invalidType.getType());
+        assertEquals("service.instance", trimmedType.getType());
+    }
+
+    @Test
+    @DisplayName("create() should normalize blank or invalid schemaUrl to null")
+    void createShouldNormalizeInvalidSchemaUrlToNull() {
+        List<KeyValue> id = Collections.singletonList(
+                new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1")));
+
+        Entity blankSchema = EntityFactory.create("service", "   ", id, null);
+        Entity invalidSchema = EntityFactory.create("service", "ht^tp:// bad-uri", id, null);
+        Entity trimmedSchema = EntityFactory.create("service", "  https://opentelemetry.io/schemas/1.27.0  ", id, null);
+
+        assertNull(blankSchema.getSchemaUrl());
+        assertNull(invalidSchema.getSchemaUrl());
+        assertEquals("https://opentelemetry.io/schemas/1.27.0", trimmedSchema.getSchemaUrl());
     }
 
     @Test

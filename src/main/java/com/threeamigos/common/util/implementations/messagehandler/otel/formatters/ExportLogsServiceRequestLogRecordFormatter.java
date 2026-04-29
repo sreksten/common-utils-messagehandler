@@ -1,12 +1,17 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel.formatters;
 
 import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
+import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordImpl;
+import com.threeamigos.common.util.implementations.messagehandler.otel.OpenTelemetryAttributeValidator;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Resource;
 import jakarta.annotation.Nonnull;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -37,28 +42,33 @@ public class ExportLogsServiceRequestLogRecordFormatter implements LogRecordForm
     @Nonnull
     @Override
     public String format(@Nonnull final LogRecord logRecord) {
-        Objects.requireNonNull(logRecord, MessageHandlerResourceBundle.get("logRecordMustNotBeNull"));
+        LogRecord safeLogRecord = logRecord;
+        if (safeLogRecord == null) {
+            OpenTelemetryAttributeValidator.handleBundled("logRecordMustNotBeNull");
+            safeLogRecord = new LogRecordImpl();
+        }
         StringBuilder sb = new StringBuilder("{\"").append(F_RESOURCE_LOGS).append("\":[{");
-        if (logRecord.getResource() != null) {
-            appendResourceBlock(sb, logRecord.getResource());
+        if (safeLogRecord.getResource() != null) {
+            appendResourceBlock(sb, safeLogRecord.getResource());
             sb.append(',');
         }
         sb.append("\"").append(F_SCOPE_LOGS).append("\":[{");
-        if (logRecord.getInstrumentationScope() != null) {
-            appendScopeBlock(sb, logRecord.getInstrumentationScope());
+        if (safeLogRecord.getInstrumentationScope() != null) {
+            appendScopeBlock(sb, safeLogRecord.getInstrumentationScope());
             sb.append(',');
         }
         sb.append("\"").append(F_LOG_RECORDS).append("\":[");
-        sb.append(rawJsonRecordFormatter.format(logRecord));
+        sb.append(rawJsonRecordFormatter.format(safeLogRecord));
         sb.append("]}]}]}");
         return sb.toString();
     }
 
     private static void appendResourceBlock(final StringBuilder sb, final Resource resource) {
         sb.append('"').append(F_RESOURCE).append("\":{");
-        if (!resource.getAttributes().isEmpty()) {
+        List<KeyValue> attributes = resource.getAttributes() != null ? resource.getAttributes() : Collections.emptyList();
+        if (!attributes.isEmpty()) {
             sb.append('"').append(F_ATTRIBUTES).append("\":");
-            RawJsonRecordFormatter.appendKeyValueArrayInline(sb, resource.getAttributes());
+            RawJsonRecordFormatter.appendKeyValueArrayInline(sb, attributes);
         }
         sb.append('}');
         if (resource.getSchemaUrl() != null) {
@@ -80,12 +90,13 @@ public class ExportLogsServiceRequestLogRecordFormatter implements LogRecordForm
             sb.append('"').append(F_VERSION).append("\":\"").append(RawJsonRecordFormatter.escape(scope.getVersion())).append('"');
             scopeFirst = false;
         }
-        if (!scope.getAttributes().isEmpty()) {
+        List<KeyValue> attributes = scope.getAttributes() != null ? scope.getAttributes() : Collections.emptyList();
+        if (!attributes.isEmpty()) {
             if (!scopeFirst) {
                 sb.append(',');
             }
             sb.append('"').append(F_ATTRIBUTES).append("\":");
-            RawJsonRecordFormatter.appendKeyValueArrayInline(sb, scope.getAttributes());
+            RawJsonRecordFormatter.appendKeyValueArrayInline(sb, attributes);
             scopeFirst = false;
         }
         int droppedAttributesCount = scope.getDroppedAttributesCount();

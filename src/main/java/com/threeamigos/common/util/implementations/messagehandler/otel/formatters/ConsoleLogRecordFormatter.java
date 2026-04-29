@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.messagehandler.otel.formatte
 
 import com.threeamigos.common.util.implementations.messagehandler.utils.ClassNameReducer;
 import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
+import com.threeamigos.common.util.implementations.messagehandler.otel.OpenTelemetryAttributeValidator;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
@@ -12,7 +13,6 @@ import jakarta.annotation.Nonnull;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.Base64;
-import java.util.Objects;
 
 /**
  * A {@link LogRecordFormatter} for console-oriented plain text output.
@@ -58,19 +58,30 @@ public class ConsoleLogRecordFormatter implements LogRecordFormatter {
     @Nonnull
     @Override
     public String format(@Nonnull final LogRecord logRecord) {
-        Objects.requireNonNull(logRecord, MessageHandlerResourceBundle.get("logRecordMustNotBeNull"));
-        Instant timestamp = Objects.requireNonNull(logRecord.getTimestamp(),
-                MessageHandlerResourceBundle.get("timestampMustNotBeNull"));
-        String isoTimestamp = DateTimeFormatter.ISO_INSTANT.format(timestamp);
-        String severity = normalizeSeverity(logRecord.getSeverityText(), logRecord.getSeverityNumber());
-        String scopeName = resolveScopeName(logRecord);
-        String message = resolveMessage(logRecord);
-        StringBuilder out = new StringBuilder(isoTimestamp).append(" [").append(severity).append("]");
-        if (!scopeName.isEmpty()) {
-            out.append(" [").append(scopeName).append("]");
+        if (logRecord == null) {
+            OpenTelemetryAttributeValidator.handleBundled("logRecordMustNotBeNull");
+            return "";
         }
-        out.append(' ').append(message);
-        return out.toString();
+        try {
+            Instant timestamp = logRecord.getTimestamp();
+            if (timestamp == null) {
+                OpenTelemetryAttributeValidator.handleBundled("timestampMustNotBeNull");
+                timestamp = Instant.now();
+            }
+            String isoTimestamp = DateTimeFormatter.ISO_INSTANT.format(timestamp);
+            String severity = normalizeSeverity(logRecord.getSeverityText(), logRecord.getSeverityNumber());
+            String scopeName = resolveScopeName(logRecord);
+            String message = resolveMessage(logRecord);
+            StringBuilder out = new StringBuilder(isoTimestamp).append(" [").append(severity).append("]");
+            if (!scopeName.isEmpty()) {
+                out.append(" [").append(scopeName).append("]");
+            }
+            out.append(' ').append(message);
+            return out.toString();
+        } catch (RuntimeException ex) {
+            OpenTelemetryAttributeValidator.handle("Failed to format console log record: " + ex.getMessage());
+            return "";
+        }
     }
 
     private String resolveScopeName(final LogRecord logRecord) {
@@ -114,9 +125,14 @@ public class ConsoleLogRecordFormatter implements LogRecordFormatter {
     }
 
     private static String anyValueToString(final AnyValue value) {
+        if (value == null) {
+            OpenTelemetryAttributeValidator.handleBundled("valueMustNotBeNull");
+            return "";
+        }
         AnyValue.Type type = value.getType();
         if (type == null) {
-            throw new IllegalArgumentException(MessageHandlerResourceBundle.get("anyValueTypeMustNotBeNull"));
+            OpenTelemetryAttributeValidator.handleBundled("anyValueTypeMustNotBeNull");
+            return "";
         }
         if (type == AnyValue.Type.EMPTY) {
             return "";

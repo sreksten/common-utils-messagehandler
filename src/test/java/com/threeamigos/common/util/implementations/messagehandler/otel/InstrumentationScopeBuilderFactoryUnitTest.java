@@ -1,6 +1,8 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -15,6 +17,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("unit")
 @Tag("messageHandler")
 class InstrumentationScopeBuilderFactoryUnitTest {
+
+    private static final boolean ORIGINAL_LENIENT = OpenTelemetryAttributeValidator.isLenientMode();
+
+    @BeforeEach
+    void enforceLenientModeForSanitizationTests() {
+        setLenient(true);
+    }
+
+    @AfterEach
+    void restoreLenientMode() {
+        setLenient(ORIGINAL_LENIENT);
+    }
 
     @Test
     @DisplayName("getBuilder() should return InstrumentationScopeBuilderImpl step0")
@@ -59,5 +73,9 @@ class InstrumentationScopeBuilderFactoryUnitTest {
         assertEquals("unknown", blanksScope.getName());
         assertEquals("unknown", blanksScope.getVersion());
         assertEquals("unknown", blanksScope.getSchemaUrl());
+    }
+
+    private static void setLenient(final boolean value) {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(value);
     }
 }

@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
+import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Context;
 
@@ -9,16 +10,25 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Immutable {@link Context} implementation.
  * <p>
  * Current-context state is tracked per-thread via {@link ThreadLocal}.
- * Attach/detach follows strict LIFO semantics.
+ * Attach/detach follows strict LIFO semantics and returns a boolean signal on invalid detach attempts
+ * instead of throwing, matching OpenTelemetry Context expectations.
+ * <p>
+ * Specification references:
+ * <a href="https://opentelemetry.io/docs/specs/otel/context/">OpenTelemetry Context</a>,
+ * <a href="https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/context/README.md">OpenTelemetry Context Specification</a>.
  * <p>
  * @author Stefano Reksten
  */
 public class ContextImpl implements Context {
+
+    private static final Logger LOGGER = Logger.getLogger(ContextImpl.class.getName());
 
     private static final Context ROOT = new ContextImpl(Collections.emptyMap());
 
@@ -46,7 +56,7 @@ public class ContextImpl implements Context {
     @Override
     public Key createKey(final String name) {
         if (name == null || name.trim().isEmpty()) {
-            OpenTelemetryAttributeValidator.handleBundled("nullContextKeyNameProvided");
+            logWarning("nullContextKeyNameProvided");
             return new Key(UUID.randomUUID().toString());
         }
         return new Key(name);
@@ -55,22 +65,21 @@ public class ContextImpl implements Context {
     @Override
     public Context set(final Key key, final AnyValue value) {
         if (key == null) {
-            OpenTelemetryAttributeValidator.handleBundled("nullContextKeyProvided");
-            return this;
-        }
-        if (value == null) {
-            OpenTelemetryAttributeValidator.handleBundled("nullContextValueProvided");
+            logWarning("nullContextKeyProvided");
             return this;
         }
         Map<Key, AnyValue> newValues = new HashMap<>(values);
         newValues.put(key, value);
+        if (value == null) {
+            logWarning("nullContextValueProvided");
+        }
         return new ContextImpl(newValues);
     }
 
     @Override
     public AnyValue get(final Key key) {
         if (key == null) {
-            OpenTelemetryAttributeValidator.handleBundled("nullContextKeyProvided");
+            logWarning("nullContextKeyProvided");
             return null;
         }
         return values.get(key);
@@ -84,7 +93,7 @@ public class ContextImpl implements Context {
     @Override
     public String attachContext(final Context context) {
         if (context == null) {
-            OpenTelemetryAttributeValidator.handleBundled("nullContextProvided");
+            logWarning("nullContextProvided");
             return null;
         }
         String token = UUID.randomUUID().toString();
@@ -97,13 +106,17 @@ public class ContextImpl implements Context {
     @Override
     public boolean detachContext(final String token) {
         if (token == null) {
-            OpenTelemetryAttributeValidator.handleBundled("nullContextTokenProvided");
+            logWarning("nullContextTokenProvided");
             return false;
         }
 
         Deque<Holder> currentStack = STACK.get();
         Holder last = currentStack.peek();
         if (last == null || !last.token.equals(token)) {
+            LOGGER.log(Level.WARNING, "Invalid context detach token or non-LIFO detach attempt.");
+            if (currentStack.isEmpty()) {
+                STACK.remove();
+            }
             return false;
         }
 
@@ -115,6 +128,16 @@ public class ContextImpl implements Context {
             CURRENT_CONTEXT.remove();
         }
         return true;
+    }
+
+    private static void logWarning(final String bundleKey) {
+        String message;
+        try {
+            message = MessageHandlerResourceBundle.get(bundleKey);
+        } catch (Exception ex) {
+            message = bundleKey;
+        }
+        LOGGER.log(Level.WARNING, message);
     }
 
     private static final class Holder {

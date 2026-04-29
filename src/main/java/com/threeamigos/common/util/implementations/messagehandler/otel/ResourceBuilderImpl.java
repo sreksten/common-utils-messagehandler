@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -102,7 +101,11 @@ class ResourceBuilderImpl extends KeyValueBuilderImpl implements ResourceBuilder
 
     @Override
     public ResourceBuilderStepEntity withEntity(Entity entity) {
-        entities.add(Objects.requireNonNull(entity, MessageHandlerResourceBundle.get("entityMustNotBeNull")));
+        if (entity == null) {
+            OpenTelemetryAttributeValidator.handleBundled("entityMustNotBeNull");
+            return this;
+        }
+        entities.add(entity);
         return this;
     }
 

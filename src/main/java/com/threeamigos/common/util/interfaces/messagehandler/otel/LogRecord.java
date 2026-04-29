@@ -18,8 +18,8 @@ public interface LogRecord {
     /**
      * @return time when the event occurred, or {@code null} if not set.
      *         {@code LogRecordImpl} always returns a non-null value (defaults to {@link java.time.Instant#now()}
-     *         at construction time and rejects {@code null} in its setter); {@code null} is only possible
-     *         for custom implementations.
+     *         at construction time and normalizes invalid/null setter inputs to a current timestamp);
+     *         {@code null} is only possible for custom implementations.
      */
     Instant getTimestamp();
 

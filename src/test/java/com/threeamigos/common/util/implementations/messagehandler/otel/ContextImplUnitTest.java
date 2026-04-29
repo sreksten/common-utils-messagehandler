@@ -45,7 +45,7 @@ class ContextImplUnitTest {
     }
 
     @Test
-    @DisplayName("set and get should be immutable and ignore invalid inputs")
+    @DisplayName("set and get should be immutable and tolerate invalid inputs")
     void setAndGetShouldBeImmutableAndIgnoreInvalidInputs() {
         ContextImpl sut = new ContextImpl();
         Context.Key key = sut.createKey("k");
@@ -57,8 +57,25 @@ class ContextImplUnitTest {
         assertEquals("v", updated.get(key).asString());
 
         assertSame(sut, sut.set(null, value));
-        assertSame(sut, sut.set(key, null));
+
+        Context withNullValue = sut.set(key, null);
+        assertNotSame(sut, withNullValue);
+        assertNull(withNullValue.get(key));
+
         assertNull(sut.get(null));
+    }
+
+    @Test
+    @DisplayName("keys created with the same name should remain distinct")
+    void keysCreatedWithSameNameShouldRemainDistinct() {
+        ContextImpl sut = new ContextImpl();
+        Context.Key key1 = sut.createKey("same");
+        Context.Key key2 = sut.createKey("same");
+
+        Context updated = sut.set(key1, AnyValueFactory.ofString("v1"));
+
+        assertEquals("v1", updated.get(key1).asString());
+        assertNull(updated.get(key2));
     }
 
     @Test

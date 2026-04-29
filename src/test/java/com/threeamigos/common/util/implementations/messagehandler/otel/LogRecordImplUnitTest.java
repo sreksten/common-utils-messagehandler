@@ -15,6 +15,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -47,10 +48,13 @@ class LogRecordImplUnitTest {
     }
 
     @Test
-    @DisplayName("timestamp setters should validate null and store explicit value")
+    @DisplayName("timestamp setters should be non-blocking and sanitize invalid values")
     void timestampSettersShouldValidateAndStoreValues() {
         LogRecordImpl record = new LogRecordImpl();
-        assertThrows(IllegalArgumentException.class, () -> record.setTimestamp(null));
+        Instant beforeNullSet = record.getTimestamp();
+        assertDoesNotThrow(() -> record.setTimestamp(null));
+        assertNotNull(record.getTimestamp());
+        assertTrue(!record.getTimestamp().isBefore(beforeNullSet));
 
         Instant ts = Instant.parse("2026-04-19T22:00:00Z");
         Instant observed = Instant.parse("2026-04-19T22:00:01Z");
@@ -59,42 +63,55 @@ class LogRecordImplUnitTest {
 
         assertEquals(ts, record.getTimestamp());
         assertEquals(observed, record.getObservedTimestamp());
+
+        assertDoesNotThrow(() -> record.setTimestamp(Instant.parse("1969-12-31T23:59:59.999999999Z")));
+        assertNotNull(record.getTimestamp());
+        assertTrue(record.getTimestamp().isAfter(Instant.EPOCH));
+
+        assertDoesNotThrow(() -> record.setObservedTimestamp(Instant.parse("1969-12-31T23:59:59.999999999Z")));
+        assertNull(record.getObservedTimestamp());
     }
 
     @Test
-    @DisplayName("traceId should accept valid value and reject invalid/all-zero values")
+    @DisplayName("traceId should accept valid values and sanitize invalid values without throwing")
     void traceIdValidationShouldFollowW3cShape() {
         LogRecordImpl record = new LogRecordImpl();
         String valid = "5b8efff798038103d269b633813fc60c";
         record.setTraceId(valid);
         assertEquals(valid, record.getTraceId());
 
-        assertThrows(IllegalArgumentException.class, () -> record.setTraceId("abc"));
-        assertThrows(IllegalArgumentException.class, () -> record.setTraceId("5B8EFFF798038103D269B633813FC60C"));
-        assertThrows(IllegalArgumentException.class, () -> record.setTraceId("00000000000000000000000000000000"));
+        assertDoesNotThrow(() -> record.setTraceId("abc"));
+        assertNull(record.getTraceId());
+        assertDoesNotThrow(() -> record.setTraceId("5B8EFFF798038103D269B633813FC60C"));
+        assertEquals(valid, record.getTraceId());
+        assertDoesNotThrow(() -> record.setTraceId("00000000000000000000000000000000"));
+        assertNull(record.getTraceId());
 
         record.setTraceId(null);
         assertNull(record.getTraceId());
     }
 
     @Test
-    @DisplayName("spanId should accept valid value and reject invalid/all-zero values")
+    @DisplayName("spanId should accept valid values and sanitize invalid values without throwing")
     void spanIdValidationShouldFollowW3cShape() {
         LogRecordImpl record = new LogRecordImpl();
         String valid = "eee19b7ec3c1b174";
         record.setSpanId(valid);
         assertEquals(valid, record.getSpanId());
 
-        assertThrows(IllegalArgumentException.class, () -> record.setSpanId("abc"));
-        assertThrows(IllegalArgumentException.class, () -> record.setSpanId("EEE19B7EC3C1B174"));
-        assertThrows(IllegalArgumentException.class, () -> record.setSpanId("0000000000000000"));
+        assertDoesNotThrow(() -> record.setSpanId("abc"));
+        assertNull(record.getSpanId());
+        assertDoesNotThrow(() -> record.setSpanId("EEE19B7EC3C1B174"));
+        assertEquals(valid, record.getSpanId());
+        assertDoesNotThrow(() -> record.setSpanId("0000000000000000"));
+        assertNull(record.getSpanId());
 
         record.setSpanId(null);
         assertNull(record.getSpanId());
     }
 
     @Test
-    @DisplayName("traceFlags should allow 0..255 and reject out-of-range values")
+    @DisplayName("traceFlags should allow 0..255 and sanitize out-of-range values")
     void traceFlagsValidationShouldEnforceByteRange() {
         LogRecordImpl record = new LogRecordImpl();
         record.setTraceFlags(0);
@@ -102,8 +119,10 @@ class LogRecordImplUnitTest {
         record.setTraceFlags(255);
         assertEquals(255, record.getTraceFlags());
 
-        assertThrows(IllegalArgumentException.class, () -> record.setTraceFlags(-1));
-        assertThrows(IllegalArgumentException.class, () -> record.setTraceFlags(256));
+        assertDoesNotThrow(() -> record.setTraceFlags(-1));
+        assertEquals(255, record.getTraceFlags());
+        assertDoesNotThrow(() -> record.setTraceFlags(256));
+        assertEquals(0, record.getTraceFlags());
     }
 
     @Test
@@ -120,6 +139,9 @@ class LogRecordImplUnitTest {
         record.setSeverityNumber(null);
         assertSame(SeverityNumber.UNSPECIFIED, record.getSeverityNumber());
         assertEquals("NOTICE", record.getSeverityText());
+
+        record.setSeverityText("  ");
+        assertNull(record.getSeverityText());
     }
 
     @Test
@@ -139,6 +161,9 @@ class LogRecordImplUnitTest {
         assertSame(resource, record.getResource());
         assertSame(scope, record.getInstrumentationScope());
         assertEquals("evt", record.getEventName());
+
+        record.setEventName("   ");
+        assertNull(record.getEventName());
     }
 
     @Test

@@ -10,11 +10,17 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 
 /**
  * Immutable implementation of {@link Resource}.
+ * <p>
+ * Specification references used for this implementation:
+ * <ul>
+ *     <li><a href="https://opentelemetry.io/docs/specs/otel/resource/sdk/">OpenTelemetry Resource SDK</a></li>
+ *     <li><a href="https://opentelemetry.io/docs/specs/otel/resource/data-model/">OpenTelemetry Resource Data Model</a></li>
+ * </ul>
+ * <p>
  * All fields are set at construction time.
  *
  * @author Stefano Reksten
@@ -55,10 +61,13 @@ final class ResourceImpl implements Resource {
 
     @Override
     public Resource merge(final Resource other) {
-        Objects.requireNonNull(other, MessageHandlerResourceBundle.get("resourceMustNotBeNull"));
+        if (other == null) {
+            OpenTelemetryAttributeValidator.handleBundled("resourceMustNotBeNull");
+            return this;
+        }
         List<Entity> mergedEntities = mergeEntities(entities, other.getEntities());
         List<KeyValue> mergedAttributes = mergeLooseAttributes(attributes, other.getAttributes(), mergedEntities);
-        String fallbackSchemaUrl = other.getSchemaUrl() != null ? other.getSchemaUrl() : schemaUrl;
+        String fallbackSchemaUrl = resolveMergedSchemaUrl(schemaUrl, other.getSchemaUrl());
         return new ResourceImpl(fallbackSchemaUrl, mergedEntities, mergedAttributes);
     }
 
@@ -71,10 +80,12 @@ final class ResourceImpl implements Resource {
         int index = 0;
         for (Entity entity : entities) {
             if (entity == null) {
-                throw new NullPointerException(MessageHandlerResourceBundle.format(
+                OpenTelemetryAttributeValidator.handle(MessageHandlerResourceBundle.format(
                         "fieldContainsNullElementAtIndex",
                         RESOURCE_ENTITIES_FIELD_NAME,
                         index));
+                index++;
+                continue;
             }
             Entity canonical = new EntityImpl(entity.getType(), entity.getSchemaUrl(), entity.getId(), entity.getDescription());
             Entity existing = byType.get(canonical.getType());
@@ -137,12 +148,20 @@ final class ResourceImpl implements Resource {
     }
 
     private static boolean hasAnyEntityKeyConflict(final Entity entity, final Set<String> usedKeys) {
-        for (KeyValue kv : entity.getId()) {
+        for (KeyValue kv : safeEntityValues(entity, true)) {
+            if (kv == null || kv.getKey() == null) {
+                OpenTelemetryAttributeValidator.handle("Entity id contains null key/value entry.");
+                continue;
+            }
             if (usedKeys.contains(kv.getKey())) {
                 return true;
             }
         }
-        for (KeyValue kv : entity.getDescription()) {
+        for (KeyValue kv : safeEntityValues(entity, false)) {
+            if (kv == null || kv.getKey() == null) {
+                OpenTelemetryAttributeValidator.handle("Entity description contains null key/value entry.");
+                continue;
+            }
             if (usedKeys.contains(kv.getKey())) {
                 return true;
             }
@@ -170,10 +189,18 @@ final class ResourceImpl implements Resource {
     }
 
     private static void collectEntityKeys(final Entity entity, final Set<String> target) {
-        for (KeyValue kv : entity.getId()) {
+        for (KeyValue kv : safeEntityValues(entity, true)) {
+            if (kv == null || kv.getKey() == null) {
+                OpenTelemetryAttributeValidator.handle("Entity id contains null key/value entry.");
+                continue;
+            }
             target.add(kv.getKey());
         }
-        for (KeyValue kv : entity.getDescription()) {
+        for (KeyValue kv : safeEntityValues(entity, false)) {
+            if (kv == null || kv.getKey() == null) {
+                OpenTelemetryAttributeValidator.handle("Entity description contains null key/value entry.");
+                continue;
+            }
             target.add(kv.getKey());
         }
     }
@@ -197,5 +224,48 @@ final class ResourceImpl implements Resource {
             }
         }
         return resolved;
+    }
+
+    private static String resolveMergedSchemaUrl(final String currentSchemaUrl,
+                                                 final String incomingSchemaUrl) {
+        String normalizedCurrent = normalizeMergeSchemaUrl(currentSchemaUrl);
+        String normalizedIncoming = normalizeMergeSchemaUrl(incomingSchemaUrl);
+
+        if (normalizedCurrent == null) {
+            return normalizedIncoming;
+        }
+        if (normalizedIncoming == null) {
+            return normalizedCurrent;
+        }
+        if (normalizedCurrent.equals(normalizedIncoming)) {
+            return normalizedIncoming;
+        }
+
+        OpenTelemetryAttributeValidator.handle(MessageHandlerResourceBundle.format(
+                "resourceSchemaUrlConflictOnMerge",
+                normalizedCurrent,
+                normalizedIncoming));
+        return null;
+    }
+
+    private static String normalizeMergeSchemaUrl(final String schemaUrl) {
+        if (schemaUrl == null || schemaUrl.trim().isEmpty()) {
+            return null;
+        }
+        return schemaUrl;
+    }
+
+    private static List<KeyValue> safeEntityValues(final Entity entity, final boolean idValues) {
+        if (entity == null) {
+            OpenTelemetryAttributeValidator.handle("Resource contains a null Entity.");
+            return Collections.emptyList();
+        }
+        List<KeyValue> values = idValues ? entity.getId() : entity.getDescription();
+        if (values == null) {
+            OpenTelemetryAttributeValidator.handle("Entity contains null " + (idValues ? "id" : "description")
+                    + " key-value list.");
+            return Collections.emptyList();
+        }
+        return values;
     }
 }

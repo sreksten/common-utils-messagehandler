@@ -19,12 +19,15 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("EntityBuilderFactory unit tests")
 @Tag("unit")
 @Tag("messageHandler")
 class EntityBuilderFactoryUnitTest {
+
+    private static final boolean ORIGINAL_LENIENT = OpenTelemetryAttributeValidator.isLenientMode();
 
     @Test
     @DisplayName("getBuilder() should return EntityBuilderImpl")
@@ -219,8 +222,10 @@ class EntityBuilderFactoryUnitTest {
     }
 
     @Test
-    @DisplayName("builder should normalize null or blank type and schemaUrl")
-    void builderShouldNormalizeNullOrBlankTypeAndSchemaUrl() {
+    @DisplayName("builder should normalize null or blank type and schemaUrl in lenient mode")
+    void builderShouldNormalizeNullOrBlankTypeAndSchemaUrlInLenientMode() {
+        setLenient(true);
+
         EntityBuilderImpl nullTypeBuilder = new EntityBuilderImpl();
         assertDoesNotThrow(() -> nullTypeBuilder.withType(null));
         Entity nullTypeEntity = nullTypeBuilder.withId(Collections.emptyList()).build();
@@ -240,6 +245,28 @@ class EntityBuilderFactoryUnitTest {
         assertDoesNotThrow(() -> blankSchemaBuilder.withType("custom.entity").withSchemaUrl(""));
         Entity blankSchemaEntity = blankSchemaBuilder.withIdString("id", "value").build();
         assertEquals("unknown", blankSchemaEntity.getSchemaUrl());
+
+        setLenient(ORIGINAL_LENIENT);
+    }
+
+    @Test
+    @DisplayName("builder should throw for null or blank type and schemaUrl in strict mode")
+    void builderShouldThrowForNullOrBlankTypeAndSchemaUrlInStrictMode() {
+        setLenient(false);
+
+        EntityBuilderImpl nullTypeBuilder = new EntityBuilderImpl();
+        assertThrows(IllegalArgumentException.class, () -> nullTypeBuilder.withType(null));
+
+        EntityBuilderImpl blankTypeBuilder = new EntityBuilderImpl();
+        assertThrows(IllegalArgumentException.class, () -> blankTypeBuilder.withType("   "));
+
+        EntityBuilderImpl nullSchemaBuilder = new EntityBuilderImpl();
+        assertThrows(IllegalArgumentException.class, () -> nullSchemaBuilder.withType("custom.entity").withSchemaUrl(null));
+
+        EntityBuilderImpl blankSchemaBuilder = new EntityBuilderImpl();
+        assertThrows(IllegalArgumentException.class, () -> blankSchemaBuilder.withType("custom.entity").withSchemaUrl(""));
+
+        setLenient(ORIGINAL_LENIENT);
     }
 
     private static void assertEntity(final String expectedType,
@@ -268,5 +295,9 @@ class EntityBuilderFactoryUnitTest {
             out.put(keyValue.getKey(), keyValue.getValue().asString());
         }
         return out;
+    }
+
+    private static void setLenient(final boolean value) {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(value);
     }
 }

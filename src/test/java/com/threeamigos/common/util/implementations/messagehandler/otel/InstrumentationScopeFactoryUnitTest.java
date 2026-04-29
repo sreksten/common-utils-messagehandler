@@ -2,13 +2,12 @@ package com.threeamigos.common.util.implementations.messagehandler.otel;
 
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -21,6 +20,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("unit")
 @Tag("messageHandler")
 class InstrumentationScopeFactoryUnitTest {
+
+    private static final boolean ORIGINAL_LENIENT = OpenTelemetryAttributeValidator.isLenientMode();
+
+    @BeforeEach
+    void enforceLenientModeForSanitizationTests() {
+        setLenient(true);
+    }
+
+    @AfterEach
+    void restoreLenientMode() {
+        setLenient(ORIGINAL_LENIENT);
+    }
 
     @Test
     @DisplayName("create() should return an InstrumentationScope with the provided scalar fields")
@@ -54,5 +65,9 @@ class InstrumentationScopeFactoryUnitTest {
         assertEquals(1, scope.getDroppedAttributesCount());
         assertTrue(scope.getAttributes().stream().anyMatch(kv -> "k0".equals(kv.getKey())));
         assertTrue(scope.getAttributes().stream().noneMatch(kv -> "k128".equals(kv.getKey())));
+    }
+
+    private static void setLenient(final boolean value) {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(value);
     }
 }
