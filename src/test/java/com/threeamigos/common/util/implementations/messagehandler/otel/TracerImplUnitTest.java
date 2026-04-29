@@ -7,10 +7,8 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -29,56 +27,47 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TracerImplUnitTest {
 
     @Test
-    @DisplayName("constructor should preserve provided instrumentation name")
-    void constructorShouldPreserveProvidedInstrumentationName() throws Exception {
+    @DisplayName("constructor should preserve provided instrumentation name in scope")
+    void constructorShouldPreserveProvidedInstrumentationName() {
         TracerImpl sut = new TracerImpl("orders", "1.0.0", "schema", Collections.emptyList());
-
-        Field field = TracerImpl.class.getDeclaredField("instrumentationName");
-        field.setAccessible(true);
-        assertEquals("orders", field.get(sut));
+        assertNotNull(sut.getInstrumentationScope());
+        assertEquals("orders", sut.getInstrumentationScope().getName());
     }
 
     @Test
-    @DisplayName("constructor should normalize null instrumentation name to empty")
-    void constructorShouldNormalizeNullInstrumentationNameToEmpty() throws Exception {
+    @DisplayName("constructor should normalize null instrumentation name to absent scope name")
+    void constructorShouldNormalizeNullInstrumentationNameToEmpty() {
         TracerImpl sut = new TracerImpl(null, null, null, null);
-
-        Field field = TracerImpl.class.getDeclaredField("instrumentationName");
-        field.setAccessible(true);
-        assertEquals("", field.get(sut));
+        assertNotNull(sut.getInstrumentationScope());
+        assertNull(sut.getInstrumentationScope().getName());
     }
 
     @Test
-    @DisplayName("constructor should normalize blank instrumentation name to empty")
-    void constructorShouldNormalizeBlankInstrumentationNameToEmpty() throws Exception {
+    @DisplayName("constructor should normalize blank instrumentation name to absent scope name")
+    void constructorShouldNormalizeBlankInstrumentationNameToEmpty() {
         TracerImpl sut = new TracerImpl("   ", "1.0.0", "schema", Collections.emptyList());
-
-        Field field = TracerImpl.class.getDeclaredField("instrumentationName");
-        field.setAccessible(true);
-        assertEquals("", field.get(sut));
+        assertNotNull(sut.getInstrumentationScope());
+        assertNull(sut.getInstrumentationScope().getName());
     }
 
     @Test
     @DisplayName("constructor should copy attributes defensively")
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    void constructorShouldCopyAttributesDefensively() throws Exception {
+    @SuppressWarnings({"rawtypes"})
+    void constructorShouldCopyAttributesDefensively() {
         ArrayList<com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue> sourceAttributes = new ArrayList<>();
         sourceAttributes.add(new KeyValueImpl("k1", AnyValueFactory.ofString("v1")));
 
         TracerImpl sut = new TracerImpl("orders", "1.0.0", "schema", sourceAttributes);
-
-        Field field = TracerImpl.class.getDeclaredField("attributes");
-        field.setAccessible(true);
-        Collection<com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue> stored =
-                (Collection<com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue>) field.get(sut);
-        assertNotSame(sourceAttributes, stored);
-        assertEquals(1, stored.size());
+        assertNotNull(sut.getInstrumentationScope());
+        assertNotSame(sourceAttributes, sut.getInstrumentationScope().getAttributes());
+        assertEquals(1, sut.getInstrumentationScope().getAttributes().size());
 
         sourceAttributes.add(new KeyValueImpl("k2", AnyValueFactory.ofString("v2")));
-        assertEquals(1, stored.size());
+        assertEquals(1, sut.getInstrumentationScope().getAttributes().size());
 
         assertThrows(UnsupportedOperationException.class,
-                () -> ((Collection) stored).add(new KeyValueImpl("k3", AnyValueFactory.ofString("v3"))));
+                () -> ((java.util.List) sut.getInstrumentationScope().getAttributes())
+                        .add(new KeyValueImpl("k3", AnyValueFactory.ofString("v3"))));
     }
 
     @Test

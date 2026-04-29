@@ -21,10 +21,15 @@ import java.util.Map;
 
 /**
  * A mutable implementation of a {@link Span}.
+ * <p>
+ * Package-private on purpose: spans should be created through
+ * {@link com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer#createSpan(String)}
+ * and
+ * {@link com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer#createSpan(String, com.threeamigos.common.util.interfaces.messagehandler.otel.SpanContext)}.
  *
  * @author Stefano Reksten
  */
-public final class SpanImpl implements Span {
+final class SpanImpl implements Span {
 
     private static final String EXCEPTION_EVENT_NAME = "exception";
     private static final String EVENT_ATTRIBUTES_FIELD_NAME = MessageHandlerResourceBundle.get("eventAttributesFieldName");
@@ -46,7 +51,7 @@ public final class SpanImpl implements Span {
     private Instant endTimestamp;
     private volatile boolean ended;
 
-    public SpanImpl(final String name, final SpanContext spanContext) {
+    SpanImpl(final String name, final SpanContext spanContext) {
         this(name, spanContext, null, Instant.now(), true);
     }
 

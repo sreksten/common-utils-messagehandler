@@ -13,18 +13,21 @@ import java.util.Collections;
 
 /**
  * An immutable implementation of a {@link Tracer}.
+ * <p>
+ * Package-private on purpose: callers should obtain tracers only via {@link TracerProvider},
+ * e.g. {@link TracerProvider#getTracer(String, String)} and related provider factory methods.
  *
  * @author Stefano Reksten
  */
-public class TracerImpl implements Tracer {
+class TracerImpl implements Tracer {
 
     private final InstrumentationScope instrumentationScope;
     private final boolean enabled;
 
-    public TracerImpl(final String instrumentationName,
-                      final String version,
-                      final String schemaUrl,
-                      final Collection<KeyValue> attributes) {
+    TracerImpl(final String instrumentationName,
+               final String version,
+               final String schemaUrl,
+               final Collection<KeyValue> attributes) {
         this(instrumentationName, version, schemaUrl, attributes, true);
     }
 
