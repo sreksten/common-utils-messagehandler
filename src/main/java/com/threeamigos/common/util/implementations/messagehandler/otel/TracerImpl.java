@@ -44,7 +44,7 @@ public class TracerImpl implements Tracer {
         this.version = version;
         this.schemaUrl = schemaUrl;
         this.attributes = attributes == null
-                ? Collections.<KeyValue>emptyList()
+                ? Collections.emptyList()
                 : Collections.unmodifiableList(new ArrayList<>(attributes));
         this.enabled = enabled;
     }

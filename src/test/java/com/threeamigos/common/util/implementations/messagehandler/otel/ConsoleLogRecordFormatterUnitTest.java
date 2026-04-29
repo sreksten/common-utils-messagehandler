@@ -24,6 +24,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("messageHandler")
 class ConsoleLogRecordFormatterUnitTest {
 
+    private static final String TRACE_ID = "0123456789abcdef0123456789abcdef";
+    private static final String SPAN_ID = "89abcdef01234567";
+
     private final ConsoleLogRecordFormatter formatter = new ConsoleLogRecordFormatter();
 
     @Test
@@ -86,6 +89,43 @@ class ConsoleLogRecordFormatterUnitTest {
         String result = formatter.format(record);
 
         assertEquals("2026-04-21T08:30:00Z [INFO  ] [com.example.Foo] hello", result);
+    }
+
+    @Test
+    @DisplayName("format() should emit traceId and spanId immediately after severity")
+    void formatShouldEmitTraceIdAndSpanIdImmediatelyAfterSeverity() {
+        LogRecordImpl record = new LogRecordImpl();
+        record.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
+        record.setSeverityText("INFO");
+        record.setTraceId(TRACE_ID);
+        record.setSpanId(SPAN_ID);
+        record.setBody(AnyValueFactory.ofString("hello"));
+
+        String result = formatter.format(record);
+
+        assertEquals(
+                "2026-04-21T08:30:00Z [INFO  ] [traceId=" + TRACE_ID + " spanId=" + SPAN_ID + "] hello",
+                result);
+    }
+
+    @Test
+    @DisplayName("format() should keep trace/span token before instrumentation scope")
+    void formatShouldKeepTraceSpanTokenBeforeInstrumentationScope() {
+        LogRecordImpl record = new LogRecordImpl();
+        record.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
+        record.setSeverityText("INFO");
+        record.setTraceId(TRACE_ID);
+        record.setSpanId(SPAN_ID);
+        record.setBody(AnyValueFactory.ofString("hello"));
+        InstrumentationScope scope = InstrumentationScopeFactory.create(
+                "com.example.Foo", "1.0.0", null, null);
+        record.setInstrumentationScope(scope);
+
+        String result = formatter.format(record);
+
+        assertEquals(
+                "2026-04-21T08:30:00Z [INFO  ] [traceId=" + TRACE_ID + " spanId=" + SPAN_ID + "] [com.example.Foo] hello",
+                result);
     }
 
     @Test

@@ -20,13 +20,16 @@ import java.util.Base64;
  * Output format:
  * <ul>
  *   <li>Without instrumentation scope name:
- *   {@code <iso-instant> [<severity-6>] <message>}</li>
+ *   {@code <iso-instant> [<severity-6>] [traceId=<traceId> spanId=<spanId>] <message>}</li>
  *   <li>With instrumentation scope name:
- *   {@code <iso-instant> [<severity-6>] [<scope-name>] <message>}</li>
+ *   {@code <iso-instant> [<severity-6>] [traceId=<traceId> spanId=<spanId>] [<scope-name>] <message>}</li>
  * </ul>
  * <p>
+ * The trace/span token is emitted only when at least one of traceId/spanId is present and non-blank,
+ * and it is always rendered immediately after the severity token.
+ * <p>
  * When {@code LogRecord.getInstrumentationScope().getName()} is present and not blank, it is emitted
- * immediately after the severity token.
+ * after severity and trace/span tokens (if present).
  * <p>
  * If {@link #isReduceScopeClassName()} is enabled, the scope name is reduced with
  * {@link ClassNameReducer#reduce(String)}
@@ -70,9 +73,13 @@ public class ConsoleLogRecordFormatter implements LogRecordFormatter {
             }
             String isoTimestamp = DateTimeFormatter.ISO_INSTANT.format(timestamp);
             String severity = normalizeSeverity(logRecord.getSeverityText(), logRecord.getSeverityNumber());
+            String traceAndSpan = resolveTraceAndSpan(logRecord);
             String scopeName = resolveScopeName(logRecord);
             String message = resolveMessage(logRecord);
             StringBuilder out = new StringBuilder(isoTimestamp).append(" [").append(severity).append("]");
+            if (!traceAndSpan.isEmpty()) {
+                out.append(" [").append(traceAndSpan).append("]");
+            }
             if (!scopeName.isEmpty()) {
                 out.append(" [").append(scopeName).append("]");
             }
@@ -99,6 +106,29 @@ public class ConsoleLogRecordFormatter implements LogRecordFormatter {
             return ClassNameReducer.reduce(scopeName);
         }
         return scopeName;
+    }
+
+    private static String resolveTraceAndSpan(final LogRecord logRecord) {
+        String traceId = normalizeOptionalToken(logRecord.getTraceId());
+        String spanId = normalizeOptionalToken(logRecord.getSpanId());
+        if (traceId == null && spanId == null) {
+            return "";
+        }
+        if (traceId == null) {
+            return "spanId=" + spanId;
+        }
+        if (spanId == null) {
+            return "traceId=" + traceId;
+        }
+        return "traceId=" + traceId + " spanId=" + spanId;
+    }
+
+    private static String normalizeOptionalToken(final String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
     }
 
     private static String normalizeSeverity(final String severityText, final SeverityNumber severityNumber) {
