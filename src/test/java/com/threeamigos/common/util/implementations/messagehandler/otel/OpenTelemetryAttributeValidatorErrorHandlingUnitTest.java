@@ -8,10 +8,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Handler;
-import java.util.logging.Level;
-import java.util.logging.LogRecord;
-import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -30,6 +26,7 @@ class OpenTelemetryAttributeValidatorErrorHandlingUnitTest {
     @AfterEach
     void restoreLenientMode() {
         setLenient(ORIGINAL_LENIENT);
+        OpenTelemetryAttributeValidator.setLogTrapForTests(null);
     }
 
     @Test
@@ -61,20 +58,16 @@ class OpenTelemetryAttributeValidatorErrorHandlingUnitTest {
     void lenientModeShouldContinueForHandleAndHandleBundled() {
         setLenient(true);
 
-        List<LogRecord> loggerRecords = captureLogs(() -> {
+        List<LoggedError> loggedErrors = trapLogs(() -> {
             OpenTelemetryAttributeValidator.handle("boom");
             OpenTelemetryAttributeValidator.handleBundled("valueMustNotBeNull");
             OpenTelemetryAttributeValidator.handleBundled("missing.bundle.key");
         });
 
-        assertTrue(hasSevereMessageWithThrowable(loggerRecords, "boom"));
-        assertTrue(hasSevereMessageWithThrowable(loggerRecords, MessageHandlerResourceBundle.get("valueMustNotBeNull")));
-        assertTrue(hasSevereMessageWithThrowable(loggerRecords, "missing.bundle.key"));
-        assertTrue(loggerRecords.stream().anyMatch(record ->
-                record.getLevel() == Level.SEVERE
-                        && record.getMessage() != null
-                        && record.getMessage().contains("missing.bundle.key")
-                        && record.getThrown() != null));
+        assertTrue(hasMessageWithThrowable(loggedErrors, "boom", IllegalArgumentException.class));
+        assertTrue(hasMessageWithThrowable(loggedErrors,
+                MessageHandlerResourceBundle.get("valueMustNotBeNull"), IllegalArgumentException.class));
+        assertTrue(hasMessageWithThrowable(loggedErrors, "missing.bundle.key", RuntimeException.class));
     }
 
     @Test
@@ -90,49 +83,34 @@ class OpenTelemetryAttributeValidatorErrorHandlingUnitTest {
         OpenTelemetryAttributeValidator.setLenientModeForTests(value);
     }
 
-    private static List<LogRecord> captureLogs(final Runnable call) {
-        Logger logger = Logger.getLogger(OpenTelemetryAttributeValidator.class.getName());
-        RecordingHandler handler = new RecordingHandler();
-        boolean previousUseParentHandlers = logger.getUseParentHandlers();
-        Level previousLevel = logger.getLevel();
-        logger.setUseParentHandlers(false);
-        logger.setLevel(Level.ALL);
-        logger.addHandler(handler);
+    private static List<LoggedError> trapLogs(final Runnable call) {
+        List<LoggedError> trapped = new ArrayList<>();
+        OpenTelemetryAttributeValidator.setLogTrapForTests((message, throwable) ->
+                trapped.add(new LoggedError(message, throwable)));
         try {
             assertDoesNotThrow(call::run);
-            return new ArrayList<>(handler.records);
+            return new ArrayList<>(trapped);
         } finally {
-            logger.removeHandler(handler);
-            logger.setUseParentHandlers(previousUseParentHandlers);
-            logger.setLevel(previousLevel);
+            OpenTelemetryAttributeValidator.setLogTrapForTests(null);
         }
     }
 
-    private static boolean hasSevereMessageWithThrowable(final List<LogRecord> records, final String expectedMessage) {
+    private static boolean hasMessageWithThrowable(final List<LoggedError> records,
+                                                   final String expectedMessage,
+                                                   final Class<? extends Throwable> throwableClass) {
         return records.stream().anyMatch(record ->
-                record.getLevel() == Level.SEVERE
-                        && expectedMessage.equals(record.getMessage())
-                        && record.getThrown() != null);
+                expectedMessage.equals(record.message)
+                        && record.throwable != null
+                        && throwableClass.isInstance(record.throwable));
     }
 
-    private static final class RecordingHandler extends Handler {
-        private final List<LogRecord> records = new ArrayList<>();
+    private static final class LoggedError {
+        private final String message;
+        private final Throwable throwable;
 
-        @Override
-        public void publish(final LogRecord record) {
-            if (record != null) {
-                records.add(record);
-            }
-        }
-
-        @Override
-        public void flush() {
-            // no-op
-        }
-
-        @Override
-        public void close() {
-            // no-op
+        private LoggedError(final String message, final Throwable throwable) {
+            this.message = message;
+            this.throwable = throwable;
         }
     }
 }

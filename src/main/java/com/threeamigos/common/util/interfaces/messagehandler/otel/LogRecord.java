@@ -4,12 +4,34 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * A representation of an OpenTelemetry Log Record, as defined by the
- * <a href="https://opentelemetry.io/docs/specs/otel/logs/data-model/">Log Data Model</a>.
+ * A representation of an OpenTelemetry Log Record.
  * <p>
- * All fields are optional: implementations may return {@code null} for absent string/object fields,
- * {@code 0} / {@link SeverityNumber#UNSPECIFIED} for absent numeric/enum fields, and empty lists
- * for absent collection fields. The formatter will omit absent fields from the output.
+ * Specification references:
+ * <ul>
+ *   <li><a href="https://opentelemetry.io/docs/specs/otel/logs/data-model/">OpenTelemetry Logs Data
+ *   Model</a></li>
+ *   <li><a href="https://github.com/open-telemetry/opentelemetry-proto/blob/main/opentelemetry/proto/logs/v1/logs.proto">OTLP
+ *   logs.proto (LogRecord)</a></li>
+ *   <li><a href="https://www.w3.org/TR/trace-context/">W3C Trace Context</a></li>
+ * </ul>
+ *
+ * {@code timestamp} defaults to {@link Instant#now()} at construction time, reflecting the moment
+ * the log record is created. All other fields are optional: implementations may return {@code null} for absent
+ * string/object fields, {@code 0} / {@link SeverityNumber#UNSPECIFIED} for absent numeric/enum fields, and empty lists
+ * for absent collection fields.<br/> Those fields may be set via the corresponding setters.
+ * <p>
+ * The {@link LogRecordFormatter} (NOT part of the OpenTelemetry specification) will omit absent fields
+ * from the output.
+ * <p>
+ * Hint: if you're looking where to look for:
+ * <ul>
+ *     <li>Fully qualified method name: <code>code.function.name</code></li>
+ *     <li>Class name: <code>code.namespace</code> (deprecated attribute)</li>
+ *     <li>Logger class name (e.g., Java logger name: <code>InstrumentationScope.name</code>)</li>
+ *     <li>Exception message: <code>exception.message</code> in attributes (e.g., "Division by zero")</li>
+ *     <li>Exception type: <code>exception.type</code> in attributes (e.g., java.net.ConnectException)</li>
+ *     <li>Exception stacktrace: <code>exception.stacktrace</code> in attributes</li>
+ * </ul>
  *
  * @author Stefano Reksten
  */

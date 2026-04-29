@@ -3,8 +3,16 @@ package com.threeamigos.common.util.interfaces.messagehandler.otel;
 import java.util.List;
 
 /**
- * Represents an OpenTelemetry Entity as defined by the
- * <a href="https://opentelemetry.io/docs/specs/otel/entities/data-model/">Entity Data Model</a>.
+ * Represents an OpenTelemetry Entity.
+ * <p>
+ * Specification references:
+ * <ul>
+ *   <li><a href="https://opentelemetry.io/docs/specs/otel/entities/data-model/">OpenTelemetry Entity
+ *   Data Model</a></li>
+ *   <li><a href="https://opentelemetry.io/docs/specs/otel/common/">OpenTelemetry Common Concepts
+ *   (Attribute)</a></li>
+ *   <li><a href="https://opentelemetry.io/docs/specs/otel/entities/sdk/">OpenTelemetry Entities SDK</a></li>
+ * </ul>
  * <p>
  * The data model defines:
  * <ul>

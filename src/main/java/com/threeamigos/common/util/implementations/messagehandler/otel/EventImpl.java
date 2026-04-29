@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
+import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Event;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 
@@ -9,11 +10,13 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Immutable span event implementation.
+ * An immutable implementation of a Span {@link Event}.
  *
  * @author Stefano Reksten
  */
 final class EventImpl implements Event {
+
+    private static final String EVENT_ATTRIBUTES_FIELD_NAME = MessageHandlerResourceBundle.get("eventAttributesFieldName");
 
     private final String name;
     private final Instant timestamp;
@@ -21,14 +24,9 @@ final class EventImpl implements Event {
 
     EventImpl(final String name, final Instant timestamp, final List<KeyValue> attributes) {
         this.name = OpenTelemetryAttributeValidator.requireNonBlank(name, "eventName");
-        if (timestamp == null) {
-            OpenTelemetryAttributeValidator.handle("eventTimestamp must not be null");
-            this.timestamp = Instant.now();
-        } else {
-            this.timestamp = timestamp;
-        }
+        this.timestamp = timestamp == null ? Instant.now() : timestamp;
         this.attributes = Collections.unmodifiableList(new ArrayList<>(
-                OpenTelemetryAttributeValidator.copyAndValidateKeyValues(attributes, "event attributes")));
+                OpenTelemetryAttributeValidator.copyAndValidateKeyValues(attributes, EVENT_ATTRIBUTES_FIELD_NAME)));
     }
 
     @Override

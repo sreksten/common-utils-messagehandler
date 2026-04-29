@@ -7,11 +7,7 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import java.util.Objects;
 
 /**
- * Immutable implementation of {@link KeyValue}.
- * <p>
- * Specification references:
- * <a href="https://opentelemetry.io/docs/specs/otel/common/#attribute">OpenTelemetry Common: Attribute</a>,
- * <a href="https://github.com/open-telemetry/opentelemetry-proto/blob/main/opentelemetry/proto/common/v1/common.proto">OTLP common.proto (KeyValue)</a>.
+ * An immutable implementation of a {@link KeyValue}.
  *
  * @author Stefano Reksten
  */

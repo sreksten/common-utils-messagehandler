@@ -9,17 +9,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Immutable implementation of {@link InstrumentationScope}.
- * <p>
- * All fields are set at construction time. Name, version, schemaUrl, and attributes are optional
- * in this model; absent or blank values are represented as {@code null}.
- * Scope attributes are internally capped to the default OpenTelemetry attribute count limit and
- * any overflow is reported through {@link #getDroppedAttributesCount()}.
- * <p>
- * Specification references:
- * <a href="https://opentelemetry.io/docs/specs/otel/common/instrumentation-scope/">OpenTelemetry Instrumentation Scope</a>,
- * <a href="https://github.com/open-telemetry/opentelemetry-proto/blob/main/opentelemetry/proto/common/v1/common.proto">OTLP common.proto (InstrumentationScope)</a>,
- * <a href="https://github.com/open-telemetry/opentelemetry-proto/blob/main/opentelemetry/proto/logs/v1/logs.proto">OTLP logs.proto (ScopeLogs)</a>.
+ * An immutable implementation of an {@link InstrumentationScope}.
  *
  * @author Stefano Reksten
  */

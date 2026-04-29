@@ -1,9 +1,13 @@
 package com.threeamigos.common.util.interfaces.messagehandler.otel;
 
 /**
- * Numerical severity of a log record, as defined by the
- * <a href="https://opentelemetry.io/docs/specs/otel/logs/data-model/#field-severitynumber">
- * OTel Log Data Model §SeverityNumber</a>.
+ * Numerical severity of a log record.
+ * <p>
+ * Specification references used for this implementation:
+ * <ul>
+ *   <li><a href="https://opentelemetry.io/docs/specs/otel/logs/data-model/#field-severitynumber">OpenTelemetry
+ *   Log Data Model</a></li>
+ * </ul>
  * <p>
  * The range 1–24 is divided into six severity levels with four sub-ranges each.
  * {@link #UNSPECIFIED} (value 0) indicates that no severity was set.

@@ -3,8 +3,13 @@ package com.threeamigos.common.util.interfaces.messagehandler.otel;
 import java.util.List;
 
 /**
- * Describes the source of telemetry, following the OpenTelemetry
- * <a href="https://opentelemetry.io/docs/specs/otel/resource/data-model/">Resource Data Model</a>.
+ * Describes the source of telemetry.
+ * <p>
+ * Specification references used for this implementation:
+ * <ul>
+ *     <li><a href="https://opentelemetry.io/docs/specs/otel/resource/sdk/">OpenTelemetry Resource SDK</a></li>
+ *     <li><a href="https://opentelemetry.io/docs/specs/otel/resource/data-model/">OpenTelemetry Resource Data Model</a></li>
+ * </ul>
  * <p>
  * A resource is represented by:
  * <ul>

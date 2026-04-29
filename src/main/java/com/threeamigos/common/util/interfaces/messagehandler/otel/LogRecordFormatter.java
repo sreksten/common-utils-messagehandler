@@ -7,6 +7,8 @@ import jakarta.annotation.Nonnull;
  * <p>
  * Implementations decide the output representation for {@link #format(LogRecord)},
  * e.g., a raw log-record JSON object or a full OTLP envelope.
+ * <p>
+ * This interface is NOT part of the OpenTelemetry specifications.
  *
  * @author Stefano Reksten
  */

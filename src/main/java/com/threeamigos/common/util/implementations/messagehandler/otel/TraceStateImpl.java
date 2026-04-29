@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
+import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.TraceState;
@@ -14,13 +15,6 @@ import java.util.regex.Pattern;
 /**
  * An immutable implementation of the TraceState interface.
  *
- * <p>Specification references:
- * <ul>
- *   <li><a href="https://opentelemetry.io/docs/specs/otel/trace/api/#tracestate">OpenTelemetry Trace API:
- *   TraceState</a></li>
- *   <li><a href="https://www.w3.org/TR/trace-context/#tracestate-header">W3C Trace Context:
- *   tracestate</a></li>
- * </ul>
  *
  * @author Stefano Reksten
  */
@@ -54,7 +48,9 @@ public class TraceStateImpl implements TraceState {
     @Override
     public AnyValue get(final String key) {
         if (!isValidTraceStateKey(key)) {
-            OpenTelemetryAttributeValidator.handle("Invalid tracestate key: " + key);
+            OpenTelemetryAttributeValidator.handle(MessageHandlerResourceBundle.format(
+                    "invalidTraceStateKey",
+                    key));
             return null;
         }
         return traceStateMap.get(key);
@@ -63,11 +59,15 @@ public class TraceStateImpl implements TraceState {
     @Override
     public TraceState set(final String key, final AnyValue value) {
         if (!isValidTraceStateKey(key)) {
-            OpenTelemetryAttributeValidator.handle("Invalid tracestate key: " + key);
+            OpenTelemetryAttributeValidator.handle(MessageHandlerResourceBundle.format(
+                    "invalidTraceStateKey",
+                    key));
             return this;
         }
         if (!isValidTraceStateValue(value)) {
-            OpenTelemetryAttributeValidator.handle("Invalid tracestate value for key '" + key + "'.");
+            OpenTelemetryAttributeValidator.handle(MessageHandlerResourceBundle.format(
+                    "invalidTraceStateValueForKey",
+                    key));
             return this;
         }
 
@@ -89,7 +89,9 @@ public class TraceStateImpl implements TraceState {
     @Override
     public TraceState delete(final String key) {
         if (!isValidTraceStateKey(key)) {
-            OpenTelemetryAttributeValidator.handle("Invalid tracestate key: " + key);
+            OpenTelemetryAttributeValidator.handle(MessageHandlerResourceBundle.format(
+                    "invalidTraceStateKey",
+                    key));
             return this;
         }
         if (!traceStateMap.containsKey(key)) {

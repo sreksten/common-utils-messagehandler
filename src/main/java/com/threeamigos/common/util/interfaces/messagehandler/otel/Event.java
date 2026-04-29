@@ -6,8 +6,13 @@ import java.util.List;
 /**
  * Event attached to a span.
  * <p>
- * Specification reference:
- * <a href="https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/trace/api.md#add-events">OpenTelemetry Trace API: Add Events</a>.
+ * Specification references:
+ * <ul>
+ *   <li><a href="https://opentelemetry.io/docs/specs/otel/trace/api/#add-events">
+ *   OpenTelemetry Trace API: Add Events</a></li>
+ *   <li><a href="https://opentelemetry.io/docs/specs/otel/trace/api/#concurrency-requirements">
+ *   OpenTelemetry Trace API: Concurrency requirements (Events are immutable)</a></li>
+ * </ul>
  *
  * @author Stefano Reksten
  */

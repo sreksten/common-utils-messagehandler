@@ -3,23 +3,15 @@ package com.threeamigos.common.util.implementations.messagehandler.otel;
 import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanContext;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.TraceState;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.Iterator;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.regex.Pattern;
 
 /**
- * OpenTelemetry {@link SpanContext} implementation.
- *
- * <p>Specification references:
- * <ul>
- *   <li>OpenTelemetry Trace API:
- *   https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/trace/api.md</li>
- *   <li>W3C Trace Context Level 2:
- *   https://www.w3.org/TR/trace-context-2/</li>
- * </ul>
+ * An immutable implementation of a {@link SpanContext}.
  *
  * @author Stefano Reksten
  */
@@ -27,31 +19,31 @@ public class SpanContextImpl implements SpanContext {
 
     private static final byte TRACE_FLAG_SAMPLED = 0x01;
     private static final byte TRACE_FLAG_RANDOM = 0x02;
-    private static final Pattern TRACE_ID_PATTERN = Pattern.compile("(?!0{32})[0-9a-f]{32}");
-    private static final Pattern SPAN_ID_PATTERN = Pattern.compile("(?!0{16})[0-9a-f]{16}");
+    private static final Pattern TRACE_ID_FORMAT_PATTERN = Pattern.compile("[0-9a-f]{32}");
+    private static final Pattern SPAN_ID_FORMAT_PATTERN = Pattern.compile("[0-9a-f]{16}");
+    private static final String INVALID_TRACE_ID = "00000000000000000000000000000000";
+    private static final String INVALID_SPAN_ID = "0000000000000000";
 
     private final String traceId;
     private final String spanId;
     private final byte traceFlags;
     private final boolean remote;
-    private final List<KeyValue> traceState;
+    private final TraceState traceState;
 
     public SpanContextImpl() {
-        this("", "", (byte) 0, false, Collections.emptyList());
+        this(INVALID_TRACE_ID, INVALID_SPAN_ID, (byte) 0, false, new TraceStateImpl());
     }
 
     public SpanContextImpl(final String traceId,
                            final String spanId,
                            final byte traceFlags,
                            final boolean remote,
-                           final List<KeyValue> traceState) {
-        this.traceId = normalizeId(traceId);
-        this.spanId = normalizeId(spanId);
+                           final TraceState traceState) {
+        this.traceId = normalizeTraceId(traceId);
+        this.spanId = normalizeSpanId(spanId);
         this.traceFlags = traceFlags;
         this.remote = remote;
-        this.traceState = traceState == null
-                ? Collections.emptyList()
-                : Collections.unmodifiableList(new ArrayList<>(traceState));
+        this.traceState = traceState == null ? new TraceStateImpl() : traceState;
     }
 
     @Override
@@ -61,7 +53,7 @@ public class SpanContextImpl implements SpanContext {
 
     @Override
     public byte[] getTraceIdBytes() {
-        return parseHexIdToBytes(traceId, TRACE_ID_PATTERN, 16, "traceId");
+        return parseHexIdToBytes(traceId, 16, "traceId");
     }
 
     @Override
@@ -71,7 +63,12 @@ public class SpanContextImpl implements SpanContext {
 
     @Override
     public byte[] getSpanIdBytes() {
-        return parseHexIdToBytes(spanId, SPAN_ID_PATTERN, 8, "spanId");
+        return parseHexIdToBytes(spanId, 8, "spanId");
+    }
+
+    @Override
+    public byte getTraceFlags() {
+        return traceFlags;
     }
 
     @Override
@@ -86,7 +83,7 @@ public class SpanContextImpl implements SpanContext {
 
     @Override
     public boolean isValid() {
-        return TRACE_ID_PATTERN.matcher(traceId).matches() && SPAN_ID_PATTERN.matcher(spanId).matches();
+        return !INVALID_TRACE_ID.equals(traceId) && !INVALID_SPAN_ID.equals(spanId);
     }
 
     @Override
@@ -95,44 +92,121 @@ public class SpanContextImpl implements SpanContext {
     }
 
     @Override
-    public List<KeyValue> getTraceState() {
+    public TraceState getTraceState() {
         return traceState;
     }
 
+    @Override
+    public int hashCode() {
+        int result = traceId.hashCode();
+        result = 31 * result + spanId.hashCode();
+        result = 31 * result + traceFlags;
+        result = 31 * result + (remote ? 1 : 0);
+        result = 31 * result + traceStateHash(traceState);
+        return result;
+    }
+
+    @Override
+    public boolean equals(final Object other) {
+        if (this == other) {
+            return true;
+        }
+        if (!(other instanceof SpanContextImpl)) {
+            return false;
+        }
+        SpanContextImpl that = (SpanContextImpl) other;
+        return traceFlags == that.traceFlags
+                && remote == that.remote
+                && traceId.equals(that.traceId)
+                && spanId.equals(that.spanId)
+                && traceStateEquals(traceState, that.traceState);
+    }
+
+    private static boolean traceStateEquals(final TraceState left, final TraceState right) {
+        if (left == right) {
+            return true;
+        }
+        if (left == null || right == null) {
+            return false;
+        }
+
+        Iterator<KeyValue> leftIterator = left.getValues().iterator();
+        Iterator<KeyValue> rightIterator = right.getValues().iterator();
+        while (leftIterator.hasNext() && rightIterator.hasNext()) {
+            KeyValue leftValue = leftIterator.next();
+            KeyValue rightValue = rightIterator.next();
+            if (!Objects.equals(leftValue == null ? null : leftValue.getKey(),
+                    rightValue == null ? null : rightValue.getKey())) {
+                return false;
+            }
+            if (!Objects.equals(leftValue == null ? null : leftValue.getValue(),
+                    rightValue == null ? null : rightValue.getValue())) {
+                return false;
+            }
+        }
+        return !leftIterator.hasNext() && !rightIterator.hasNext();
+    }
+
+    private static int traceStateHash(final TraceState state) {
+        int hash = 1;
+        if (state == null) {
+            return hash;
+        }
+        for (KeyValue keyValue : state.getValues()) {
+            hash = 31 * hash + Objects.hash(
+                    keyValue == null ? null : keyValue.getKey(),
+                    keyValue == null ? null : keyValue.getValue());
+        }
+        return hash;
+    }
+
     private static byte[] parseHexIdToBytes(final String id,
-                                            final Pattern validator,
                                             final int expectedByteLength,
                                             final String fieldName) {
-        if (id == null) {
-            OpenTelemetryAttributeValidator.handle(MessageHandlerResourceBundle.format(
-                    "builderFieldMustNotBeNull",
-                    fieldName));
-            return new byte[0];
-        }
-
-        String normalized = id.trim().toLowerCase(Locale.ROOT);
-        if (normalized.isEmpty()) {
-            return new byte[0];
-        }
-        if (!validator.matcher(normalized).matches()) {
-            OpenTelemetryAttributeValidator.handle("Invalid " + fieldName + " value: " + id);
-            return new byte[0];
-        }
-
         byte[] result = new byte[expectedByteLength];
-        for (int i = 0; i < normalized.length(); i += 2) {
-            int high = Character.digit(normalized.charAt(i), 16);
-            int low = Character.digit(normalized.charAt(i + 1), 16);
-            if (high < 0 || low < 0) {
-                OpenTelemetryAttributeValidator.handle("Invalid hexadecimal " + fieldName + " value: " + id);
-                return new byte[0];
+        try {
+            for (int i = 0; i < id.length(); i += 2) {
+                int high = Character.digit(id.charAt(i), 16);
+                int low = Character.digit(id.charAt(i + 1), 16);
+                result[i / 2] = (byte) ((high << 4) + low);
             }
-            result[i / 2] = (byte) ((high << 4) + low);
+        } catch (RuntimeException ex) {
+            OpenTelemetryAttributeValidator.handle(MessageHandlerResourceBundle.format(
+                    "invalidHexadecimalFieldValue",
+                    fieldName,
+                    id));
+            return new byte[expectedByteLength];
         }
         return result;
     }
 
-    private static String normalizeId(final String id) {
-        return id == null ? "" : id.trim().toLowerCase(Locale.ROOT);
+    private static String normalizeTraceId(final String id) {
+        return normalizeId(id, "traceId", TRACE_ID_FORMAT_PATTERN, INVALID_TRACE_ID);
     }
+
+    private static String normalizeSpanId(final String id) {
+        return normalizeId(id, "spanId", SPAN_ID_FORMAT_PATTERN, INVALID_SPAN_ID);
+    }
+
+    private static String normalizeId(final String id,
+                                      final String fieldName,
+                                      final Pattern formatPattern,
+                                      final String fallback) {
+        if (id == null) {
+            OpenTelemetryAttributeValidator.handle(MessageHandlerResourceBundle.format(
+                    "builderFieldMustNotBeNull",
+                    fieldName));
+            return fallback;
+        }
+        String normalized = id.toLowerCase(Locale.ROOT);
+        if (!formatPattern.matcher(normalized).matches()) {
+            OpenTelemetryAttributeValidator.handle(MessageHandlerResourceBundle.format(
+                    "invalidFieldValue",
+                    fieldName,
+                    id));
+            return fallback;
+        }
+        return normalized;
+    }
+
 }

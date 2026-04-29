@@ -5,10 +5,15 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Span API aligned with OpenTelemetry trace API semantics.
+ * A Span identifies a single unit of work.
  * <p>
  * Specification reference:
- * <a href="https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/trace/api.md#span-operations">OpenTelemetry Trace API: Span operations</a>.
+ * <ul>
+ *   <li><a href="https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/trace/api.md#span-operations">
+ *   OpenTelemetry Trace API: Span operations</a></li>
+ *   <li><a href="https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/trace/api.md#record-exception">
+ *   OpenTelemetry Trace API: Record Exception</a></li>
+ * </ul>
  *
  * @author Stefano Reksten
  */
@@ -177,22 +182,27 @@ public interface Span {
 
         @Override
         public String getTraceId() {
-            return "";
+            return "00000000000000000000000000000000";
         }
 
         @Override
         public byte[] getTraceIdBytes() {
-            return new byte[0];
+            return new byte[16];
         }
 
         @Override
         public String getSpanId() {
-            return "";
+            return "0000000000000000";
         }
 
         @Override
         public byte[] getSpanIdBytes() {
-            return new byte[0];
+            return new byte[8];
+        }
+
+        @Override
+        public byte getTraceFlags() {
+            return 0x00;
         }
 
         @Override
@@ -216,8 +226,28 @@ public interface Span {
         }
 
         @Override
-        public List<KeyValue> getTraceState() {
-            return Collections.emptyList();
+        public TraceState getTraceState() {
+            return new TraceState() {
+                @Override
+                public AnyValue get(final String key) {
+                    return null;
+                }
+
+                @Override
+                public TraceState set(final String key, final AnyValue value) {
+                    return this;
+                }
+
+                @Override
+                public TraceState delete(final String key) {
+                    return this;
+                }
+
+                @Override
+                public List<KeyValue> getValues() {
+                    return Collections.emptyList();
+                }
+            };
         }
     }
 

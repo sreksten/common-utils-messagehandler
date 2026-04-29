@@ -3,9 +3,19 @@ package com.threeamigos.common.util.interfaces.messagehandler.otel;
 import java.util.List;
 
 /**
- * Identifies the library or component that emitted a telemetry signal, following the
- * OpenTelemetry <a href="https://opentelemetry.io/docs/specs/otel/glossary/#instrumentation-scope">
- * Instrumentation Scope specification</a>.
+ * Identifies the library or component that emitted a telemetry signal.
+ * <p>
+ * Specification references:
+ * <ul>
+ *   <li><a href="https://opentelemetry.io/docs/specs/otel/common/instrumentation-scope/">OpenTelemetry
+ *   Instrumentation Scope</a></li>
+ *   <li><a href="https://github.com/open-telemetry/opentelemetry-proto/blob/main/opentelemetry/proto/common/v1/common.proto">OTLP
+ *   common.proto (InstrumentationScope)</a></li>
+ *   <li><a href="https://github.com/open-telemetry/opentelemetry-proto/blob/main/opentelemetry/proto/logs/v1/logs.proto">OTLP
+ *   logs.proto (ScopeLogs)</a></li>
+ * </ul>
+ *  Scope attributes are internally capped to the default OpenTelemetry attribute count limit and  any overflow is
+ *  reported through {@link #getDroppedAttributesCount()}.
  *
  * @author Stefano Reksten
  */

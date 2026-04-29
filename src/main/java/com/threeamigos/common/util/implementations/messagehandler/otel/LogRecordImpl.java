@@ -11,41 +11,18 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber
 import java.math.BigInteger;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
- * A mutable implementation of the {@link LogRecord} interface.
- * <p>
- * Specification references:
- * <a href="https://opentelemetry.io/docs/specs/otel/logs/data-model/">OpenTelemetry Logs Data Model</a>,
- * <a href="https://github.com/open-telemetry/opentelemetry-proto/blob/main/opentelemetry/proto/logs/v1/logs.proto">OTLP logs.proto (LogRecord)</a>,
- * <a href="https://www.w3.org/TR/trace-context/">W3C Trace Context</a>.
- * <p>
- * {@code timestamp} defaults to {@link Instant#now()} at construction time, reflecting the moment
- * the log record is created. All other fields default to {@code null} / {@code 0} / an empty list
- * and may be set via the corresponding setters.
- * <p>
- * Hint: if you're looking where to look for:
- * <ul>
- *     <li>Fully qualified method name: <code>code.function.name</code></li>
- *     <li>Class name: <code>code.namespace</code> (deprecated attribute)</li>
- *     <li>Logger class name (e.g., Java logger name: <code>InstrumentationScope.name</code>)</li>
- *     <li>Exception message: <code>exception.message</code> in attributes (e.g., "Division by zero")</li>
- *     <li>Exception type: <code>exception.type</code> in attributes (e.g., java.net.ConnectException)</li>
- *     <li>Exception stacktrace: <code>exception.stacktrace</code> in attributes</li>
- * </ul>
+ * A mutable implementation of a {@link LogRecord}.
  *
  * @author Stefano Reksten
  */
 public class LogRecordImpl implements LogRecord {
 
-    private static final Logger LOGGER = Logger.getLogger(LogRecordImpl.class.getName());
     private static final Pattern TRACE_ID_PATTERN = Pattern.compile("(?!0{32})[0-9a-f]{32}");
     private static final Pattern SPAN_ID_PATTERN  = Pattern.compile("(?!0{16})[0-9a-f]{16}");
     private static final BigInteger NANOS_PER_SECOND = BigInteger.valueOf(1_000_000_000L);
@@ -79,7 +56,7 @@ public class LogRecordImpl implements LogRecord {
             }
             this.timestamp = normalizeTimestamp(timestamp, Instant.now());
         } catch (RuntimeException ex) {
-            handleNonBlocking("Failed to set timestamp: " + ex.getMessage());
+            handleBundledNonBlocking("failedToSetTimestamp", ex.getMessage());
             this.timestamp = Instant.now();
         }
     }
@@ -97,7 +74,7 @@ public class LogRecordImpl implements LogRecord {
             }
             this.observedTimestamp = normalizeTimestamp(observedTimestamp, null);
         } catch (RuntimeException ex) {
-            handleNonBlocking("Failed to set observedTimestamp: " + ex.getMessage());
+            handleBundledNonBlocking("failedToSetObservedTimestamp", ex.getMessage());
             this.observedTimestamp = null;
         }
     }
@@ -123,7 +100,7 @@ public class LogRecordImpl implements LogRecord {
             }
             this.traceId = normalizedTraceId;
         } catch (RuntimeException ex) {
-            handleNonBlocking("Failed to set traceId: " + ex.getMessage());
+            handleBundledNonBlocking("failedToSetTraceId", ex.getMessage());
             this.traceId = null;
         }
     }
@@ -149,7 +126,7 @@ public class LogRecordImpl implements LogRecord {
             }
             this.spanId = normalizedSpanId;
         } catch (RuntimeException ex) {
-            handleNonBlocking("Failed to set spanId: " + ex.getMessage());
+            handleBundledNonBlocking("failedToSetSpanId", ex.getMessage());
             this.spanId = null;
         }
     }
@@ -170,7 +147,7 @@ public class LogRecordImpl implements LogRecord {
             }
             this.traceFlags = traceFlags;
         } catch (RuntimeException ex) {
-            handleNonBlocking("Failed to set traceFlags: " + ex.getMessage());
+            handleBundledNonBlocking("failedToSetTraceFlags", ex.getMessage());
             this.traceFlags = 0;
         }
     }
@@ -194,7 +171,7 @@ public class LogRecordImpl implements LogRecord {
             String normalizedSeverityText = severityText.trim();
             this.severityText = normalizedSeverityText.isEmpty() ? null : normalizedSeverityText;
         } catch (RuntimeException ex) {
-            handleNonBlocking("Failed to set severityText: " + ex.getMessage());
+            handleBundledNonBlocking("failedToSetSeverityText", ex.getMessage());
             this.severityText = null;
         }
     }
@@ -203,7 +180,7 @@ public class LogRecordImpl implements LogRecord {
         try {
             this.severityNumber = severityNumber != null ? severityNumber : SeverityNumber.UNSPECIFIED;
         } catch (RuntimeException ex) {
-            handleNonBlocking("Failed to set severityNumber: " + ex.getMessage());
+            handleBundledNonBlocking("failedToSetSeverityNumber", ex.getMessage());
             this.severityNumber = SeverityNumber.UNSPECIFIED;
         }
     }
@@ -245,12 +222,12 @@ public class LogRecordImpl implements LogRecord {
             OpenTelemetryAttributeValidator.ValidationResult validationResult =
                     OpenTelemetryAttributeValidator.copyValidateAndLimitKeyValuesLenient(
                     attributes,
-                    safeBundleGet("logRecordAttributesFieldName", "logRecord attributes")
+                    safeBundleGet("logRecordAttributesFieldName", "logRecordAttributesFieldName")
                     );
             this.attributes = validationResult.getAttributes();
             this.droppedAttributesCount = validationResult.getDroppedAttributesCount();
         } catch (RuntimeException ex) {
-            handleNonBlocking("Failed to set logRecord attributes: " + ex.getMessage());
+            handleBundledNonBlocking("failedToSetLogRecordAttributes", ex.getMessage());
             this.attributes = new ArrayList<>();
             this.droppedAttributesCount = 0;
         }
@@ -274,14 +251,14 @@ public class LogRecordImpl implements LogRecord {
             String normalizedEventName = eventName.trim();
             this.eventName = normalizedEventName.isEmpty() ? null : normalizedEventName;
         } catch (RuntimeException ex) {
-            handleNonBlocking("Failed to set eventName: " + ex.getMessage());
+            handleBundledNonBlocking("failedToSetEventName", ex.getMessage());
             this.eventName = null;
         }
     }
 
     private static Instant normalizeTimestamp(final Instant input, final Instant fallback) {
         if (!isUint64NanoTimestamp(input)) {
-            handleNonBlocking("Timestamp is outside OTLP uint64 nanoseconds range: " + input);
+            handleBundledNonBlocking("timestampOutsideOtlpRange", input);
             return fallback;
         }
         return input;
@@ -295,26 +272,22 @@ public class LogRecordImpl implements LogRecord {
     }
 
     private static void handleBundledNonBlocking(final String messageKey) {
-        try {
-            OpenTelemetryAttributeValidator.handleBundled(messageKey);
-        } catch (RuntimeException ex) {
-            safeLog(Level.SEVERE, messageKey, ex);
-        }
+        OpenTelemetryAttributeValidator.reportBundled(messageKey);
+    }
+
+    private static void handleBundledNonBlocking(final String messageKey, final Object... args) {
+        OpenTelemetryAttributeValidator.reportBundled(messageKey, args);
     }
 
     private static void handleNonBlocking(final String message) {
-        try {
-            OpenTelemetryAttributeValidator.handle(message);
-        } catch (RuntimeException ex) {
-            safeLog(Level.SEVERE, message, ex);
-        }
+        OpenTelemetryAttributeValidator.report(message);
     }
 
     private static String safeBundleFormat(final String key, final Object... args) {
         try {
             return MessageHandlerResourceBundle.format(key, args);
         } catch (RuntimeException ex) {
-            return key + " " + Arrays.toString(args);
+            return key;
         }
     }
 
@@ -323,14 +296,6 @@ public class LogRecordImpl implements LogRecord {
             return MessageHandlerResourceBundle.get(key);
         } catch (RuntimeException ex) {
             return fallback;
-        }
-    }
-
-    private static void safeLog(final Level level, final String message, final Throwable throwable) {
-        try {
-            LOGGER.log(level, message, throwable);
-        } catch (RuntimeException ignored) {
-            // Intentionally swallow logging failures to keep setters non-blocking.
         }
     }
 }

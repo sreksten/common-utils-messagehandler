@@ -12,20 +12,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * An immutable implementation of {@link AnyValue}. Instances are created through
- * {@link AnyValueFactory}.
- * <p>
- * Specification references used for this implementation:
- * <ul>
- *     <li><a href="https://opentelemetry.io/docs/specs/otel/common/#anyvalue">OpenTelemetry
- *     Common: AnyValue</a></li>
- *     <li><a href="https://github.com/open-telemetry/opentelemetry-proto/blob/main/opentelemetry/proto/common/v1/common.proto">
- *     OTLP Common Protobuf: AnyValue / ArrayValue / KeyValueList</a></li>
- * </ul>
- * <p>
- * If the user tries to access a value of a different type, and we are running in lenient mode, default values are
- * returned in order not to have a crash in a production environment due to the logging system. Otherwise, an exception
- * is thrown. See also {@link OpenTelemetryAttributeValidator}.
+ * An immutable implementation of an {@link AnyValue}.
  *
  * @author Stefano Reksten
  */

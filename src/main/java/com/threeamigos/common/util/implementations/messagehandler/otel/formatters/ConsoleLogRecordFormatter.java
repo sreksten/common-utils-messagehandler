@@ -79,7 +79,9 @@ public class ConsoleLogRecordFormatter implements LogRecordFormatter {
             out.append(' ').append(message);
             return out.toString();
         } catch (RuntimeException ex) {
-            OpenTelemetryAttributeValidator.handle("Failed to format console log record: " + ex.getMessage());
+            OpenTelemetryAttributeValidator.handle(MessageHandlerResourceBundle.format(
+                    "failedToFormatConsoleLogRecord",
+                    ex.getMessage()));
             return "";
         }
     }

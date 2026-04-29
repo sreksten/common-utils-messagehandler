@@ -5,6 +5,7 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -16,6 +17,7 @@ public final class OpenTelemetryAttributeValidator {
 
     static final int DEFAULT_ATTRIBUTE_COUNT_LIMIT = 128;
     private static volatile boolean lenient;
+    private static volatile LogTrap testLogTrap;
 
     static {
         lenient = "true".equalsIgnoreCase(System.getenv("OTEL_ERROR_HANDLER_LENIENT"));
@@ -33,17 +35,7 @@ public final class OpenTelemetryAttributeValidator {
     }
 
     public static void handleBundled(final String errorMessage) {
-        String message;
-        try {
-            message = MessageHandlerResourceBundle.get(errorMessage);
-        } catch (Exception e) {
-            if (lenient) {
-                logWithStackTrace(e.getMessage(), e);
-                message = errorMessage;
-            } else {
-                throw e;
-            }
-        }
+        String message = resolveBundledMessage(errorMessage);
         if (lenient) {
             logWithStackTrace(message, new IllegalArgumentException(message));
         } else {
@@ -55,8 +47,28 @@ public final class OpenTelemetryAttributeValidator {
         return lenient;
     }
 
+    public static void report(final String message) {
+        logWithStackTrace(message, new IllegalArgumentException(message));
+    }
+
+    public static void report(final String message, final Throwable throwable) {
+        Throwable effectiveThrowable = throwable == null
+                ? new IllegalArgumentException(message)
+                : throwable;
+        logWithStackTrace(message, effectiveThrowable);
+    }
+
+    public static void reportBundled(final String messageKey, final Object... args) {
+        String message = resolveBundledMessage(messageKey, args);
+        report(message, new IllegalArgumentException(message));
+    }
+
     static void setLenientModeForTests(final boolean value) {
         lenient = value;
+    }
+
+    static void setLogTrapForTests(final LogTrap trap) {
+        testLogTrap = trap;
     }
 
     static String requireNonBlank(final String value, final String fieldName) {
@@ -163,8 +175,9 @@ public final class OpenTelemetryAttributeValidator {
                 ? copyAndValidateKeyValuesLenient(keyValues, fieldName)
                 : copyAndValidateKeyValues(keyValues, fieldName);
         if (OpenTelemetryAttributeValidator.DEFAULT_ATTRIBUTE_COUNT_LIMIT <= 0) {
-            handle(
-                    "maxAttributeCount must be positive, got: " + OpenTelemetryAttributeValidator.DEFAULT_ATTRIBUTE_COUNT_LIMIT,
+            handle(MessageHandlerResourceBundle.format(
+                    "maxAttributeCountMustBePositive",
+                    OpenTelemetryAttributeValidator.DEFAULT_ATTRIBUTE_COUNT_LIMIT),
                     forceLenient);
             return new ValidationResult(new ArrayList<>(), validated.size());
         }
@@ -177,8 +190,40 @@ public final class OpenTelemetryAttributeValidator {
     }
 
     private static void logWithStackTrace(final String message, final Throwable throwable) {
+        LogTrap trap = testLogTrap;
+        if (trap != null) {
+            try {
+                trap.onLog(message, throwable);
+                return;
+            } catch (Exception ignored) {
+                // Fall back to regular logging if test hook fails.
+            }
+        }
+
         java.util.logging.Logger.getLogger(OpenTelemetryAttributeValidator.class.getName())
                 .log(java.util.logging.Level.SEVERE, message, throwable);
+    }
+
+    private static String resolveBundledMessage(final String errorMessage, final Object... args) {
+        try {
+            return args == null || args.length == 0
+                    ? MessageHandlerResourceBundle.get(errorMessage)
+                    : MessageHandlerResourceBundle.format(errorMessage, args);
+        } catch (Exception e) {
+            if (lenient) {
+                logWithStackTrace(e.getMessage(), e);
+            } else if (args == null || args.length == 0) {
+                throw e;
+            }
+            return args == null || args.length == 0
+                    ? errorMessage
+                    : errorMessage + " " + Arrays.toString(args);
+        }
+    }
+
+    @FunctionalInterface
+    interface LogTrap {
+        void onLog(String message, Throwable throwable);
     }
 
     static final class ValidationResult {

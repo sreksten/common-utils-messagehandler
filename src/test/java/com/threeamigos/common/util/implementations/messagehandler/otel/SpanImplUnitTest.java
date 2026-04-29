@@ -40,7 +40,7 @@ class SpanImplUnitTest {
                 "eee19b7ec3c1b174",
                 (byte) 0x01,
                 false,
-                Collections.<KeyValue>emptyList());
+                new TraceStateImpl());
     }
 
     @AfterEach
@@ -103,7 +103,7 @@ class SpanImplUnitTest {
                 "ddd19b7ec3c1b174",
                 (byte) 0x00,
                 true,
-                Collections.<KeyValue>emptyList());
+                new TraceStateImpl());
 
         span.addLink(linkedContext);
         span.addLink(linkedContext, Collections.singletonList(

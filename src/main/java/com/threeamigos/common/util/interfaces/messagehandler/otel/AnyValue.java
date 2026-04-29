@@ -1,14 +1,25 @@
 package com.threeamigos.common.util.interfaces.messagehandler.otel;
 
+import com.threeamigos.common.util.implementations.messagehandler.otel.AnyValueFactory;
+import com.threeamigos.common.util.implementations.messagehandler.otel.OpenTelemetryAttributeValidator;
+
 import java.util.List;
 
 /**
- * A typed value container following the OpenTelemetry
- * <a href="https://opentelemetry.io/docs/specs/otel/common/#anyvalue">AnyValue</a> specification.
+ * A typed value container following the OpenTelemetry Specification references:
+ * <ul>
+ *     <li><a href="https://opentelemetry.io/docs/specs/otel/common/#anyvalue">OpenTelemetry
+ *     Common: AnyValue</a></li>
+ *     <li><a href="https://github.com/open-telemetry/opentelemetry-proto/blob/main/opentelemetry/proto/common/v1/common.proto">
+ *     OTLP Common Protobuf: AnyValue / ArrayValue / KeyValueList</a></li>
+ *     <li><a href="https://opentelemetry.io/docs/specs/otel/error-handling/">Error handling in OpenTelemetry</a></li>
+ * </ul>
  * <p>
- * An {@code AnyValue} holds one typed value (or an explicit empty value) whose kind is indicated
- * by {@link #getType()}. Implementations in this project are defensive: calling a getter for a
- * different type returns a default value and does not throw.
+ * Instances are created through {@link AnyValueFactory}.<br/>
+ * An {@code AnyValue} holds one typed value (or an explicit empty value) whose kind is indicated by {@link #getType()}.
+ * In this implementation, if the user tries to access a value of a different type, an exception is thrown; unless we
+ * are running in <i>lenient mode</i> (see {@link OpenTelemetryAttributeValidator}), in which case default values are
+ * returned in order not to have a crash in a production environment due to the logging system.
  *
  * @author Stefano Reksten
  */

@@ -3,6 +3,12 @@ package com.threeamigos.common.util.interfaces.messagehandler.otel;
 /**
  * OpenTelemetry-like execution context container.
  * <p>
+ * Specification references:
+ * <ul>
+ *    <li><a href="https://opentelemetry.io/docs/specs/otel/context/">OpenTelemetry Context</a></li>
+ *    <li><a href="https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/context/README.md">OpenTelemetry
+ *    Context Specification</a></li>
+ * </ul>
  * Context values are immutable snapshots: {@link #set(Key, AnyValue)} returns a new
  * context instead of mutating the existing one.
  * <p>
@@ -17,19 +23,11 @@ public interface Context {
     /**
      * Opaque context key type.
      */
-    final class Key {
-        private final String name;
-
-        public Key(final String name) {
-            this.name = name;
-        }
-
+    interface Key {
         /**
          * @return human-readable key name, useful only for debugging/logging.
          */
-        public String getName() {
-            return name;
-        }
+        String getName();
     }
 
     /**

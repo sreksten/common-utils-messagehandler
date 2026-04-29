@@ -83,14 +83,16 @@ public class RawJsonRecordFormatter implements LogRecordFormatter {
             sb.append('}');
             return sb.toString();
         } catch (RuntimeException ex) {
-            OpenTelemetryAttributeValidator.handle("Failed to format raw JSON log record: " + ex.getMessage());
+            OpenTelemetryAttributeValidator.handle(MessageHandlerResourceBundle.format(
+                    "failedToFormatRawJsonLogRecord",
+                    ex.getMessage()));
             return "{}";
         }
     }
 
     static void appendKeyValueArrayInline(final StringBuilder sb, final List<KeyValue> attrs) {
         if (attrs == null) {
-            OpenTelemetryAttributeValidator.handle("Null attribute list provided to formatter.");
+            OpenTelemetryAttributeValidator.handleBundled("nullAttributeListProvidedToFormatter");
             sb.append("[]");
             return;
         }
@@ -98,7 +100,7 @@ public class RawJsonRecordFormatter implements LogRecordFormatter {
         boolean firstEntry = true;
         for (KeyValue keyValue : attrs) {
             if (keyValue == null) {
-                OpenTelemetryAttributeValidator.handle("Null KeyValue entry provided to formatter.");
+                OpenTelemetryAttributeValidator.handleBundled("nullKeyValueEntryProvidedToFormatter");
                 continue;
             }
             if (!firstEntry) {
@@ -106,12 +108,12 @@ public class RawJsonRecordFormatter implements LogRecordFormatter {
             }
             String key = keyValue.getKey();
             if (key == null) {
-                OpenTelemetryAttributeValidator.handle("Null KeyValue key provided to formatter.");
+                OpenTelemetryAttributeValidator.handleBundled("nullKeyValueKeyProvidedToFormatter");
                 key = "unknown";
             }
             AnyValue value = keyValue.getValue();
             if (value == null) {
-                OpenTelemetryAttributeValidator.handle("Null KeyValue value provided to formatter.");
+                OpenTelemetryAttributeValidator.handleBundled("nullKeyValueValueProvidedToFormatter");
                 value = AnyValueFactory.empty();
             }
             sb.append("{\"").append(F_KEY).append("\":\"").append(escape(key))

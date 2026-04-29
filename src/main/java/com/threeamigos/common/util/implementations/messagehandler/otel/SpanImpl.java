@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
+import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Event;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
@@ -18,21 +19,16 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Span implementation aligned with OpenTelemetry Trace API semantics.
- *
- * <p>Specification references:
- * <ul>
- *   <li><a href="https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/trace/api.md#span-operations">
- *   OpenTelemetry Trace API: Span operations</a></li>
- *   <li><a href="https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/trace/api.md#record-exception">
- *   OpenTelemetry Trace API: Record Exception</a></li>
- * </ul>
+ * A mutable implementation of a {@link Span}.
  *
  * @author Stefano Reksten
  */
 public final class SpanImpl implements Span {
 
     private static final String EXCEPTION_EVENT_NAME = "exception";
+    private static final String EVENT_ATTRIBUTES_FIELD_NAME = MessageHandlerResourceBundle.get("eventAttributesFieldName");
+    private static final String LINK_ATTRIBUTES_FIELD_NAME = MessageHandlerResourceBundle.get("linkAttributesFieldName");
+    private static final String EXCEPTION_ATTRIBUTES_FIELD_NAME = MessageHandlerResourceBundle.get("exceptionAttributesFieldName");
 
     private final Object lock = new Object();
     private final SpanContext spanContext;
@@ -58,13 +54,13 @@ public final class SpanImpl implements Span {
              final boolean recordingEnabled) {
         this.name = OpenTelemetryAttributeValidator.requireNonBlank(name, "spanName");
         if (spanContext == null) {
-            OpenTelemetryAttributeValidator.handle("spanContext must not be null");
+            OpenTelemetryAttributeValidator.handleBundled("spanContextMustNotBeNull");
             this.spanContext = new SpanContextImpl();
         } else {
             this.spanContext = spanContext;
         }
         if (startTimestamp == null) {
-            OpenTelemetryAttributeValidator.handle("startTimestamp must not be null");
+            OpenTelemetryAttributeValidator.handleBundled("startTimestampMustNotBeNull");
             this.startTimestamp = Instant.now();
         } else {
             this.startTimestamp = startTimestamp;
@@ -88,7 +84,7 @@ public final class SpanImpl implements Span {
         String normalizedKey = OpenTelemetryAttributeValidator.requireNonBlank(key, "attributeKey");
         AnyValue normalizedValue = value;
         if (normalizedValue == null) {
-            OpenTelemetryAttributeValidator.handle("attributeValue must not be null");
+            OpenTelemetryAttributeValidator.handleBundled("attributeValueMustNotBeNull");
             normalizedValue = AnyValueFactory.empty();
         }
         if (!isRecording()) {
@@ -120,11 +116,11 @@ public final class SpanImpl implements Span {
         String normalizedName = OpenTelemetryAttributeValidator.requireNonBlank(name, "eventName");
         Instant effectiveTimestamp = timestamp;
         if (effectiveTimestamp == null) {
-            OpenTelemetryAttributeValidator.handle("eventTimestamp must not be null");
+            OpenTelemetryAttributeValidator.handleBundled("eventTimestampMustNotBeNull");
             effectiveTimestamp = Instant.now();
         }
         List<KeyValue> sanitizedAttributes = OpenTelemetryAttributeValidator.copyAndValidateKeyValues(
-                attributes, "event attributes");
+                attributes, EVENT_ATTRIBUTES_FIELD_NAME);
         synchronized (lock) {
             if (!isRecording()) {
                 return;
@@ -136,7 +132,7 @@ public final class SpanImpl implements Span {
     @Override
     public void addEvent(final Event event) {
         if (event == null) {
-            OpenTelemetryAttributeValidator.handle("event must not be null");
+            OpenTelemetryAttributeValidator.handleBundled("eventMustNotBeNull");
             return;
         }
         addEvent(event.getName(), event.getAttributes(), event.getTimestamp());
@@ -153,11 +149,11 @@ public final class SpanImpl implements Span {
             return;
         }
         if (spanContext == null) {
-            OpenTelemetryAttributeValidator.handle("linkSpanContext must not be null");
+            OpenTelemetryAttributeValidator.handleBundled("linkSpanContextMustNotBeNull");
             return;
         }
         List<KeyValue> sanitizedAttributes = OpenTelemetryAttributeValidator.copyAndValidateKeyValues(
-                attributes, "link attributes");
+                attributes, LINK_ATTRIBUTES_FIELD_NAME);
         synchronized (lock) {
             if (!isRecording()) {
                 return;
@@ -169,7 +165,7 @@ public final class SpanImpl implements Span {
     @Override
     public void addLink(final Link link) {
         if (link == null) {
-            OpenTelemetryAttributeValidator.handle("link must not be null");
+            OpenTelemetryAttributeValidator.handleBundled("linkMustNotBeNull");
             return;
         }
         addLink(link.getSpanContext(), link.getAttributes());
@@ -183,7 +179,7 @@ public final class SpanImpl implements Span {
     @Override
     public void setStatus(final StatusCode statusCode, final String description) {
         if (statusCode == null) {
-            OpenTelemetryAttributeValidator.handle("statusCode must not be null");
+            OpenTelemetryAttributeValidator.handleBundled("statusCodeMustNotBeNull");
             return;
         }
         if (!isRecording()) {
@@ -232,7 +228,7 @@ public final class SpanImpl implements Span {
     public void end(final Instant endTimestamp) {
         Instant effectiveEndTimestamp = endTimestamp;
         if (effectiveEndTimestamp == null) {
-            OpenTelemetryAttributeValidator.handle("endTimestamp must not be null");
+            OpenTelemetryAttributeValidator.handleBundled("endTimestampMustNotBeNull");
             effectiveEndTimestamp = Instant.now();
         }
         synchronized (lock) {
@@ -252,7 +248,7 @@ public final class SpanImpl implements Span {
     @Override
     public void recordException(final Throwable exception, final List<KeyValue> additionalAttributes) {
         if (exception == null) {
-            OpenTelemetryAttributeValidator.handle("exception must not be null");
+            OpenTelemetryAttributeValidator.handleBundled("exceptionMustNotBeNull");
             return;
         }
         if (!isRecording()) {
@@ -271,7 +267,7 @@ public final class SpanImpl implements Span {
                     AnyValueFactory.ofString(stackTrace));
         }
         List<KeyValue> sanitizedAdditional = OpenTelemetryAttributeValidator.copyAndValidateKeyValues(
-                additionalAttributes, "exception attributes");
+                additionalAttributes, EXCEPTION_ATTRIBUTES_FIELD_NAME);
         for (KeyValue additional : sanitizedAdditional) {
             mergedEventAttributes.put(additional.getKey(), additional.getValue());
         }

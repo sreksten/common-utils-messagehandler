@@ -3,10 +3,16 @@ package com.threeamigos.common.util.interfaces.messagehandler.otel;
 import java.util.Collection;
 
 /**
- * TraceState is a part of SpanContext, represented by an immutable list of string key-value pairs and formally defined
- * by the <a href="https://www.w3.org/TR/trace-context/#tracestate-header">W3C Trace Context specification</a>.<br/>
- * TraceState is immutable and provides methods to retrieve, set, update, and delete key-value pairs.
- *
+ * TraceState is an immutable section of SpanContext, represented by a list of string key-value pairs.
+ * <p>
+ * Specification references:
+ * <ul>
+ *   <li><a href="https://opentelemetry.io/docs/specs/otel/trace/api/#tracestate">OpenTelemetry Trace API:
+ *   TraceState</a></li>
+ *   <li><a href="https://www.w3.org/TR/trace-context/#tracestate-header">W3C Trace Context: tracestate</a></li>
+ * </ul>
+ * TraceState provides methods to retrieve, set, update, and delete key-value pairs that will return a new TraceState
+ * instance. It should be prepared at the very beginning of the unit of work.
  *
  * @author Stefano Reksten
  */

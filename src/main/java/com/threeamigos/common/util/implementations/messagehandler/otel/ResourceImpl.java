@@ -13,13 +13,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Immutable implementation of {@link Resource}.
- * <p>
- * Specification references used for this implementation:
- * <ul>
- *     <li><a href="https://opentelemetry.io/docs/specs/otel/resource/sdk/">OpenTelemetry Resource SDK</a></li>
- *     <li><a href="https://opentelemetry.io/docs/specs/otel/resource/data-model/">OpenTelemetry Resource Data Model</a></li>
- * </ul>
+ * An immutable implementation of a {@link Resource}.
  * <p>
  * All fields are set at construction time.
  *
@@ -150,7 +144,7 @@ final class ResourceImpl implements Resource {
     private static boolean hasAnyEntityKeyConflict(final Entity entity, final Set<String> usedKeys) {
         for (KeyValue kv : safeEntityValues(entity, true)) {
             if (kv == null || kv.getKey() == null) {
-                OpenTelemetryAttributeValidator.handle("Entity id contains null key/value entry.");
+                OpenTelemetryAttributeValidator.handleBundled("entityIdContainsNullKeyValueEntry");
                 continue;
             }
             if (usedKeys.contains(kv.getKey())) {
@@ -159,7 +153,7 @@ final class ResourceImpl implements Resource {
         }
         for (KeyValue kv : safeEntityValues(entity, false)) {
             if (kv == null || kv.getKey() == null) {
-                OpenTelemetryAttributeValidator.handle("Entity description contains null key/value entry.");
+                OpenTelemetryAttributeValidator.handleBundled("entityDescriptionContainsNullKeyValueEntry");
                 continue;
             }
             if (usedKeys.contains(kv.getKey())) {
@@ -191,14 +185,14 @@ final class ResourceImpl implements Resource {
     private static void collectEntityKeys(final Entity entity, final Set<String> target) {
         for (KeyValue kv : safeEntityValues(entity, true)) {
             if (kv == null || kv.getKey() == null) {
-                OpenTelemetryAttributeValidator.handle("Entity id contains null key/value entry.");
+                OpenTelemetryAttributeValidator.handleBundled("entityIdContainsNullKeyValueEntry");
                 continue;
             }
             target.add(kv.getKey());
         }
         for (KeyValue kv : safeEntityValues(entity, false)) {
             if (kv == null || kv.getKey() == null) {
-                OpenTelemetryAttributeValidator.handle("Entity description contains null key/value entry.");
+                OpenTelemetryAttributeValidator.handleBundled("entityDescriptionContainsNullKeyValueEntry");
                 continue;
             }
             target.add(kv.getKey());
@@ -257,13 +251,16 @@ final class ResourceImpl implements Resource {
 
     private static List<KeyValue> safeEntityValues(final Entity entity, final boolean idValues) {
         if (entity == null) {
-            OpenTelemetryAttributeValidator.handle("Resource contains a null Entity.");
+            OpenTelemetryAttributeValidator.handleBundled("resourceContainsNullEntity");
             return Collections.emptyList();
         }
         List<KeyValue> values = idValues ? entity.getId() : entity.getDescription();
         if (values == null) {
-            OpenTelemetryAttributeValidator.handle("Entity contains null " + (idValues ? "id" : "description")
-                    + " key-value list.");
+            OpenTelemetryAttributeValidator.handle(MessageHandlerResourceBundle.format(
+                    "entityContainsNullKeyValueList",
+                    idValues
+                            ? MessageHandlerResourceBundle.get("entityIdValuesLabel")
+                            : MessageHandlerResourceBundle.get("entityDescriptionValuesLabel")));
             return Collections.emptyList();
         }
         return values;

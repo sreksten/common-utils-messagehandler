@@ -1,6 +1,5 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
-import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Context;
 
@@ -10,25 +9,13 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
- * Immutable {@link Context} implementation.
- * <p>
- * Current-context state is tracked per-thread via {@link ThreadLocal}.
- * Attach/detach follows strict LIFO semantics and returns a boolean signal on invalid detach attempts
- * instead of throwing, matching OpenTelemetry Context expectations.
- * <p>
- * Specification references:
- * <a href="https://opentelemetry.io/docs/specs/otel/context/">OpenTelemetry Context</a>,
- * <a href="https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/context/README.md">OpenTelemetry Context Specification</a>.
- * <p>
+ * An immutable implementation of a {@link Context}.
+ *
  * @author Stefano Reksten
  */
 public class ContextImpl implements Context {
-
-    private static final Logger LOGGER = Logger.getLogger(ContextImpl.class.getName());
 
     private static final Context ROOT = new ContextImpl(Collections.emptyMap());
 
@@ -57,9 +44,9 @@ public class ContextImpl implements Context {
     public Key createKey(final String name) {
         if (name == null || name.trim().isEmpty()) {
             logWarning("nullContextKeyNameProvided");
-            return new Key(UUID.randomUUID().toString());
+            return new KeyImpl(UUID.randomUUID().toString());
         }
-        return new Key(name);
+        return new KeyImpl(name);
     }
 
     @Override
@@ -113,7 +100,7 @@ public class ContextImpl implements Context {
         Deque<Holder> currentStack = STACK.get();
         Holder last = currentStack.peek();
         if (last == null || !last.token.equals(token)) {
-            LOGGER.log(Level.WARNING, "Invalid context detach token or non-LIFO detach attempt.");
+            logWarning("invalidContextDetachTokenOrNonLifoDetachAttempt");
             if (currentStack.isEmpty()) {
                 STACK.remove();
             }
@@ -131,13 +118,7 @@ public class ContextImpl implements Context {
     }
 
     private static void logWarning(final String bundleKey) {
-        String message;
-        try {
-            message = MessageHandlerResourceBundle.get(bundleKey);
-        } catch (Exception ex) {
-            message = bundleKey;
-        }
-        LOGGER.log(Level.WARNING, message);
+        OpenTelemetryAttributeValidator.reportBundled(bundleKey);
     }
 
     private static final class Holder {
@@ -147,6 +128,18 @@ public class ContextImpl implements Context {
         private Holder(final String token, final Context context) {
             this.token = token;
             this.context = context;
+        }
+    }
+
+    static final class KeyImpl implements Key {
+        private final String name;
+
+        KeyImpl(final String name) {
+            this.name = name;
+        }
+
+        public String getName() {
+            return name;
         }
     }
 }
