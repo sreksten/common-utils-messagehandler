@@ -72,19 +72,21 @@ class InstrumentationScopeImplUnitTest {
     }
 
     @Test
-    @DisplayName("constructor should reject duplicate keys")
-    void constructorShouldRejectDuplicateKeys() {
+    @DisplayName("constructor should skip duplicate keys")
+    void constructorShouldSkipDuplicateKeys() {
         List<KeyValue> attrs = Arrays.asList(
                 new KeyValueImpl("k", AnyValueFactory.ofString("v1")),
                 new KeyValueImpl("k", AnyValueFactory.ofString("v2"))
         );
-        assertThrows(IllegalArgumentException.class, () ->
-                new InstrumentationScopeImpl(null, null, null, attrs));
+        InstrumentationScopeImpl scope = new InstrumentationScopeImpl(null, null, null, attrs);
+        assertEquals(1, scope.getAttributes().size());
+        assertEquals("k", scope.getAttributes().get(0).getKey());
+        assertEquals("v1", scope.getAttributes().get(0).getValue().asString());
     }
 
     @Test
-    @DisplayName("constructor should reject invalid key/value entries")
-    void constructorShouldRejectInvalidEntries() {
+    @DisplayName("constructor should skip invalid entries and normalize null values")
+    void constructorShouldSkipInvalidEntries() {
         KeyValue emptyKey = new KeyValue() {
             @Override
             public String getKey() {
@@ -108,10 +110,11 @@ class InstrumentationScopeImplUnitTest {
             }
         };
 
-        assertThrows(IllegalArgumentException.class, () ->
-                new InstrumentationScopeImpl(null, null, null, Collections.singletonList(emptyKey)));
-        assertThrows(NullPointerException.class, () ->
-                new InstrumentationScopeImpl(null, null, null, Collections.singletonList(nullValue)));
+        InstrumentationScopeImpl scope = new InstrumentationScopeImpl(
+                null, null, null, Arrays.asList(emptyKey, nullValue, null));
+        assertEquals(1, scope.getAttributes().size());
+        assertEquals("k", scope.getAttributes().get(0).getKey());
+        assertEquals(AnyValue.Type.EMPTY, scope.getAttributes().get(0).getValue().getType());
     }
 
     @Test

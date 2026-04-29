@@ -167,15 +167,18 @@ class LogRecordImplUnitTest {
     }
 
     @Test
-    @DisplayName("setAttributes() should reject duplicate keys and invalid entries")
-    void setAttributesShouldRejectDuplicateKeysAndInvalidEntries() {
+    @DisplayName("setAttributes() should skip duplicate keys and invalid entries")
+    void setAttributesShouldSkipDuplicateKeysAndInvalidEntries() {
         LogRecordImpl record = new LogRecordImpl();
 
         List<KeyValue> duplicates = Arrays.asList(
                 new KeyValueImpl("dup", AnyValueFactory.ofString("v1")),
                 new KeyValueImpl("dup", AnyValueFactory.ofString("v2"))
         );
-        assertThrows(IllegalArgumentException.class, () -> record.setAttributes(duplicates));
+        record.setAttributes(duplicates);
+        assertEquals(1, record.getAttributes().size());
+        assertEquals("dup", record.getAttributes().get(0).getKey());
+        assertEquals("v1", record.getAttributes().get(0).getValue().asString());
 
         KeyValue invalid = new KeyValue() {
             @Override
@@ -188,8 +191,10 @@ class LogRecordImplUnitTest {
                 return null;
             }
         };
-        assertThrows(NullPointerException.class, () -> record.setAttributes(Collections.singletonList(invalid)));
-        assertThrows(NullPointerException.class, () -> record.setAttributes(Collections.singletonList(null)));
+        record.setAttributes(Arrays.asList(invalid, null));
+        assertEquals(1, record.getAttributes().size());
+        assertEquals("k", record.getAttributes().get(0).getKey());
+        assertEquals(AnyValue.Type.EMPTY, record.getAttributes().get(0).getValue().getType());
     }
 
     @Test

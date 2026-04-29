@@ -31,8 +31,8 @@ final class InstrumentationScopeImpl implements InstrumentationScope {
         OpenTelemetryAttributeValidator.ValidationResult validationResult =
                 OpenTelemetryAttributeValidator.copyValidateAndLimitKeyValues(
                         attributes,
-                        MessageHandlerResourceBundle.get("scopeAttributesFieldName"),
-                        OpenTelemetryAttributeValidator.DEFAULT_ATTRIBUTE_COUNT_LIMIT);
+                        MessageHandlerResourceBundle.get("scopeAttributesFieldName")
+                );
         this.name = name;
         this.version = version;
         this.schemaUrl = schemaUrl;

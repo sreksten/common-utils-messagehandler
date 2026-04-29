@@ -6,14 +6,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -34,16 +32,28 @@ class AnyValueFactoryUnitTest {
     }
 
     @Test
-    @DisplayName("all typed accessors should throw when AnyValue is EMPTY")
-    void typedAccessorsShouldThrowWhenEmpty() {
+    @DisplayName("all typed accessors should return defaults when AnyValue is EMPTY")
+    void typedAccessorsShouldReturnDefaultsWhenEmpty() {
         AnyValue empty = AnyValueFactory.empty();
-        assertThrows(IllegalStateException.class, empty::asString);
-        assertThrows(IllegalStateException.class, empty::asBoolean);
-        assertThrows(IllegalStateException.class, empty::asLong);
-        assertThrows(IllegalStateException.class, empty::asDouble);
-        assertThrows(IllegalStateException.class, empty::asArray);
-        assertThrows(IllegalStateException.class, empty::asKvList);
-        assertThrows(IllegalStateException.class, empty::asBytes);
+        assertEquals("", empty.asString());
+        assertFalse(empty.asBoolean());
+        assertEquals(0L, empty.asLong());
+        assertEquals(0.0d, empty.asDouble(), 0.0d);
+        assertTrue(empty.asArray().isEmpty());
+        assertTrue(empty.asKvList().isEmpty());
+        assertArrayEquals(new byte[0], empty.asBytes());
+    }
+
+    @Test
+    @DisplayName("typed accessors should return defaults on type mismatch")
+    void typedAccessorsShouldReturnDefaultsOnTypeMismatch() {
+        AnyValue stringValue = AnyValueFactory.ofString("abc");
+        assertFalse(stringValue.asBoolean());
+        assertEquals(0L, stringValue.asLong());
+        assertEquals(0.0d, stringValue.asDouble(), 0.0d);
+        assertTrue(stringValue.asArray().isEmpty());
+        assertTrue(stringValue.asKvList().isEmpty());
+        assertArrayEquals(new byte[0], stringValue.asBytes());
     }
 
     @Test
@@ -57,7 +67,8 @@ class AnyValueFactoryUnitTest {
     @Test
     @DisplayName("ofString() should reject null")
     void ofStringShouldRejectNull() {
-        assertThrows(NullPointerException.class, () -> AnyValueFactory.ofString(null));
+        AnyValue value = AnyValueFactory.ofString(null);
+        assertSame(AnyValueFactory.empty(), value);
     }
 
     @Test
@@ -114,7 +125,7 @@ class AnyValueFactoryUnitTest {
     @Test
     @DisplayName("ofArray() should reject null list and preserve null elements as EMPTY")
     void ofArrayShouldRejectNullListAndPreserveNullElementsAsEmpty() {
-        assertThrows(NullPointerException.class, () -> AnyValueFactory.ofArray(null));
+        assertSame(AnyValueFactory.empty(), AnyValueFactory.ofArray(null));
         AnyValue value = AnyValueFactory.ofArray(Arrays.asList(AnyValueFactory.ofString("x"), null));
         assertEquals(AnyValue.Type.ARRAY, value.getType());
         assertEquals(2, value.asArray().size());
@@ -140,14 +151,34 @@ class AnyValueFactoryUnitTest {
     }
 
     @Test
-    @DisplayName("ofKvList() should reject null input, duplicates and invalid elements")
-    void ofKvListShouldRejectInvalidInputs() {
-        assertThrows(NullPointerException.class, () -> AnyValueFactory.ofKvList(null));
-        assertThrows(NullPointerException.class, () -> AnyValueFactory.ofKvList(Arrays.asList(new KeyValueImpl("k", AnyValueFactory.ofString("v")), null)));
-        assertThrows(IllegalArgumentException.class, () -> AnyValueFactory.ofKvList(Arrays.asList(
+    @DisplayName("ofKvList() should skip invalid entries and duplicate keys")
+    void ofKvListShouldSkipInvalidEntriesAndDuplicateKeys() {
+        assertSame(AnyValueFactory.empty(), AnyValueFactory.ofKvList(null));
+
+        KeyValue nullKey = new KeyValue() {
+            @Override
+            public String getKey() {
+                return null;
+            }
+
+            @Override
+            public AnyValue getValue() {
+                return AnyValueFactory.ofString("ignored");
+            }
+        };
+        AnyValue value = AnyValueFactory.ofKvList(Arrays.asList(
+                new KeyValueImpl("k", AnyValueFactory.ofString("v")),
+                null,
+                nullKey,
                 new KeyValueImpl("dup", AnyValueFactory.ofString("v1")),
                 new KeyValueImpl("dup", AnyValueFactory.ofString("v2"))
-        )));
+        ));
+
+        assertEquals(AnyValue.Type.KVLIST, value.getType());
+        assertEquals(2, value.asKvList().size());
+        assertEquals("k", value.asKvList().get(0).getKey());
+        assertEquals("dup", value.asKvList().get(1).getKey());
+        assertEquals("v1", value.asKvList().get(1).getValue().asString());
     }
 
     @Test
@@ -205,6 +236,6 @@ class AnyValueFactoryUnitTest {
     @Test
     @DisplayName("ofBytes() should reject null input")
     void ofBytesShouldRejectNull() {
-        assertThrows(NullPointerException.class, () -> AnyValueFactory.ofBytes(null));
+        assertSame(AnyValueFactory.empty(), AnyValueFactory.ofBytes(null));
     }
 }

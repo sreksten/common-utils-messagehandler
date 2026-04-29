@@ -6,9 +6,9 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("InstrumentationScopeBuilder unit tests")
@@ -44,16 +44,20 @@ class InstrumentationScopeBuilderFactoryUnitTest {
     }
 
     @Test
-    @DisplayName("with... methods should reject null or blank values")
-    void withMethodsShouldRejectNullOrBlankValues() {
-        InstrumentationScopeBuilderImpl builder = new InstrumentationScopeBuilderImpl();
-        assertThrows(NullPointerException.class, () -> builder.withName(null));
-        assertThrows(IllegalArgumentException.class, () -> builder.withName("   "));
+    @DisplayName("with... methods should normalize null or blank values")
+    void withMethodsShouldNormalizeNullOrBlankValues() {
+        InstrumentationScopeBuilderImpl nulls = new InstrumentationScopeBuilderImpl();
+        assertDoesNotThrow(() -> nulls.withName(null).withVersion(null).withScopeUrl(null));
+        InstrumentationScope nullsScope = nulls.build();
+        assertEquals("unknown", nullsScope.getName());
+        assertEquals("unknown", nullsScope.getVersion());
+        assertEquals("unknown", nullsScope.getSchemaUrl());
 
-        assertThrows(NullPointerException.class, () -> builder.withName("scope").withVersion(null));
-        assertThrows(IllegalArgumentException.class, () -> builder.withName("scope").withVersion(""));
-
-        assertThrows(NullPointerException.class, () -> builder.withName("scope").withScopeUrl(null));
-        assertThrows(IllegalArgumentException.class, () -> builder.withName("scope").withScopeUrl(" "));
+        InstrumentationScopeBuilderImpl blanks = new InstrumentationScopeBuilderImpl();
+        assertDoesNotThrow(() -> blanks.withName(" ").withVersion("  ").withScopeUrl(" "));
+        InstrumentationScope blanksScope = blanks.build();
+        assertEquals("unknown", blanksScope.getName());
+        assertEquals("unknown", blanksScope.getVersion());
+        assertEquals("unknown", blanksScope.getSchemaUrl());
     }
 }

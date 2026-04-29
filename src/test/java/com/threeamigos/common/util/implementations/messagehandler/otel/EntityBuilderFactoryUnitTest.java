@@ -16,9 +16,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("EntityBuilderFactory unit tests")
@@ -219,14 +219,27 @@ class EntityBuilderFactoryUnitTest {
     }
 
     @Test
-    @DisplayName("builder should reject null or blank type and schemaUrl")
-    void builderShouldRejectNullOrBlankTypeAndSchemaUrl() {
-        EntityBuilderImpl builder = new EntityBuilderImpl();
-        assertThrows(NullPointerException.class, () -> builder.withType(null));
-        assertThrows(IllegalArgumentException.class, () -> builder.withType("   "));
+    @DisplayName("builder should normalize null or blank type and schemaUrl")
+    void builderShouldNormalizeNullOrBlankTypeAndSchemaUrl() {
+        EntityBuilderImpl nullTypeBuilder = new EntityBuilderImpl();
+        assertDoesNotThrow(() -> nullTypeBuilder.withType(null));
+        Entity nullTypeEntity = nullTypeBuilder.withId(Collections.emptyList()).build();
+        assertEquals("unknown", nullTypeEntity.getType());
 
-        assertThrows(NullPointerException.class, () -> builder.withType("custom.entity").withSchemaUrl(null));
-        assertThrows(IllegalArgumentException.class, () -> builder.withType("custom.entity").withSchemaUrl(""));
+        EntityBuilderImpl blankTypeBuilder = new EntityBuilderImpl();
+        assertDoesNotThrow(() -> blankTypeBuilder.withType("   "));
+        Entity blankTypeEntity = blankTypeBuilder.withId(Collections.emptyList()).build();
+        assertEquals("unknown", blankTypeEntity.getType());
+
+        EntityBuilderImpl nullSchemaBuilder = new EntityBuilderImpl();
+        assertDoesNotThrow(() -> nullSchemaBuilder.withType("custom.entity").withSchemaUrl(null));
+        Entity nullSchemaEntity = nullSchemaBuilder.withIdString("id", "value").build();
+        assertEquals("unknown", nullSchemaEntity.getSchemaUrl());
+
+        EntityBuilderImpl blankSchemaBuilder = new EntityBuilderImpl();
+        assertDoesNotThrow(() -> blankSchemaBuilder.withType("custom.entity").withSchemaUrl(""));
+        Entity blankSchemaEntity = blankSchemaBuilder.withIdString("id", "value").build();
+        assertEquals("unknown", blankSchemaEntity.getSchemaUrl());
     }
 
     private static void assertEntity(final String expectedType,

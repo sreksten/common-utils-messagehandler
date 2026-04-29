@@ -1,12 +1,16 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
-import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import sun.misc.Unsafe;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -14,14 +18,69 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("OpenTelemetryAttributeValidator unit tests")
 @Tag("unit")
 @Tag("messageHandler")
 class OpenTelemetryAttributeValidatorUnitTest {
+
+    private static final Field LENIENT_FIELD;
+    private static final Unsafe UNSAFE;
+    private static final Object LENIENT_BASE;
+    private static final long LENIENT_OFFSET;
+    private static final boolean ORIGINAL_LENIENT;
+
+    static {
+        try {
+            LENIENT_FIELD = OpenTelemetryAttributeValidator.class.getDeclaredField("lenient");
+            LENIENT_FIELD.setAccessible(true);
+
+            Field unsafeField = Unsafe.class.getDeclaredField("theUnsafe");
+            unsafeField.setAccessible(true);
+            UNSAFE = (Unsafe) unsafeField.get(null);
+
+            LENIENT_BASE = UNSAFE.staticFieldBase(LENIENT_FIELD);
+            LENIENT_OFFSET = UNSAFE.staticFieldOffset(LENIENT_FIELD);
+            ORIGINAL_LENIENT = LENIENT_FIELD.getBoolean(null);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @BeforeEach
+    void enforceLenientModeForValidationTests() {
+        setLenient(true);
+    }
+
+    @AfterEach
+    void restoreLenientMode() {
+        setLenient(ORIGINAL_LENIENT);
+    }
+
+    @Test
+    @DisplayName("requireNonBlank should return value when valid")
+    void requireNonBlankShouldReturnValueWhenValid() {
+        assertEquals("checkout", OpenTelemetryAttributeValidator.requireNonBlank("checkout", "service.name"));
+    }
+
+    @Test
+    @DisplayName("requireNonBlank should normalize null and blank to unknown")
+    void requireNonBlankShouldNormalizeNullAndBlank() {
+        assertEquals("unknown", OpenTelemetryAttributeValidator.requireNonBlank(null, "service.name"));
+        assertEquals("unknown", OpenTelemetryAttributeValidator.requireNonBlank("   ", "service.name"));
+    }
+
+    @Test
+    @DisplayName("constructor should be private and instantiable via reflection for coverage")
+    void constructorShouldBePrivateUtilityGuard() throws Exception {
+        Constructor<OpenTelemetryAttributeValidator> constructor = OpenTelemetryAttributeValidator.class.getDeclaredConstructor();
+        constructor.setAccessible(true);
+        OpenTelemetryAttributeValidator instance = constructor.newInstance();
+        assertNotNull(instance);
+    }
 
     @Test
     @DisplayName("copyAndValidateKeyValues() should return empty list for null input")
@@ -46,20 +105,17 @@ class OpenTelemetryAttributeValidatorUnitTest {
     }
 
     @Test
-    @DisplayName("copyAndValidateKeyValues() should reject null elements")
-    void copyAndValidateKeyValuesShouldRejectNullElements() {
+    @DisplayName("copyAndValidateKeyValues() should skip null elements")
+    void copyAndValidateKeyValuesShouldSkipNullElements() {
         List<KeyValue> source = Arrays.asList(new KeyValueImpl("k1", AnyValueFactory.ofString("v1")), null);
-        NullPointerException ex = assertThrows(
-                NullPointerException.class,
-                () -> OpenTelemetryAttributeValidator.copyAndValidateKeyValues(source, "attrs"));
-        assertEquals(
-                MessageHandlerResourceBundle.format("fieldContainsNullElementAtIndex", "attrs", 1),
-                ex.getMessage());
+        List<KeyValue> copy = OpenTelemetryAttributeValidator.copyAndValidateKeyValues(source, "attrs");
+        assertEquals(1, copy.size());
+        assertEquals("k1", copy.get(0).getKey());
     }
 
     @Test
-    @DisplayName("copyAndValidateKeyValues() should reject null keys")
-    void copyAndValidateKeyValuesShouldRejectNullKeys() {
+    @DisplayName("copyAndValidateKeyValues() should skip null keys")
+    void copyAndValidateKeyValuesShouldSkipNullKeys() {
         KeyValue invalid = new KeyValue() {
             @Override
             public String getKey() {
@@ -72,17 +128,13 @@ class OpenTelemetryAttributeValidatorUnitTest {
             }
         };
 
-        NullPointerException ex = assertThrows(
-                NullPointerException.class,
-                () -> OpenTelemetryAttributeValidator.copyAndValidateKeyValues(Collections.singletonList(invalid), "attrs"));
-        assertEquals(
-                MessageHandlerResourceBundle.format("fieldKeyMustNotBeNullAtIndex", "attrs", 0),
-                ex.getMessage());
+        List<KeyValue> copy = OpenTelemetryAttributeValidator.copyAndValidateKeyValues(Collections.singletonList(invalid), "attrs");
+        assertTrue(copy.isEmpty());
     }
 
     @Test
-    @DisplayName("copyAndValidateKeyValues() should reject empty keys")
-    void copyAndValidateKeyValuesShouldRejectEmptyKeys() {
+    @DisplayName("copyAndValidateKeyValues() should skip empty keys")
+    void copyAndValidateKeyValuesShouldSkipEmptyKeys() {
         KeyValue invalid = new KeyValue() {
             @Override
             public String getKey() {
@@ -95,17 +147,13 @@ class OpenTelemetryAttributeValidatorUnitTest {
             }
         };
 
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
-                () -> OpenTelemetryAttributeValidator.copyAndValidateKeyValues(Collections.singletonList(invalid), "attrs"));
-        assertEquals(
-                MessageHandlerResourceBundle.format("fieldKeyMustNotBeEmptyAtIndex", "attrs", 0),
-                ex.getMessage());
+        List<KeyValue> copy = OpenTelemetryAttributeValidator.copyAndValidateKeyValues(Collections.singletonList(invalid), "attrs");
+        assertTrue(copy.isEmpty());
     }
 
     @Test
-    @DisplayName("copyAndValidateKeyValues() should reject null values")
-    void copyAndValidateKeyValuesShouldRejectNullValues() {
+    @DisplayName("copyAndValidateKeyValues() should normalize null values to AnyValue.EMPTY")
+    void copyAndValidateKeyValuesShouldNormalizeNullValues() {
         KeyValue invalid = new KeyValue() {
             @Override
             public String getKey() {
@@ -118,27 +166,23 @@ class OpenTelemetryAttributeValidatorUnitTest {
             }
         };
 
-        NullPointerException ex = assertThrows(
-                NullPointerException.class,
-                () -> OpenTelemetryAttributeValidator.copyAndValidateKeyValues(Collections.singletonList(invalid), "attrs"));
-        assertEquals(
-                MessageHandlerResourceBundle.format("fieldValueMustNotBeNullAtIndex", "attrs", 0),
-                ex.getMessage());
+        List<KeyValue> copy = OpenTelemetryAttributeValidator.copyAndValidateKeyValues(Collections.singletonList(invalid), "attrs");
+        assertEquals(1, copy.size());
+        assertEquals("k", copy.get(0).getKey());
+        assertEquals(AnyValue.Type.EMPTY, copy.get(0).getValue().getType());
     }
 
     @Test
-    @DisplayName("copyAndValidateKeyValues() should reject duplicate keys")
-    void copyAndValidateKeyValuesShouldRejectDuplicateKeys() {
+    @DisplayName("copyAndValidateKeyValues() should skip duplicate keys")
+    void copyAndValidateKeyValuesShouldSkipDuplicateKeys() {
         List<KeyValue> source = Arrays.asList(
                 new KeyValueImpl("dup", AnyValueFactory.ofString("v1")),
                 new KeyValueImpl("dup", AnyValueFactory.ofString("v2"))
         );
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
-                () -> OpenTelemetryAttributeValidator.copyAndValidateKeyValues(source, "attrs"));
-        assertEquals(
-                MessageHandlerResourceBundle.format("fieldContainsDuplicateKey", "attrs", "dup"),
-                ex.getMessage());
+        List<KeyValue> copy = OpenTelemetryAttributeValidator.copyAndValidateKeyValues(source, "attrs");
+        assertEquals(1, copy.size());
+        assertEquals("dup", copy.get(0).getKey());
+        assertEquals("v1", copy.get(0).getValue().asString());
     }
 
     @Test
@@ -148,5 +192,9 @@ class OpenTelemetryAttributeValidatorUnitTest {
                 new KeyValueImpl("a", AnyValueFactory.ofString("1")),
                 new KeyValueImpl("b", AnyValueFactory.ofLong(2))
         ), "attrs"));
+    }
+
+    private static void setLenient(final boolean value) {
+        UNSAFE.putBoolean(LENIENT_BASE, LENIENT_OFFSET, value);
     }
 }

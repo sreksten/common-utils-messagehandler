@@ -9,8 +9,9 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.Collections;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 @DisplayName("KeyValueBuilderImpl unit tests")
 @Tag("unit")
@@ -36,10 +37,13 @@ class KeyValueBuilderImplUnitTest {
     }
 
     @Test
-    @DisplayName("withString should reject null values")
-    void withStringShouldRejectNullValues() {
+    @DisplayName("withString should map null values to AnyValue.EMPTY")
+    void withStringShouldMapNullValuesToEmpty() {
         KeyValueBuilderImpl builder = new KeyValueBuilderImpl();
-        assertThrows(NullPointerException.class, () -> builder.withString("s", null));
-        assertThrows(NullPointerException.class, () -> builder.withString(OTelTags.SERVICE_NAME, null));
+        assertDoesNotThrow(() -> builder.withString("s", null));
+        assertDoesNotThrow(() -> builder.withString(OTelTags.SERVICE_NAME, null));
+        assertEquals(2, builder.attributes.size());
+        assertEquals(AnyValue.Type.EMPTY, builder.attributes.get(0).getValue().getType());
+        assertEquals(AnyValue.Type.EMPTY, builder.attributes.get(1).getValue().getType());
     }
 }

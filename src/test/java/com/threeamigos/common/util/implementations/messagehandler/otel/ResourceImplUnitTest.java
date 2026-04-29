@@ -250,18 +250,21 @@ class ResourceFactoryUnitTest {
     }
 
     @Test
-    @DisplayName("create() should reject duplicate keys")
-    void createShouldRejectDuplicateKeys() {
+    @DisplayName("create() should skip duplicate keys")
+    void createShouldSkipDuplicateKeys() {
         List<KeyValue> attrs = Arrays.asList(
                 new KeyValueImpl("k", AnyValueFactory.ofString("v1")),
                 new KeyValueImpl("k", AnyValueFactory.ofString("v2"))
         );
-        assertThrows(IllegalArgumentException.class, () -> ResourceFactory.create(null, null, attrs));
+        Resource resource = ResourceFactory.create(null, null, attrs);
+        assertEquals(1, resource.getAttributes().size());
+        assertEquals("k", resource.getAttributes().get(0).getKey());
+        assertEquals("v1", resource.getAttributes().get(0).getValue().asString());
     }
 
     @Test
-    @DisplayName("create() should reject invalid key/value entries")
-    void createShouldRejectInvalidEntries() {
+    @DisplayName("create() should skip invalid key/value entries and normalize null values")
+    void createShouldSkipInvalidEntries() {
         KeyValue nullKey = new KeyValue() {
             @Override
             public String getKey() {
@@ -285,9 +288,10 @@ class ResourceFactoryUnitTest {
             }
         };
 
-        assertThrows(NullPointerException.class, () -> ResourceFactory.create(null, null, Collections.singletonList(null)));
-        assertThrows(NullPointerException.class, () -> ResourceFactory.create(null, null, Collections.singletonList(nullKey)));
-        assertThrows(NullPointerException.class, () -> ResourceFactory.create(null, null, Collections.singletonList(nullValue)));
+        Resource resource = ResourceFactory.create(null, null, Arrays.asList(null, nullKey, nullValue));
+        assertEquals(1, resource.getAttributes().size());
+        assertEquals("k", resource.getAttributes().get(0).getKey());
+        assertEquals(AnyValue.Type.EMPTY, resource.getAttributes().get(0).getValue().getType());
     }
 
     @Test

@@ -31,7 +31,7 @@ class ResourceBuilderImpl extends KeyValueBuilderImpl implements ResourceBuilder
     private final List<Entity> entities = new ArrayList<>();
 
     public ResourceBuilderStepServiceNamespace withServiceName(String serviceName) {
-        overridingAttributes.put(OTelTags.SERVICE_NAME.getValue(), BuilderValidationUtils.requireNonBlank(
+        overridingAttributes.put(OTelTags.SERVICE_NAME.getValue(), OpenTelemetryAttributeValidator.requireNonBlank(
                 serviceName,
                 OTelTags.SERVICE_NAME.getValue()));
         return this;
@@ -39,7 +39,7 @@ class ResourceBuilderImpl extends KeyValueBuilderImpl implements ResourceBuilder
 
     @Override
     public ResourceBuilderStepServiceVersion withServiceNamespace(String serviceNamespace) {
-        overridingAttributes.put(OTelTags.SERVICE_NAMESPACE.getValue(), BuilderValidationUtils.requireNonBlank(
+        overridingAttributes.put(OTelTags.SERVICE_NAMESPACE.getValue(), OpenTelemetryAttributeValidator.requireNonBlank(
                 serviceNamespace,
                 OTelTags.SERVICE_NAMESPACE.getValue()));
         return this;
@@ -52,7 +52,7 @@ class ResourceBuilderImpl extends KeyValueBuilderImpl implements ResourceBuilder
 
     @Override
     public ResourceBuilderStepServiceInstanceId withServiceVersion(String serviceVersion) {
-        overridingAttributes.put(OTelTags.SERVICE_VERSION.getValue(), BuilderValidationUtils.requireNonBlank(
+        overridingAttributes.put(OTelTags.SERVICE_VERSION.getValue(), OpenTelemetryAttributeValidator.requireNonBlank(
                 serviceVersion,
                 OTelTags.SERVICE_VERSION.getValue()));
         return this;
@@ -65,7 +65,7 @@ class ResourceBuilderImpl extends KeyValueBuilderImpl implements ResourceBuilder
 
     @Override
     public ResourceBuilderStepDeploymentEnvironmentName withServiceInstanceId(String serviceInstanceId) {
-        overridingAttributes.put(OTelTags.SERVICE_INSTANCE_ID.getValue(), BuilderValidationUtils.requireNonBlank(
+        overridingAttributes.put(OTelTags.SERVICE_INSTANCE_ID.getValue(), OpenTelemetryAttributeValidator.requireNonBlank(
                 serviceInstanceId,
                 OTelTags.SERVICE_INSTANCE_ID.getValue()));
         return this;
@@ -78,7 +78,7 @@ class ResourceBuilderImpl extends KeyValueBuilderImpl implements ResourceBuilder
 
     @Override
     public ResourceBuilderStepSchemaUrl withDeploymentEnvironmentName(String deploymentEnvironmentName) {
-        overridingAttributes.put(OTelTags.DEPLOYMENT_ENVIRONMENT_NAME.getValue(), BuilderValidationUtils.requireNonBlank(
+        overridingAttributes.put(OTelTags.DEPLOYMENT_ENVIRONMENT_NAME.getValue(), OpenTelemetryAttributeValidator.requireNonBlank(
                 deploymentEnvironmentName,
                 OTelTags.DEPLOYMENT_ENVIRONMENT_NAME.getValue()));
         return this;
@@ -91,7 +91,7 @@ class ResourceBuilderImpl extends KeyValueBuilderImpl implements ResourceBuilder
 
     @Override
     public ResourceBuilderStepEntity withSchemaUrl(String schemaUrl) {
-        this.schemaUrl = BuilderValidationUtils.requireNonBlank(schemaUrl, "schemaUrl");
+        this.schemaUrl = OpenTelemetryAttributeValidator.requireNonBlank(schemaUrl, "schemaUrl");
         return this;
     }
 

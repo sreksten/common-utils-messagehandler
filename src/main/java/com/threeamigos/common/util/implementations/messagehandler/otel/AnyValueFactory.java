@@ -3,16 +3,19 @@ package com.threeamigos.common.util.implementations.messagehandler.otel;
 import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
+import jakarta.annotation.Nonnull;
+import jakarta.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 
 /**
- * Utility factory for creating {@link AnyValue} values.
+ * Utility factory for creating {@link AnyValue} values. If an invalid value is provided, and we are running in lenient
+ * mode, default (empty) values are used in order not to have a crash in a production environment due to the logging
+ * system. Otherwise, an exception is thrown. See also {@link OpenTelemetryAttributeValidator}.
  *
  * @author Stefano Reksten
  */
@@ -27,12 +30,20 @@ public final class AnyValueFactory {
         return EMPTY_VALUE;
     }
 
-    public static AnyValue ofString(final String value) {
-        Objects.requireNonNull(value, MessageHandlerResourceBundle.get("valueMustNotBeNull"));
+    /**
+     * If a null value is passed, an empty value is returned if in lenient mode. Otherwise, an exception is thrown.
+     * @param value the value to use
+     * @return an AnyValue instance
+     */
+    public static AnyValue ofString(final @Nonnull String value) {
+        if (value == null) {
+            OpenTelemetryAttributeValidator.handleBundled("valueMustNotBeNull");
+            return EMPTY_VALUE;
+        }
         return new AnyValueImpl(AnyValue.Type.STRING, value, false, 0L, 0.0, null, null, null);
     }
 
-    public static AnyValue ofNullableString(final String value) {
+    public static AnyValue ofNullableString(final @Nullable String value) {
         return value == null ? EMPTY_VALUE : ofString(value);
     }
 
@@ -48,49 +59,79 @@ public final class AnyValueFactory {
         return new AnyValueImpl(AnyValue.Type.DOUBLE, null, false, 0L, value, null, null, null);
     }
 
-    public static AnyValue ofArray(final List<AnyValue> value) {
-        Objects.requireNonNull(value, MessageHandlerResourceBundle.get("valueMustNotBeNull"));
+    /**
+     * If a null value is passed, an empty value is returned if in lenient mode. Otherwise, an exception is thrown.
+     * @param value the value to use
+     * @return an AnyValue instance
+     */
+    public static AnyValue ofArray(final @Nonnull List<AnyValue> value) {
+        if (value == null) {
+            OpenTelemetryAttributeValidator.handleBundled("valueMustNotBeNull");
+            return EMPTY_VALUE;
+        }
         List<AnyValue> copy = new ArrayList<>(value.size());
         for (AnyValue entry : value) {
-            // OTel Common allows empty values and requires preserving nulls in arrays when accepted.
+            // OTel requires preserving null array elements when accepted.
+            // In this model, null is represented as an empty AnyValue.
             copy.add(entry != null ? entry : EMPTY_VALUE);
         }
         return new AnyValueImpl(AnyValue.Type.ARRAY, null, false, 0L, 0.0, Collections.unmodifiableList(copy), null, null);
     }
 
-    public static AnyValue ofKvList(final List<KeyValue> value) {
-        Objects.requireNonNull(value, MessageHandlerResourceBundle.get("valueMustNotBeNull"));
+    /**
+     * If a null value is passed, an empty value is returned if in lenient mode. Otherwise, an exception is thrown.
+     * @param value the value to use
+     * @return an AnyValue instance
+     */
+    public static AnyValue ofKvList(final @Nonnull List<KeyValue> value) {
+        if (value == null) {
+            OpenTelemetryAttributeValidator.handleBundled("valueMustNotBeNull");
+            return EMPTY_VALUE;
+        }
         List<KeyValue> copy = new ArrayList<>(value.size());
         Set<String> keys = new HashSet<>(value.size());
-        int index = 0;
-        for (KeyValue kv : value) {
+        for (int index = 0; index < value.size(); index++) {
+            KeyValue kv = value.get(index);
             if (kv == null) {
-                throw new NullPointerException(MessageHandlerResourceBundle.format(
+                OpenTelemetryAttributeValidator.handle(MessageHandlerResourceBundle.format(
                         "fieldContainsNullElementAtIndex",
                         MessageHandlerResourceBundle.get("kvlistValuesFieldName"),
                         index));
+                continue;
             }
-            String key = Objects.requireNonNull(kv.getKey(),
-                    MessageHandlerResourceBundle.format(
+            String key = kv.getKey();
+            if (key == null) {
+                OpenTelemetryAttributeValidator.handle(MessageHandlerResourceBundle.format(
                             "fieldKeyMustNotBeNullAtIndex",
                             MessageHandlerResourceBundle.get("kvlistValuesFieldName"),
                             index));
+                continue;
+            }
             if (!keys.add(key)) {
-                throw new IllegalArgumentException(MessageHandlerResourceBundle.format(
+                // map<string, AnyValue> keys must be unique; by default, duplicates are removed.
+                OpenTelemetryAttributeValidator.handle(MessageHandlerResourceBundle.format(
                         "fieldContainsDuplicateKey",
                         MessageHandlerResourceBundle.get("kvlistValuesFieldName"),
                         key));
+                continue;
             }
-            // OTel Common map<string, AnyValue>: null value is valid and maps to empty AnyValue.
+            // For map<string, AnyValue>, an absent/null source value is represented as empty AnyValue.
             AnyValue normalizedValue = kv.getValue() != null ? kv.getValue() : EMPTY_VALUE;
             copy.add(new KvListKeyValue(key, normalizedValue));
-            index++;
         }
         return new AnyValueImpl(AnyValue.Type.KVLIST, null, false, 0L, 0.0, null, Collections.unmodifiableList(copy), null);
     }
 
-    public static AnyValue ofBytes(final byte[] value) {
-        Objects.requireNonNull(value, MessageHandlerResourceBundle.get("valueMustNotBeNull"));
+    /**
+     * If a null value is passed, an empty value is returned if in lenient mode. Otherwise, an exception is thrown.
+     * @param value the value to use
+     * @return an AnyValue instance
+     */
+    public static AnyValue ofBytes(final @Nonnull byte[] value) {
+        if (value == null) {
+            OpenTelemetryAttributeValidator.handleBundled("valueMustNotBeNull");
+            return EMPTY_VALUE;
+        }
         byte[] copy = new byte[value.length];
         System.arraycopy(value, 0, copy, 0, value.length);
         return new AnyValueImpl(AnyValue.Type.BYTES, null, false, 0L, 0.0, null, null, copy);

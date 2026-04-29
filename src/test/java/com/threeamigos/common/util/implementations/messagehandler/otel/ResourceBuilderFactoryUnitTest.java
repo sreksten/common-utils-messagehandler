@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -63,65 +64,28 @@ class ResourceBuilderFactoryUnitTest {
     }
 
     @Test
-    @DisplayName("builder should reject null or blank values in with... methods")
-    void builderShouldRejectNullOrBlankValuesInWithMethods() {
-        assertThrows(NullPointerException.class, () -> new ResourceBuilderImpl().withServiceName(null));
-        assertThrows(IllegalArgumentException.class, () -> new ResourceBuilderImpl().withServiceName("   "));
+    @DisplayName("builder should normalize null or blank values in with... methods")
+    void builderShouldNormalizeNullOrBlankValuesInWithMethods() {
+        ResourceBuilderImpl builder = new ResourceBuilderImpl();
+        assertDoesNotThrow(() -> builder
+                .withServiceName(null)
+                .withServiceNamespace("")
+                .withServiceVersion(" ")
+                .withServiceInstanceId(null)
+                .withDeploymentEnvironmentName("")
+                .withSchemaUrl("   ")
+                .withNoEntity()
+                .build());
 
-        assertThrows(NullPointerException.class, () -> new ResourceBuilderImpl()
-                .withServiceName("checkout")
-                .withServiceNamespace(null));
-        assertThrows(IllegalArgumentException.class, () -> new ResourceBuilderImpl()
-                .withServiceName("checkout")
-                .withServiceNamespace(""));
+        Resource resource = builder.build();
+        Map<String, String> attributes = stringValuesByKey(resource.getAttributes());
 
-        assertThrows(NullPointerException.class, () -> new ResourceBuilderImpl()
-                .withServiceName("checkout")
-                .withServiceNamespace("payments")
-                .withServiceVersion(null));
-        assertThrows(IllegalArgumentException.class, () -> new ResourceBuilderImpl()
-                .withServiceName("checkout")
-                .withServiceNamespace("payments")
-                .withServiceVersion(" "));
-
-        assertThrows(NullPointerException.class, () -> new ResourceBuilderImpl()
-                .withServiceName("checkout")
-                .withServiceNamespace("payments")
-                .withServiceVersion("1.2.3")
-                .withServiceInstanceId(null));
-        assertThrows(IllegalArgumentException.class, () -> new ResourceBuilderImpl()
-                .withServiceName("checkout")
-                .withServiceNamespace("payments")
-                .withServiceVersion("1.2.3")
-                .withServiceInstanceId(""));
-
-        assertThrows(NullPointerException.class, () -> new ResourceBuilderImpl()
-                .withServiceName("checkout")
-                .withServiceNamespace("payments")
-                .withServiceVersion("1.2.3")
-                .withServiceInstanceId("instance-1")
-                .withDeploymentEnvironmentName(null));
-        assertThrows(IllegalArgumentException.class, () -> new ResourceBuilderImpl()
-                .withServiceName("checkout")
-                .withServiceNamespace("payments")
-                .withServiceVersion("1.2.3")
-                .withServiceInstanceId("instance-1")
-                .withDeploymentEnvironmentName(""));
-
-        assertThrows(NullPointerException.class, () -> new ResourceBuilderImpl()
-                .withServiceName("checkout")
-                .withNoServiceNamespace()
-                .withNoServiceVersion()
-                .withNoServiceInstanceId()
-                .withNoDeploymentEnvironmentName()
-                .withSchemaUrl(null));
-        assertThrows(IllegalArgumentException.class, () -> new ResourceBuilderImpl()
-                .withServiceName("checkout")
-                .withNoServiceNamespace()
-                .withNoServiceVersion()
-                .withNoServiceInstanceId()
-                .withNoDeploymentEnvironmentName()
-                .withSchemaUrl("   "));
+        assertEquals("unknown", attributes.get(OTelTags.SERVICE_NAME.getValue()));
+        assertEquals("unknown", attributes.get(OTelTags.SERVICE_NAMESPACE.getValue()));
+        assertEquals("unknown", attributes.get(OTelTags.SERVICE_VERSION.getValue()));
+        assertEquals("unknown", attributes.get(OTelTags.SERVICE_INSTANCE_ID.getValue()));
+        assertEquals("unknown", attributes.get(OTelTags.DEPLOYMENT_ENVIRONMENT_NAME.getValue()));
+        assertEquals("unknown", resource.getSchemaUrl());
 
         assertThrows(NullPointerException.class, () -> new ResourceBuilderImpl()
                 .withServiceName("checkout")

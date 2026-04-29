@@ -375,7 +375,7 @@ class CompositeMessageHandlerUnitTest {
                     UnsupportedOperationException.class,
                     invocation,
                     operation + " should be unsupported in DELEGATE_ONLY mode");
-            assertTrue(ex.getMessage() != null && !ex.getMessage().isBlank());
+            assertTrue(ex.getMessage() != null && !ex.getMessage().isEmpty());
             assertTrue(ex.getMessage().contains(operation));
             assertTrue(ex.getMessage().contains("DELEGATE_ONLY"));
         });

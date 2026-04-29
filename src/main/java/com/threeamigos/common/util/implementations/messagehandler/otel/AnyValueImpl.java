@@ -4,11 +4,16 @@ import com.threeamigos.common.util.implementations.messagehandler.MessageHandler
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 /**
- * Immutable implementation of {@link AnyValue}.
- * Instances are created through {@link AnyValueFactory}.
+ * An immutable implementation of {@link AnyValue}. Instances are created through {@link AnyValueFactory}.<br/>
+ * If the user tries to access a value of a different type, and we are running in lenient mode, default values are
+ * returned in order not to have a crash in a production environment due to the logging system. Otherwise, an exception
+ * is thrown. See also {@link OpenTelemetryAttributeValidator}.
  *
  * @author Stefano Reksten
  */
@@ -48,54 +53,90 @@ final class AnyValueImpl implements AnyValue {
 
     @Override
     public String asString() {
-        checkType(Type.STRING);
+        if (isTypeNot(Type.STRING)) {
+            return "";
+        }
         return stringValue;
     }
 
     @Override
     public boolean asBoolean() {
-        checkType(Type.BOOL);
+        if (isTypeNot(Type.BOOL)) {
+            return false;
+        }
         return boolValue;
     }
 
     @Override
     public long asLong() {
-        checkType(Type.INT);
+        if (isTypeNot(Type.INT)) {
+            return 0L;
+        }
         return longValue;
     }
 
     @Override
     public double asDouble() {
-        checkType(Type.DOUBLE);
+        if (isTypeNot(Type.DOUBLE)) {
+            return 0.0d;
+        }
         return doubleValue;
     }
 
     @Override
     public List<AnyValue> asArray() {
-        checkType(Type.ARRAY);
+        if (isTypeNot(Type.ARRAY)) {
+            return Collections.emptyList();
+        }
         return arrayValue;
     }
 
     @Override
     public List<KeyValue> asKvList() {
-        checkType(Type.KVLIST);
+        if (isTypeNot(Type.KVLIST)) {
+            return Collections.emptyList();
+        }
         return kvListValue;
     }
 
     @Override
     public byte[] asBytes() {
-        checkType(Type.BYTES);
+        if (isTypeNot(Type.BYTES)) {
+            return new byte[0];
+        }
         byte[] copy = new byte[bytesValue.length];
         System.arraycopy(bytesValue, 0, copy, 0, bytesValue.length);
         return copy;
     }
 
-    private void checkType(final Type expectedType) {
+    private boolean isTypeNot(final Type expectedType) {
         if (type != expectedType) {
-            throw new IllegalStateException(MessageHandlerResourceBundle.format(
-                    "anyValueTypeMismatch",
-                    type,
-                    expectedType));
+            OpenTelemetryAttributeValidator.handle(MessageHandlerResourceBundle.format(
+                    "anyValueTypeMismatch", type, expectedType));
+            return true;
         }
+        return false;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null || getClass() != obj.getClass()) {
+            return false;
+        }
+        AnyValueImpl other = (AnyValueImpl) obj;
+        return Objects.equals(this.type, other.type)
+                && Objects.equals(this.stringValue, other.stringValue)
+                && Objects.equals(this.boolValue, other.boolValue)
+                && Objects.equals(this.longValue, other.longValue)
+                && Objects.equals(this.doubleValue, other.doubleValue)
+                && Objects.equals(this.arrayValue, other.arrayValue)
+                && Objects.equals(this.kvListValue, other.kvListValue)
+                && Arrays.equals(this.bytesValue, other.bytesValue);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(type, stringValue, boolValue, longValue, doubleValue, arrayValue, kvListValue,
+                Arrays.hashCode(bytesValue));
     }
 }

@@ -168,8 +168,8 @@ public class LogRecordImpl implements LogRecord {
         OpenTelemetryAttributeValidator.ValidationResult validationResult =
                 OpenTelemetryAttributeValidator.copyValidateAndLimitKeyValues(
                 attributes,
-                MessageHandlerResourceBundle.get("logRecordAttributesFieldName"),
-                OpenTelemetryAttributeValidator.DEFAULT_ATTRIBUTE_COUNT_LIMIT);
+                MessageHandlerResourceBundle.get("logRecordAttributesFieldName")
+                );
         this.attributes = validationResult.getAttributes();
         this.droppedAttributesCount = validationResult.getDroppedAttributesCount();
     }

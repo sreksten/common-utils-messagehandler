@@ -14,7 +14,7 @@ public interface EntityBuilderInterface {
 
         /**
          * Generic type
-         * @param type type of Entity
+         * @param type the type of Entity
          *             must be non-null and non-blank.
          */
         EntityBuilderSchemaUrlStep withType(String type);

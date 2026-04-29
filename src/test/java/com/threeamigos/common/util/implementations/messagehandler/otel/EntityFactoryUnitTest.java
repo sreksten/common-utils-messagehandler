@@ -7,9 +7,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -74,82 +71,164 @@ class EntityFactoryUnitTest {
     }
 
     @Test
-    @DisplayName("create() should reject null and blank type")
-    void createShouldRejectNullAndBlankType() {
+    @DisplayName("create() should normalize null and blank type values")
+    void createShouldNormalizeNullAndBlankType() {
         List<KeyValue> id = Collections.singletonList(
                 new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1")));
 
-        assertThrows(NullPointerException.class, () -> EntityFactory.create(null, null, id, null));
-        assertThrows(IllegalArgumentException.class, () -> EntityFactory.create("", null, id, null));
-        assertThrows(IllegalArgumentException.class, () -> EntityFactory.create("   ", null, id, null));
+        Entity nullType = EntityFactory.create(null, null, id, null);
+        Entity emptyType = EntityFactory.create("", null, id, null);
+        Entity blankType = EntityFactory.create("   ", null, id, null);
+
+        assertEquals("unknown", nullType.getType());
+        assertEquals("unknown", emptyType.getType());
+        assertEquals("unknown", blankType.getType());
     }
 
     @Test
-    @DisplayName("create() should reject null or empty entity id")
-    void createShouldRejectNullOrEmptyEntityId() {
-        assertThrows(IllegalArgumentException.class, () -> EntityFactory.create("service", null, null, null));
-        assertThrows(IllegalArgumentException.class, () -> EntityFactory.create("service", null, Collections.<KeyValue>emptyList(), null));
+    @DisplayName("create() should default entity id when id list is null or empty")
+    void createShouldDefaultEntityIdWhenIdListIsNullOrEmpty() {
+        Entity nullId = EntityFactory.create("service", null, null, null);
+        Entity emptyId = EntityFactory.create("service", null, Collections.<KeyValue>emptyList(), null);
+
+        assertEquals(1, nullId.getId().size());
+        assertEquals("unknown_id", nullId.getId().get(0).getKey());
+        assertEquals("unknown", nullId.getId().get(0).getValue().asString());
+
+        assertEquals(1, emptyId.getId().size());
+        assertEquals("unknown_id", emptyId.getId().get(0).getKey());
+        assertEquals("unknown", emptyId.getId().get(0).getValue().asString());
     }
 
     @Test
-    @DisplayName("create() should reject invalid id entries")
-    void createShouldRejectInvalidIdEntries() {
+    @DisplayName("create() should skip invalid id entries and normalize null values")
+    void createShouldSkipInvalidIdEntriesAndNormalizeNullValues() {
         List<KeyValue> duplicateId = Arrays.asList(
+                null,
+                new KeyValue() {
+                    @Override
+                    public String getKey() {
+                        return null;
+                    }
+
+                    @Override
+                    public AnyValue getValue() {
+                        return AnyValueFactory.ofString("x");
+                    }
+                },
+                new KeyValue() {
+                    @Override
+                    public String getKey() {
+                        return " ";
+                    }
+
+                    @Override
+                    public AnyValue getValue() {
+                        return AnyValueFactory.ofString("x");
+                    }
+                },
                 new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("i1")),
-                new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("i2")));
-        assertThrows(IllegalArgumentException.class, () -> EntityFactory.create("service", null, duplicateId, null));
+                new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("i2")),
+                new KeyValue() {
+                    @Override
+                    public String getKey() {
+                        return "service.name";
+                    }
 
-        KeyValue nullKey = new KeyValue() {
-            @Override
-            public String getKey() {
-                return null;
-            }
+                    @Override
+                    public AnyValue getValue() {
+                        return null;
+                    }
+                }
+        );
 
-            @Override
-            public AnyValue getValue() {
-                return AnyValueFactory.ofString("x");
-            }
-        };
-        KeyValue nullValue = new KeyValue() {
-            @Override
-            public String getKey() {
-                return "service.instance.id";
-            }
-
-            @Override
-            public AnyValue getValue() {
-                return null;
-            }
-        };
-
-        assertThrows(NullPointerException.class, () -> EntityFactory.create("service", null, Collections.singletonList(null), null));
-        assertThrows(NullPointerException.class, () -> EntityFactory.create("service", null, Collections.singletonList(nullKey), null));
-        assertThrows(NullPointerException.class, () -> EntityFactory.create("service", null, Collections.singletonList(nullValue), null));
+        Entity entity = EntityFactory.create("service", null, duplicateId, null);
+        assertEquals(2, entity.getId().size());
+        assertEquals("service.instance.id", entity.getId().get(0).getKey());
+        assertEquals("i1", entity.getId().get(0).getValue().asString());
+        assertEquals("service.name", entity.getId().get(1).getKey());
+        assertEquals(AnyValue.Type.EMPTY, entity.getId().get(1).getValue().getType());
     }
 
     @Test
-    @DisplayName("create() should reject invalid description entries")
-    void createShouldRejectInvalidDescriptionEntries() {
+    @DisplayName("create() should skip invalid description entries")
+    void createShouldSkipInvalidDescriptionEntries() {
         List<KeyValue> id = Collections.singletonList(
                 new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-3")));
 
         List<KeyValue> duplicateDescription = Arrays.asList(
+                null,
                 new KeyValueImpl("service.name", AnyValueFactory.ofString("a")),
-                new KeyValueImpl("service.name", AnyValueFactory.ofString("b")));
-        assertThrows(IllegalArgumentException.class,
-                () -> EntityFactory.create("service", null, id, duplicateDescription));
+                new KeyValueImpl("service.name", AnyValueFactory.ofString("b")),
+                new KeyValue() {
+                    @Override
+                    public String getKey() {
+                        return "host.name";
+                    }
+
+                    @Override
+                    public AnyValue getValue() {
+                        return null;
+                    }
+                });
+
+        Entity entity = EntityFactory.create("service", null, id, duplicateDescription);
+        assertEquals(2, entity.getDescription().size());
+        assertEquals("service.name", entity.getDescription().get(0).getKey());
+        assertEquals("a", entity.getDescription().get(0).getValue().asString());
+        assertEquals("host.name", entity.getDescription().get(1).getKey());
+        assertEquals(AnyValue.Type.EMPTY, entity.getDescription().get(1).getValue().getType());
     }
 
     @Test
-    @DisplayName("merge() should reject null entity")
-    void mergeShouldRejectNullEntity() {
+    @DisplayName("merge() should return the same instance when other is null")
+    void mergeShouldReturnSameInstanceWhenOtherIsNull() {
         Entity entity = EntityFactory.create(
                 "service",
                 null,
                 Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1"))),
                 null);
 
-        assertThrows(NullPointerException.class, () -> entity.merge(null));
+        assertSame(entity, entity.merge(null));
+    }
+
+    @Test
+    @DisplayName("merge() should ignore malformed external entities")
+    void mergeShouldIgnoreMalformedExternalEntities() {
+        Entity base = EntityFactory.create(
+                "service",
+                null,
+                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1"))),
+                Collections.singletonList(new KeyValueImpl("service.name", AnyValueFactory.ofString("billing"))));
+
+        Entity malformed = new Entity() {
+            @Override
+            public String getType() {
+                return "service";
+            }
+
+            @Override
+            public String getSchemaUrl() {
+                return null;
+            }
+
+            @Override
+            public List<KeyValue> getId() {
+                return Collections.singletonList(null);
+            }
+
+            @Override
+            public List<KeyValue> getDescription() {
+                return null;
+            }
+
+            @Override
+            public Entity merge(Entity other) {
+                return this;
+            }
+        };
+
+        assertSame(base, base.merge(malformed));
     }
 
     @Test
