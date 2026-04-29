@@ -1,28 +1,101 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
+import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Resource;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanContext;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * The <code>TracerProvider</code> is expected to be the stateful object that holds any configuration.
+ * Stateful provider for creating and caching {@link Tracer} instances by instrumentation scope identity.
+ * <p>
+ * Provider-level defaults can be configured and reused by enrichment helpers.
+ *
  * @author Stefano Reksten
  */
 public class TracerProvider {
 
     private static final TracerProvider INSTANCE = new TracerProvider();
 
+    private final Map<TracerKey, Tracer> tracersByScope = new ConcurrentHashMap<>();
+
+    private volatile Resource defaultResource;
+    private volatile String defaultSchemaUrl;
+    private volatile List<KeyValue> defaultCommonAttributes = Collections.emptyList();
+    private volatile CorrelationResolver correlationResolver;
+
     public static TracerProvider getGlobal() {
         return INSTANCE;
     }
 
-    private TracerProvider() {}
+    private TracerProvider() {
+    }
 
-    public TracerProvider createProvider() {
+    public static TracerProvider createProvider() {
         return new TracerProvider();
+    }
+
+    public void setDefaultResource(final @Nullable Resource defaultResource) {
+        this.defaultResource = defaultResource;
+    }
+
+    public @Nullable Resource getDefaultResource() {
+        return defaultResource;
+    }
+
+    public void setDefaultSchemaUrl(final @Nullable String defaultSchemaUrl) {
+        this.defaultSchemaUrl = normalizeNullable(defaultSchemaUrl);
+    }
+
+    public @Nullable String getDefaultSchemaUrl() {
+        return defaultSchemaUrl;
+    }
+
+    public void setDefaultCommonAttributes(final @Nullable Collection<KeyValue> commonAttributes) {
+        List<KeyValue> normalizedAttributes = copyAndNormalizeAttributes(commonAttributes);
+        this.defaultCommonAttributes = Collections.unmodifiableList(normalizedAttributes);
+    }
+
+    public @Nonnull List<KeyValue> getDefaultCommonAttributes() {
+        return defaultCommonAttributes;
+    }
+
+    public void setCorrelationResolver(final @Nullable CorrelationResolver correlationResolver) {
+        this.correlationResolver = correlationResolver;
+    }
+
+    public @Nullable CorrelationResolver getCorrelationResolver() {
+        return correlationResolver;
+    }
+
+    /**
+     * Returns a tracer instance with the given instrumentation name and version.
+     * <p>
+     * This overload resolves to {@link #getTracer(String, String, String, Collection)}
+     * with {@code schemaUrl = null} and {@code attributes = Collections.emptyList()}.
+     *
+     * @param instrumentationName The name of the instrumentation. Should not be null or empty.
+     * @param version The version of the instrumentation.
+     * @return A tracer instance.
+     */
+    public Tracer getTracer(final @Nullable String instrumentationName,
+                            final @Nullable String version) {
+        return getTracer(instrumentationName, version, null, Collections.emptyList());
     }
 
     /**
@@ -34,11 +107,179 @@ public class TracerProvider {
      * @param attributes The attributes associated with the instrumentation.
      * @return A tracer instance or null if not available.
      */
-    public Tracer getTracer(@Nonnull String instrumentationName,
+    public Tracer getTracer(final @Nullable String instrumentationName,
                             final @Nullable String version,
                             final @Nullable String schemaUrl,
                             final @Nullable Collection<KeyValue> attributes) {
-        return null;
+        String normalizedInstrumentationName = normalizeInstrumentationName(instrumentationName);
+        String normalizedVersion = normalizeNullable(version);
+        String normalizedSchemaUrl = normalizeNullable(schemaUrl);
+        final String resolvedSchemaUrl = normalizedSchemaUrl == null ? defaultSchemaUrl : normalizedSchemaUrl;
+        final List<KeyValue> resolvedAttributes = copyAndNormalizeAttributes(attributes);
+        final String resolvedInstrumentationName = normalizedInstrumentationName;
+        final String resolvedVersion = normalizedVersion;
+        TracerKey key = new TracerKey(
+                resolvedInstrumentationName,
+                resolvedVersion,
+                resolvedSchemaUrl,
+                toAttributeSignature(resolvedAttributes));
+        return tracersByScope.computeIfAbsent(key, ignored ->
+                new TracerImpl(
+                        resolvedInstrumentationName,
+                        resolvedVersion,
+                        resolvedSchemaUrl,
+                        resolvedAttributes));
+    }
+
+    public Tracer getTracer(final @Nullable InstrumentationScope instrumentationScope) {
+        if (instrumentationScope == null) {
+            return getTracer(null, null, null, null);
+        }
+        return getTracer(
+                instrumentationScope.getName(),
+                instrumentationScope.getVersion(),
+                instrumentationScope.getSchemaUrl(),
+                instrumentationScope.getAttributes());
+    }
+
+    public LogRecordFactory enrichingLogRecordFactory(final @Nonnull LogRecordFactory delegate,
+                                                      final @Nullable InstrumentationScope scope) {
+        return enrichingLogRecordFactory(delegate, scope, null);
+    }
+
+    public LogRecordFactory enrichingLogRecordFactory(final @Nonnull LogRecordFactory delegate,
+                                                      final @Nullable InstrumentationScope scope,
+                                                      final @Nullable SpanContext explicitSpanContext) {
+        CorrelationResolver resolver = correlationResolver;
+        if (resolver == null) {
+            return new EnrichingLogRecordFactory(
+                    delegate,
+                    defaultResource,
+                    scope,
+                    defaultCommonAttributes,
+                    explicitSpanContext);
+        }
+        return new EnrichingLogRecordFactory(
+                delegate,
+                defaultResource,
+                scope,
+                defaultCommonAttributes,
+                explicitSpanContext,
+                resolver::resolveSpanContext,
+                resolver::resolveInstrumentationScope);
+    }
+
+    private static String normalizeInstrumentationName(final String instrumentationName) {
+        String normalized = normalizeNullable(instrumentationName);
+        if (normalized == null) {
+            OpenTelemetryAttributeValidator.reportBundled("nullInstrumentationNameProvided");
+            return "";
+        }
+        return normalized;
+    }
+
+    private static String normalizeNullable(final String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
+
+    private static List<KeyValue> copyAndNormalizeAttributes(final Collection<KeyValue> attributes) {
+        if (attributes == null || attributes.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<KeyValue> asList = new ArrayList<>(attributes);
+        return OpenTelemetryAttributeValidator.copyAndValidateKeyValuesLenient(
+                asList,
+                MessageHandlerResourceBundle.get("scopeAttributesFieldName"));
+    }
+
+    private static List<String> toAttributeSignature(final List<KeyValue> attributes) {
+        if (attributes.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<String> signature = new ArrayList<>(attributes.size());
+        for (KeyValue keyValue : attributes) {
+            signature.add(keyValue.getKey() + "=" + anyValueSignature(keyValue.getValue()));
+        }
+        signature.sort(Comparator.naturalOrder());
+        return signature;
+    }
+
+    private static String anyValueSignature(final AnyValue value) {
+        if (value == null || value.getType() == null) {
+            return "EMPTY";
+        }
+        AnyValue.Type type = value.getType();
+        switch (type) {
+            case EMPTY:
+                return "EMPTY";
+            case STRING:
+                return "STRING:" + value.asString();
+            case BOOL:
+                return "BOOL:" + value.asBoolean();
+            case INT:
+                return "INT:" + value.asLong();
+            case DOUBLE:
+                return "DOUBLE:" + value.asDouble();
+            case BYTES:
+                return "BYTES:" + Arrays.toString(value.asBytes());
+            case ARRAY:
+                return "ARRAY:" + value.asArray();
+            case KVLIST:
+                return "KVLIST:" + value.asKvList();
+            default:
+                return type.name();
+        }
+    }
+
+    @FunctionalInterface
+    public interface CorrelationResolver {
+        @Nullable
+        SpanContext resolveSpanContext();
+
+        default @Nullable InstrumentationScope resolveInstrumentationScope() {
+            return null;
+        }
+    }
+
+    private static final class TracerKey {
+        private final String instrumentationName;
+        private final String version;
+        private final String schemaUrl;
+        private final List<String> attributeSignature;
+
+        private TracerKey(final String instrumentationName,
+                          final String version,
+                          final String schemaUrl,
+                          final List<String> attributeSignature) {
+            this.instrumentationName = instrumentationName;
+            this.version = version;
+            this.schemaUrl = schemaUrl;
+            this.attributeSignature = attributeSignature;
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (!(o instanceof TracerKey)) {
+                return false;
+            }
+            TracerKey tracerKey = (TracerKey) o;
+            return Objects.equals(instrumentationName, tracerKey.instrumentationName)
+                    && Objects.equals(version, tracerKey.version)
+                    && Objects.equals(schemaUrl, tracerKey.schemaUrl)
+                    && Objects.equals(attributeSignature, tracerKey.attributeSignature);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(instrumentationName, version, schemaUrl, attributeSignature);
+        }
     }
 
 }

@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Event;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanContext;
@@ -54,12 +55,25 @@ class SpanImplUnitTest {
         SpanImpl span = new SpanImpl("span-name", context);
         assertEquals(context, span.getSpanContext());
         assertEquals(context, span.getContext());
+        assertNull(span.getInstrumentationScope());
         assertTrue(span.isRecording());
         assertNull(span.getEndTimestamp());
 
         span.end();
         assertFalse(span.isRecording());
         assertNotNull(span.getEndTimestamp());
+    }
+
+    @Test
+    @DisplayName("span should expose instrumentation scope when provided")
+    void spanShouldExposeInstrumentationScopeWhenProvided() {
+        InstrumentationScope scope = InstrumentationScopeFactory.create(
+                "orders", "1.0.0", "https://schema", Collections.emptyList());
+        SpanImpl span = new SpanImpl("span-name", context, scope, Instant.now(), true);
+
+        assertNotNull(span.getInstrumentationScope());
+        assertEquals("orders", span.getInstrumentationScope().getName());
+        assertEquals("1.0.0", span.getInstrumentationScope().getVersion());
     }
 
     @Test

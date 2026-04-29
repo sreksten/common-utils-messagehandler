@@ -8,6 +8,7 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.Link;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanContext;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.StatusCode;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -32,6 +33,7 @@ public final class SpanImpl implements Span {
 
     private final Object lock = new Object();
     private final SpanContext spanContext;
+    private final InstrumentationScope instrumentationScope;
     private final Instant startTimestamp;
     private final boolean recordingEnabled;
     private final Map<String, AnyValue> attributes = new LinkedHashMap<>();
@@ -45,11 +47,12 @@ public final class SpanImpl implements Span {
     private volatile boolean ended;
 
     public SpanImpl(final String name, final SpanContext spanContext) {
-        this(name, spanContext, Instant.now(), true);
+        this(name, spanContext, null, Instant.now(), true);
     }
 
     SpanImpl(final String name,
              final SpanContext spanContext,
+             final InstrumentationScope instrumentationScope,
              final Instant startTimestamp,
              final boolean recordingEnabled) {
         this.name = OpenTelemetryAttributeValidator.requireNonBlank(name, "spanName");
@@ -59,6 +62,7 @@ public final class SpanImpl implements Span {
         } else {
             this.spanContext = spanContext;
         }
+        this.instrumentationScope = instrumentationScope;
         if (startTimestamp == null) {
             OpenTelemetryAttributeValidator.handleBundled("startTimestampMustNotBeNull");
             this.startTimestamp = Instant.now();
@@ -72,6 +76,11 @@ public final class SpanImpl implements Span {
     @Override
     public SpanContext getSpanContext() {
         return spanContext;
+    }
+
+    @Override
+    public InstrumentationScope getInstrumentationScope() {
+        return instrumentationScope;
     }
 
     @Override

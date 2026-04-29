@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanContext;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
@@ -17,10 +18,7 @@ import java.util.Collections;
  */
 public class TracerImpl implements Tracer {
 
-    private final String instrumentationName;
-    private final String version;
-    private final String schemaUrl;
-    private final Collection<KeyValue> attributes;
+    private final InstrumentationScope instrumentationScope;
     private final boolean enabled;
 
     public TracerImpl(final String instrumentationName,
@@ -40,12 +38,15 @@ public class TracerImpl implements Tracer {
             OpenTelemetryAttributeValidator.reportBundled("nullInstrumentationNameProvided");
             resolvedInstrumentationName = "";
         }
-        this.instrumentationName = resolvedInstrumentationName;
-        this.version = version;
-        this.schemaUrl = schemaUrl;
-        this.attributes = attributes == null
+        String instrumentationName1 = resolvedInstrumentationName;
+        Collection<KeyValue> attributes1 = attributes == null
                 ? Collections.emptyList()
                 : Collections.unmodifiableList(new ArrayList<>(attributes));
+        this.instrumentationScope = InstrumentationScopeFactory.create(
+                instrumentationName1,
+                version,
+                schemaUrl,
+                new ArrayList<>(attributes1));
         this.enabled = enabled;
     }
 
@@ -78,7 +79,15 @@ public class TracerImpl implements Tracer {
         }
         return new SpanImpl(
                 normalizedName,
-                spanContext);
+                spanContext,
+                instrumentationScope,
+                java.time.Instant.now(),
+                true);
+    }
+
+    @Override
+    public InstrumentationScope getInstrumentationScope() {
+        return instrumentationScope;
     }
 
     @Override

@@ -27,6 +27,17 @@ public interface Span {
     SpanContext getSpanContext();
 
     /**
+     * Returns the instrumentation scope that produced this span.
+     * <p>
+     * This is optional metadata; may be {@code null}.
+     *
+     * @return emitting instrumentation scope, or {@code null} when unavailable
+     */
+    default InstrumentationScope getInstrumentationScope() {
+        return null;
+    }
+
+    /**
      * Backward-compatible alias for {@link #getSpanContext()}.
      */
     default SpanContext getContext() {

@@ -41,6 +41,17 @@ public interface Tracer {
     Span createSpan(String name, SpanContext parentSpanContext);
 
     /**
+     * Returns the effective instrumentation scope for this tracer.
+     * <p>
+     * Implementations may derive this value from a provider and/or tracer-local configuration.
+     *
+     * @return effective instrumentation scope, or {@code null} when unavailable
+     */
+    default InstrumentationScope getInstrumentationScope() {
+        return null;
+    }
+
+    /**
      * Returns whether this tracer is currently enabled for span creation.
      * <p>
      * Callers should not cache this value because it may change over time.

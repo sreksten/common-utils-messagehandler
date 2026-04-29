@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -100,6 +101,8 @@ class TracerImplUnitTest {
         Span span = sut.createSpan("span-name");
         assertNotNull(span);
         assertNotNull(span.getContext());
+        assertNotNull(span.getInstrumentationScope());
+        assertEquals("orders", span.getInstrumentationScope().getName());
         assertTrue(span.isRecording());
         assertDoesNotThrow(() -> {
             span.addAttribute("k", AnyValueFactory.ofString("v"));
@@ -118,6 +121,22 @@ class TracerImplUnitTest {
             span.end();
         });
         assertFalse(span.isRecording());
+    }
+
+    @Test
+    @DisplayName("tracer should expose effective instrumentation scope")
+    void tracerShouldExposeEffectiveInstrumentationScope() {
+        TracerImpl tracer = new TracerImpl("orders", "1.0.0", "https://schema", Collections.emptyList());
+        assertNotNull(tracer.getInstrumentationScope());
+        assertEquals("orders", tracer.getInstrumentationScope().getName());
+        assertEquals("1.0.0", tracer.getInstrumentationScope().getVersion());
+        assertEquals("https://schema", tracer.getInstrumentationScope().getSchemaUrl());
+
+        TracerImpl nullNameTracer = new TracerImpl(null, "1.0.0", null, null);
+        assertNotNull(nullNameTracer.getInstrumentationScope());
+        assertNull(nullNameTracer.getInstrumentationScope().getName());
+        assertEquals("1.0.0", nullNameTracer.getInstrumentationScope().getVersion());
+        assertNull(nullNameTracer.getInstrumentationScope().getSchemaUrl());
     }
 
     @Test
