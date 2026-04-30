@@ -17,10 +17,13 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -30,6 +33,12 @@ import static org.mockito.Mockito.when;
 @Tag("unit")
 @Tag("messageHandler")
 class EnrichingLogRecordFactoryUnitTest {
+
+    @org.junit.jupiter.api.AfterEach
+    void cleanupLenientAndTrap() {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(false);
+        OpenTelemetryAttributeValidator.setLogTrapForTests(null);
+    }
 
     @Test
     @DisplayName("create methods should return delegate record unchanged when delegate does not return LogRecordImpl")
@@ -275,5 +284,151 @@ class EnrichingLogRecordFactoryUnitTest {
         assertEquals(Arrays.asList("existing", "new"), keys);
         assertEquals("present", record.getAttributes().get(0).getValue().asString());
         assertEquals(0, scopeResolverCalls.get());
+    }
+
+    @Test
+    @DisplayName("enrichRecord should throw in strict mode when record is null")
+    void enrichRecordShouldThrowInStrictModeWhenRecordIsNull() {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(false);
+        EnrichingLogRecordFactory sut = new EnrichingLogRecordFactory(
+                mock(LogRecordFactory.class),
+                null,
+                null,
+                Collections.emptyList());
+
+        assertThrows(IllegalArgumentException.class, () -> sut.enrichRecord(null));
+    }
+
+    @Test
+    @DisplayName("enrichRecord should return empty record in lenient mode when record is null")
+    void enrichRecordShouldReturnEmptyRecordInLenientModeWhenRecordIsNull() {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(true);
+        OpenTelemetryAttributeValidator.setLogTrapForTests((message, throwable) -> {
+            // no-op trap for lenient assertions
+        });
+        EnrichingLogRecordFactory sut = new EnrichingLogRecordFactory(
+                mock(LogRecordFactory.class),
+                null,
+                null,
+                Collections.emptyList());
+
+        LogRecord enriched = assertDoesNotThrow(() -> sut.enrichRecord(null));
+        assertNotNull(enriched);
+        assertTrue(enriched instanceof LogRecordImpl);
+    }
+
+    @Test
+    @DisplayName("resolver failures should be swallowed and keep record usable")
+    void resolverFailuresShouldBeSwallowedAndKeepRecordUsable() {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(true);
+        OpenTelemetryAttributeValidator.setLogTrapForTests((message, throwable) -> {
+            // no-op trap for resolver failure paths
+        });
+        LogRecordFactory delegate = mock(LogRecordFactory.class);
+        LogRecordImpl record = new LogRecordImpl();
+        when(delegate.create()).thenReturn(record);
+
+        EnrichingLogRecordFactory sut = new EnrichingLogRecordFactory(
+                delegate,
+                null,
+                null,
+                Collections.emptyList(),
+                null,
+                () -> {
+                    throw new RuntimeException("span resolver failure");
+                },
+                () -> {
+                    throw new RuntimeException("scope resolver failure");
+                });
+
+        LogRecord enriched = assertDoesNotThrow(() -> sut.create());
+        assertSame(record, enriched);
+        assertNull(record.getInstrumentationScope());
+        assertNull(record.getTraceId());
+        assertNull(record.getSpanId());
+    }
+
+    @Test
+    @DisplayName("explicit invalid span context should fall back to resolver context")
+    void explicitInvalidSpanContextShouldFallBackToResolverContext() {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(true);
+        OpenTelemetryAttributeValidator.setLogTrapForTests((message, throwable) -> {
+            // no-op trap for invalid explicit span path
+        });
+        LogRecordFactory delegate = mock(LogRecordFactory.class);
+        LogRecordImpl record = new LogRecordImpl();
+        SpanContext resolverSpan = new SpanContextImpl(
+                "4b8efff798038103d269b633813fc60c",
+                "ddd19b7ec3c1b174",
+                (byte) 0x01,
+                false,
+                new TraceStateImpl());
+        when(delegate.create()).thenReturn(record);
+
+        SpanContext invalidExplicit = new SpanContext() {
+            @Override
+            public String getTraceId() {
+                return null;
+            }
+
+            @Override
+            public byte[] getTraceIdBytes() {
+                return new byte[0];
+            }
+
+            @Override
+            public String getSpanId() {
+                return null;
+            }
+
+            @Override
+            public byte[] getSpanIdBytes() {
+                return new byte[0];
+            }
+
+            @Override
+            public byte getTraceFlags() {
+                return 0;
+            }
+
+            @Override
+            public boolean isSampled() {
+                return false;
+            }
+
+            @Override
+            public boolean isRandom() {
+                return false;
+            }
+
+            @Override
+            public boolean isValid() {
+                throw new RuntimeException("invalid explicit context");
+            }
+
+            @Override
+            public boolean isRemote() {
+                return false;
+            }
+
+            @Override
+            public com.threeamigos.common.util.interfaces.messagehandler.otel.TraceState getTraceState() {
+                return null;
+            }
+        };
+
+        EnrichingLogRecordFactory sut = new EnrichingLogRecordFactory(
+                delegate,
+                null,
+                null,
+                Collections.emptyList(),
+                invalidExplicit,
+                () -> resolverSpan,
+                null);
+
+        LogRecord enriched = sut.create();
+        assertSame(record, enriched);
+        assertEquals(resolverSpan.getTraceId(), record.getTraceId());
+        assertEquals(resolverSpan.getSpanId(), record.getSpanId());
     }
 }

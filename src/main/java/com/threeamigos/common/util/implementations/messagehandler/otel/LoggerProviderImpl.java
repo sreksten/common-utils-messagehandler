@@ -5,10 +5,11 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.CorrelationResolver;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Logger;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LoggerProvider;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Resource;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanContext;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
 
@@ -21,34 +22,44 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 /**
- * Stateful provider for creating and caching {@link Tracer} instances by instrumentation scope identity.
+ * Stateful provider for creating and caching {@link Logger} instances by instrumentation scope identity.
  * <p>
- * Provider-level defaults can be configured and reused by enrichment helpers.
+ * Provider-level defaults and correlation resolver are applied when log records are emitted.
  *
  * @author Stefano Reksten
  */
-public class TracerProvider {
+public class LoggerProviderImpl implements LoggerProvider {
 
-    private static final TracerProvider INSTANCE = new TracerProvider();
+    private static final LoggerProviderImpl INSTANCE = new LoggerProviderImpl();
+    private static final LogRecordFactory UNUSED_RECORD_FACTORY = new LogRecordFactoryImpl();
+    private static final Consumer<LogRecord> NO_OP_CONSUMER = new Consumer<LogRecord>() {
+        @Override
+        public void accept(final LogRecord logRecord) {
+            // no-op by default
+        }
+    };
 
-    private final Map<TracerKey, Tracer> tracersByScope = new ConcurrentHashMap<>();
+    private final Map<LoggerKey, Logger> loggersByScope = new ConcurrentHashMap<>();
 
     private volatile Resource defaultResource;
     private volatile String defaultSchemaUrl;
     private volatile List<KeyValue> defaultCommonAttributes = Collections.emptyList();
     private volatile CorrelationResolver correlationResolver;
+    private volatile Consumer<LogRecord> logRecordConsumer = NO_OP_CONSUMER;
+    private volatile boolean enabled = true;
 
-    public static TracerProvider getGlobal() {
+    public static LoggerProviderImpl getGlobal() {
         return INSTANCE;
     }
 
-    private TracerProvider() {
+    private LoggerProviderImpl() {
     }
 
-    public static TracerProvider createProvider() {
-        return new TracerProvider();
+    public static LoggerProviderImpl createProvider() {
+        return new LoggerProviderImpl();
     }
 
     public void setDefaultResource(final @Nullable Resource defaultResource) {
@@ -84,90 +95,77 @@ public class TracerProvider {
         return correlationResolver;
     }
 
-    /**
-     * Returns a tracer instance with the given instrumentation name and version.
-     * <p>
-     * This overload resolves to {@link #getTracer(String, String, String, Collection)}
-     * with {@code schemaUrl = null} and {@code attributes = Collections.emptyList()}.
-     *
-     * @param instrumentationName The name of the instrumentation. Should not be null or empty.
-     * @param version The version of the instrumentation.
-     * @return A tracer instance.
-     */
-    public Tracer getTracer(final @Nullable String instrumentationName,
-                            final @Nullable String version) {
-        return getTracer(instrumentationName, version, null, Collections.emptyList());
+    public void setLogRecordConsumer(final @Nullable Consumer<LogRecord> logRecordConsumer) {
+        this.logRecordConsumer = logRecordConsumer == null ? NO_OP_CONSUMER : logRecordConsumer;
     }
 
-    /**
-     * Returns a tracer instance with the given instrumentation name, version, schema URL, and attributes.
-     * @param instrumentationName The name of the instrumentation. Should not be null or empty. As per spec, if it is
-     *                            null, it will be treated as an empty string.
-     * @param version The version of the instrumentation.
-     * @param schemaUrl The schema URL for the instrumentation.
-     * @param attributes The attributes associated with the instrumentation.
-     * @return A tracer instance or null if not available.
-     */
-    public Tracer getTracer(final @Nullable String instrumentationName,
-                            final @Nullable String version,
-                            final @Nullable String schemaUrl,
-                            final @Nullable Collection<KeyValue> attributes) {
-        String normalizedInstrumentationName = normalizeInstrumentationName(instrumentationName);
+    public @Nonnull Consumer<LogRecord> getLogRecordConsumer() {
+        return logRecordConsumer;
+    }
+
+    public void setEnabled(final boolean enabled) {
+        this.enabled = enabled;
+    }
+
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    @Override
+    public Logger getLogger(final String name,
+                            final String version,
+                            final String schemaUrl,
+                            final KeyValue... attributes) {
+        String normalizedName = normalizeInstrumentationName(name);
         String normalizedVersion = normalizeNullable(version);
         String normalizedSchemaUrl = normalizeNullable(schemaUrl);
         final String resolvedSchemaUrl = normalizedSchemaUrl == null ? defaultSchemaUrl : normalizedSchemaUrl;
-        final List<KeyValue> resolvedAttributes = copyAndNormalizeAttributes(attributes);
-        final String resolvedInstrumentationName = normalizedInstrumentationName;
-        final String resolvedVersion = normalizedVersion;
-        TracerKey key = new TracerKey(
-                resolvedInstrumentationName,
-                resolvedVersion,
+        final List<KeyValue> resolvedAttributes = copyAndNormalizeAttributes(
+                attributes == null ? Collections.<KeyValue>emptyList() : Arrays.asList(attributes));
+        final InstrumentationScope scope = InstrumentationScopeFactory.create(
+                normalizedName,
+                normalizedVersion,
+                resolvedSchemaUrl,
+                resolvedAttributes);
+
+        LoggerKey key = new LoggerKey(
+                normalizedName,
+                normalizedVersion,
                 resolvedSchemaUrl,
                 toAttributeSignature(resolvedAttributes));
-        return tracersByScope.computeIfAbsent(key, ignored ->
-                new TracerImpl(
-                        resolvedInstrumentationName,
-                        resolvedVersion,
-                        resolvedSchemaUrl,
-                        resolvedAttributes));
+        return loggersByScope.computeIfAbsent(key, newLoggerKey -> new LoggerImpl(this, scope));
     }
 
-    public Tracer getTracer(final @Nullable InstrumentationScope instrumentationScope) {
-        if (instrumentationScope == null) {
-            return getTracer(null, null, null, null);
-        }
-        return getTracer(
-                instrumentationScope.getName(),
-                instrumentationScope.getVersion(),
-                instrumentationScope.getSchemaUrl(),
-                instrumentationScope.getAttributes());
-    }
-
-    public LogRecordFactory enrichingLogRecordFactory(final @Nonnull LogRecordFactory delegate,
-                                                      final @Nullable InstrumentationScope scope) {
-        return enrichingLogRecordFactory(delegate, scope, null);
-    }
-
-    public LogRecordFactory enrichingLogRecordFactory(final @Nonnull LogRecordFactory delegate,
-                                                      final @Nullable InstrumentationScope scope,
-                                                      final @Nullable SpanContext explicitSpanContext) {
+    LogRecord enrichForLogger(final InstrumentationScope scope, final LogRecord record) {
         CorrelationResolver resolver = correlationResolver;
+        EnrichingLogRecordFactory enricher;
         if (resolver == null) {
-            return new EnrichingLogRecordFactory(
-                    delegate,
+            enricher = new EnrichingLogRecordFactory(
+                    UNUSED_RECORD_FACTORY,
+                    defaultResource,
+                    scope,
+                    defaultCommonAttributes);
+        } else {
+            enricher = new EnrichingLogRecordFactory(
+                    UNUSED_RECORD_FACTORY,
                     defaultResource,
                     scope,
                     defaultCommonAttributes,
-                    explicitSpanContext);
+                    null,
+                    resolver::resolveSpanContext,
+                    resolver::resolveInstrumentationScope);
         }
-        return new EnrichingLogRecordFactory(
-                delegate,
-                defaultResource,
-                scope,
-                defaultCommonAttributes,
-                explicitSpanContext,
-                resolver::resolveSpanContext,
-                resolver::resolveInstrumentationScope);
+        return enricher.enrichRecord(record);
+    }
+
+    void emit(final LogRecord record) {
+        try {
+            logRecordConsumer.accept(record);
+        } catch (RuntimeException ex) {
+            OpenTelemetryAttributeValidator.report(
+                    MessageHandlerResourceBundle.format("failedToEmitLogRecord", ex.getMessage()),
+                    ex);
+        }
     }
 
     private static String normalizeInstrumentationName(final String instrumentationName) {
@@ -236,13 +234,13 @@ public class TracerProvider {
         }
     }
 
-    private static final class TracerKey {
+    private static final class LoggerKey {
         private final String instrumentationName;
         private final String version;
         private final String schemaUrl;
         private final List<String> attributeSignature;
 
-        private TracerKey(final String instrumentationName,
+        private LoggerKey(final String instrumentationName,
                           final String version,
                           final String schemaUrl,
                           final List<String> attributeSignature) {
@@ -257,14 +255,14 @@ public class TracerProvider {
             if (this == o) {
                 return true;
             }
-            if (!(o instanceof TracerKey)) {
+            if (!(o instanceof LoggerKey)) {
                 return false;
             }
-            TracerKey tracerKey = (TracerKey) o;
-            return Objects.equals(instrumentationName, tracerKey.instrumentationName)
-                    && Objects.equals(version, tracerKey.version)
-                    && Objects.equals(schemaUrl, tracerKey.schemaUrl)
-                    && Objects.equals(attributeSignature, tracerKey.attributeSignature);
+            LoggerKey loggerKey = (LoggerKey) o;
+            return Objects.equals(instrumentationName, loggerKey.instrumentationName)
+                    && Objects.equals(version, loggerKey.version)
+                    && Objects.equals(schemaUrl, loggerKey.schemaUrl)
+                    && Objects.equals(attributeSignature, loggerKey.attributeSignature);
         }
 
         @Override
@@ -272,5 +270,4 @@ public class TracerProvider {
             return Objects.hash(instrumentationName, version, schemaUrl, attributeSignature);
         }
     }
-
 }

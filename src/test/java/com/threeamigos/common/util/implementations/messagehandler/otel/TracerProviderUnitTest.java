@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.CorrelationResolver;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -151,7 +153,7 @@ class TracerProviderUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
                 "1.0.0",
                 "https://resolver.schema",
                 Collections.emptyList());
-        provider.setCorrelationResolver(new TracerProvider.CorrelationResolver() {
+        provider.setCorrelationResolver(new CorrelationResolver() {
             @Override
             public SpanContext resolveSpanContext() {
                 return resolverContext;
@@ -214,7 +216,7 @@ class TracerProviderUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
                 "1.0.0",
                 "https://explicit.schema",
                 Collections.emptyList());
-        provider.setCorrelationResolver(new TracerProvider.CorrelationResolver() {
+        provider.setCorrelationResolver(new CorrelationResolver() {
             @Override
             public SpanContext resolveSpanContext() {
                 return null;
@@ -237,5 +239,146 @@ class TracerProviderUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
 
         assertNotNull(record.getInstrumentationScope());
         assertSame(explicitScope, record.getInstrumentationScope());
+    }
+
+    @Test
+    @DisplayName("setters/getters should support null values and normalize blank schema")
+    void settersAndGettersShouldSupportNullValuesAndNormalizeBlankSchema() {
+        TracerProvider provider = TracerProvider.createProvider();
+
+        assertNull(provider.getDefaultResource());
+        assertNull(provider.getDefaultSchemaUrl());
+        assertTrue(provider.getDefaultCommonAttributes().isEmpty());
+        assertNull(provider.getCorrelationResolver());
+
+        provider.setDefaultSchemaUrl("   ");
+        assertNull(provider.getDefaultSchemaUrl());
+
+        provider.setDefaultCommonAttributes(null);
+        assertTrue(provider.getDefaultCommonAttributes().isEmpty());
+    }
+
+    @Test
+    @DisplayName("getTracer should support null attributes collection and normalize blank values")
+    void getTracerShouldSupportNullAttributesCollectionAndNormalizeBlankValues() {
+        TracerProvider provider = TracerProvider.createProvider();
+        provider.setDefaultSchemaUrl("https://provider-schema");
+
+        Tracer tracer = provider.getTracer("orders", "   ", "   ", null);
+
+        assertNotNull(tracer);
+        assertNotNull(tracer.getInstrumentationScope());
+        assertEquals("orders", tracer.getInstrumentationScope().getName());
+        assertNull(tracer.getInstrumentationScope().getVersion());
+        assertEquals("https://provider-schema", tracer.getInstrumentationScope().getSchemaUrl());
+    }
+
+    @Test
+    @DisplayName("getTracer should compute cache signatures for all AnyValue types")
+    void getTracerShouldComputeCacheSignaturesForAllAnyValueTypes() {
+        TracerProvider provider = TracerProvider.createProvider();
+
+        Tracer empty = provider.getTracer(
+                "orders",
+                "1.0.0",
+                "https://schema",
+                Collections.singletonList(KeyValueFactory.of("k", AnyValueFactory.empty())));
+        Tracer string = provider.getTracer(
+                "orders",
+                "1.0.0",
+                "https://schema",
+                Collections.singletonList(KeyValueFactory.of("k", AnyValueFactory.ofString("v"))));
+        Tracer bool = provider.getTracer(
+                "orders",
+                "1.0.0",
+                "https://schema",
+                Collections.singletonList(KeyValueFactory.of("k", AnyValueFactory.ofBoolean(true))));
+        Tracer integer = provider.getTracer(
+                "orders",
+                "1.0.0",
+                "https://schema",
+                Collections.singletonList(KeyValueFactory.of("k", AnyValueFactory.ofLong(7L))));
+        Tracer decimal = provider.getTracer(
+                "orders",
+                "1.0.0",
+                "https://schema",
+                Collections.singletonList(KeyValueFactory.of("k", AnyValueFactory.ofDouble(1.25d))));
+        Tracer bytes = provider.getTracer(
+                "orders",
+                "1.0.0",
+                "https://schema",
+                Collections.singletonList(KeyValueFactory.of("k", AnyValueFactory.ofBytes(new byte[]{1, 2, 3}))));
+        Tracer array = provider.getTracer(
+                "orders",
+                "1.0.0",
+                "https://schema",
+                Collections.singletonList(KeyValueFactory.of("k", AnyValueFactory.ofArray(Collections.singletonList(AnyValueFactory.ofString("x"))))));
+        Tracer kvlist = provider.getTracer(
+                "orders",
+                "1.0.0",
+                "https://schema",
+                Collections.singletonList(KeyValueFactory.of("k", AnyValueFactory.ofKvList(Collections.singletonList(
+                        KeyValueFactory.of("inner", AnyValueFactory.ofString("value")))))));
+        Tracer nullType = provider.getTracer(
+                "orders",
+                "1.0.0",
+                "https://schema",
+                Collections.singletonList(KeyValueFactory.of("k", new com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue() {
+                    @Override
+                    public Type getType() {
+                        return null;
+                    }
+
+                    @Override
+                    public String asString() {
+                        return null;
+                    }
+
+                    @Override
+                    public boolean asBoolean() {
+                        return false;
+                    }
+
+                    @Override
+                    public long asLong() {
+                        return 0;
+                    }
+
+                    @Override
+                    public double asDouble() {
+                        return 0;
+                    }
+
+                    @Override
+                    public List<com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue> asArray() {
+                        return Collections.emptyList();
+                    }
+
+                    @Override
+                    public List<com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue> asKvList() {
+                        return Collections.emptyList();
+                    }
+
+                    @Override
+                    public byte[] asBytes() {
+                        return new byte[0];
+                    }
+                })));
+
+        assertNotSame(empty, string);
+        assertNotSame(string, bool);
+        assertNotSame(bool, integer);
+        assertNotSame(integer, decimal);
+        assertNotSame(decimal, bytes);
+        assertNotSame(bytes, array);
+        assertNotSame(array, kvlist);
+        assertNotSame(kvlist, nullType);
+
+        Tracer emptyAgain = provider.getTracer(
+                "orders",
+                "1.0.0",
+                "https://schema",
+                Collections.singletonList(KeyValueFactory.of("k", AnyValueFactory.empty())));
+        assertSame(empty, emptyAgain);
     }
 }

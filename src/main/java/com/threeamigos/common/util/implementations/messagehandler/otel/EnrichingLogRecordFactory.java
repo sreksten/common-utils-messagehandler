@@ -76,6 +76,20 @@ public class EnrichingLogRecordFactory implements LogRecordFactory {
         return enrich(delegate.create(throwable));
     }
 
+    /**
+     * Enriches an existing record instance with configured resource/scope/attributes/correlation.
+     *
+     * @param record record to enrich
+     * @return enriched record; never {@code null}
+     */
+    public LogRecord enrichRecord(final LogRecord record) {
+        if (record == null) {
+            OpenTelemetryAttributeValidator.handleBundled("logRecordMustNotBeNull");
+            return new LogRecordImpl();
+        }
+        return enrich(record);
+    }
+
     private LogRecord enrich(LogRecord record) {
         if (!(record instanceof LogRecordImpl)) {
             return record;
