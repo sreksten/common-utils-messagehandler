@@ -321,6 +321,27 @@ public final class TraceContextValidator {
     }
 
     /**
+     * @return the current valid parent-id
+     */
+    public String getParentId() {
+        return parentId;
+    }
+
+    /**
+     * @return the normalized trace-flags as a lowercase hex string ({@code "00"} or {@code "01"})
+     */
+    public String getTraceFlags() {
+        return traceFlags;
+    }
+
+    /**
+     * @return the normalized trace-flags as a byte value
+     */
+    public byte getTraceFlagsByte() {
+        return (byte) Integer.parseInt(traceFlags, 16);
+    }
+
+    /**
      * @return a valid traceparent value
      */
     public String getTraceparentValue() {
