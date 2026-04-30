@@ -131,19 +131,31 @@ class TraceContextValidatorUnitTest {
         TraceContextValidator generated = new TraceContextValidator();
         assertTrue(TraceContextValidator.isValidTraceId(generated.getTraceId()));
         assertTrue(TraceContextValidator.isValidTraceparent(generated.getTraceparentValue()));
+        assertTrue(TraceContextValidator.isValidParentId(generated.getParentId()));
+        assertEquals("00", generated.getTraceFlags());
+        assertEquals((byte) 0x00, generated.getTraceFlagsByte());
 
         TraceContextValidator parsed = new TraceContextValidator(VALID_TRACEPARENT);
         assertEquals(VALID_TRACE_ID, parsed.getTraceId());
+        assertEquals(VALID_PARENT_ID, parsed.getParentId());
+        assertEquals("01", parsed.getTraceFlags());
+        assertEquals((byte) 0x01, parsed.getTraceFlagsByte());
         assertEquals(VALID_TRACEPARENT, parsed.getTraceparentValue());
 
         TraceContextValidator shortParsed = new TraceContextValidator("00-1-2-01");
         assertEquals("00000000000000000000000000000001", shortParsed.getTraceId());
+        assertEquals("0000000000000002", shortParsed.getParentId());
+        assertEquals("01", shortParsed.getTraceFlags());
+        assertEquals((byte) 0x01, shortParsed.getTraceFlagsByte());
         assertEquals("00-00000000000000000000000000000001-0000000000000002-01", shortParsed.getTraceparentValue());
 
         TraceContextValidator higherVersion = new TraceContextValidator(
                 "0a-" + VALID_TRACE_ID.toUpperCase() + "-" + VALID_PARENT_ID.toUpperCase() + "-a2-extra",
                 "vendor1=value1, vendor2=value2");
         assertEquals(VALID_TRACE_ID, higherVersion.getTraceId());
+        assertEquals(VALID_PARENT_ID, higherVersion.getParentId());
+        assertEquals("00", higherVersion.getTraceFlags());
+        assertEquals((byte) 0x00, higherVersion.getTraceFlagsByte());
         assertEquals("00-" + VALID_TRACE_ID + "-" + VALID_PARENT_ID + "-00", higherVersion.getTraceparentValue());
         assertEquals("vendor1=value1,vendor2=value2", higherVersion.getTracestateValue());
     }

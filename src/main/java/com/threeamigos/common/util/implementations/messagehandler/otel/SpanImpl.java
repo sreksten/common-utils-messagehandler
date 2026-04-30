@@ -41,6 +41,7 @@ final class SpanImpl implements Span {
     private final InstrumentationScope instrumentationScope;
     private final Instant startTimestamp;
     private final boolean recordingEnabled;
+    private final AutoCloseable scopeToken;
     private final Map<String, AnyValue> attributes = new LinkedHashMap<>();
     private final List<Event> events = new ArrayList<>();
     private final List<Link> links = new ArrayList<>();
@@ -52,7 +53,7 @@ final class SpanImpl implements Span {
     private volatile boolean ended;
 
     SpanImpl(final String name, final SpanContext spanContext) {
-        this(name, spanContext, null, Instant.now(), true);
+        this(name, spanContext, null, Instant.now(), true, null);
     }
 
     SpanImpl(final String name,
@@ -60,6 +61,15 @@ final class SpanImpl implements Span {
              final InstrumentationScope instrumentationScope,
              final Instant startTimestamp,
              final boolean recordingEnabled) {
+        this(name, spanContext, instrumentationScope, startTimestamp, recordingEnabled, null);
+    }
+
+    SpanImpl(final String name,
+             final SpanContext spanContext,
+             final InstrumentationScope instrumentationScope,
+             final Instant startTimestamp,
+             final boolean recordingEnabled,
+             final AutoCloseable scopeToken) {
         this.name = OpenTelemetryAttributeValidator.requireNonBlank(name, "spanName");
         if (spanContext == null) {
             OpenTelemetryAttributeValidator.handleBundled("spanContextMustNotBeNull");
@@ -75,6 +85,7 @@ final class SpanImpl implements Span {
             this.startTimestamp = startTimestamp;
         }
         this.recordingEnabled = recordingEnabled;
+        this.scopeToken = scopeToken;
         this.ended = !recordingEnabled;
     }
 
@@ -252,6 +263,7 @@ final class SpanImpl implements Span {
             this.endTimestamp = effectiveEndTimestamp;
             this.ended = true;
         }
+        closeScopeTokenQuietly();
     }
 
     @Override
@@ -349,5 +361,16 @@ final class SpanImpl implements Span {
         throwable.printStackTrace(printWriter);
         printWriter.flush();
         return stringWriter.toString();
+    }
+
+    private void closeScopeTokenQuietly() {
+        if (scopeToken == null) {
+            return;
+        }
+        try {
+            scopeToken.close();
+        } catch (Exception ex) {
+            OpenTelemetryAttributeValidator.report(ex.getMessage(), ex);
+        }
     }
 }

@@ -1,5 +1,11 @@
 package com.threeamigos.common.util.interfaces.messagehandler.otel;
 
+import com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Filter;
+
+import java.io.File;
+
 /**
  * OpenTelemetry-like tracer API.
  * <p>
@@ -49,6 +55,79 @@ public interface Tracer {
      */
     default InstrumentationScope getInstrumentationScope() {
         return null;
+    }
+
+    default MessageHandler getConsoleMessageHandler() {
+        return new VoidMessageHandler();
+    }
+
+    default MessageHandler getConsoleMessageHandler(final Filter filter) {
+        return getConsoleMessageHandler();
+    }
+
+    default MessageHandler getFileMessageHandler(final String filePath) {
+        return new VoidMessageHandler();
+    }
+
+    default MessageHandler getFileMessageHandler(final String filePath,
+                                                 final Filter filter) {
+        return getFileMessageHandler(filePath);
+    }
+
+    default MessageHandler getFileMessageHandler(final File file) {
+        return new VoidMessageHandler();
+    }
+
+    default MessageHandler getFileMessageHandler(final File file,
+                                                 final Filter filter) {
+        return getFileMessageHandler(file);
+    }
+
+    default MessageHandler getInMemoryMessageHandler() {
+        return new VoidMessageHandler();
+    }
+
+    default MessageHandler getInMemoryMessageHandler(final Filter filter) {
+        return getInMemoryMessageHandler();
+    }
+
+    default MessageHandler getJULMessageHandler(final java.util.logging.Logger logger) {
+        return new VoidMessageHandler();
+    }
+
+    default MessageHandler getJULMessageHandler(final java.util.logging.Logger logger,
+                                                final Filter filter) {
+        return getJULMessageHandler(logger);
+    }
+
+    default MessageHandler getLog4JMessageHandler(final org.apache.logging.log4j.Logger logger) {
+        return new VoidMessageHandler();
+    }
+
+    default MessageHandler getLog4JMessageHandler(final org.apache.logging.log4j.Logger logger,
+                                                  final Filter filter) {
+        return getLog4JMessageHandler(logger);
+    }
+
+    default MessageHandler getSLF4JMessageHandler(final org.slf4j.Logger logger) {
+        return new VoidMessageHandler();
+    }
+
+    default MessageHandler getSLF4JMessageHandler(final org.slf4j.Logger logger,
+                                                  final Filter filter) {
+        return getSLF4JMessageHandler(logger);
+    }
+
+    default MessageHandler getSwingMessageHandler() {
+        return new VoidMessageHandler();
+    }
+
+    default MessageHandler getSwingMessageHandler(final Filter filter) {
+        return getSwingMessageHandler();
+    }
+
+    default MessageHandler getVoidMessageHandler() {
+        return new VoidMessageHandler();
     }
 
     /**

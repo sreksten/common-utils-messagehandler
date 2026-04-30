@@ -3,6 +3,7 @@ package com.threeamigos.common.util.implementations.messagehandler.otel;
 import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.CorrelationResolver;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Filter;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
@@ -39,6 +40,7 @@ public class TracerProvider {
     private volatile String defaultSchemaUrl;
     private volatile List<KeyValue> defaultCommonAttributes = Collections.emptyList();
     private volatile CorrelationResolver correlationResolver;
+    private volatile String defaultFilePath = "message-handler.log";
 
     public static TracerProvider getGlobal() {
         return INSTANCE;
@@ -49,6 +51,10 @@ public class TracerProvider {
 
     public static TracerProvider createProvider() {
         return new TracerProvider();
+    }
+
+    public static TracerProviderBuilder builder() {
+        return new TracerProviderBuilder();
     }
 
     public void setDefaultResource(final @Nullable Resource defaultResource) {
@@ -84,6 +90,15 @@ public class TracerProvider {
         return correlationResolver;
     }
 
+    public void setDefaultFilePath(final @Nullable String defaultFilePath) {
+        String normalized = normalizeNullable(defaultFilePath);
+        this.defaultFilePath = normalized == null ? "message-handler.log" : normalized;
+    }
+
+    public @Nonnull String getDefaultFilePath() {
+        return defaultFilePath;
+    }
+
     /**
      * Returns a tracer instance with the given instrumentation name and version.
      * <p>
@@ -97,6 +112,38 @@ public class TracerProvider {
     public Tracer getTracer(final @Nullable String instrumentationName,
                             final @Nullable String version) {
         return getTracer(instrumentationName, version, null, Collections.emptyList());
+    }
+
+    /**
+     * Returns a tracer with an optional tracer-level filter.
+     * <p>
+     * Filter-aware tracers are not cached: each invocation returns an isolated tracer instance
+     * carrying its own filter reference.
+     *
+     * @param instrumentationName The name of the instrumentation.
+     * @param filter filter used when creating message handlers from the tracer
+     * @return A tracer instance.
+     */
+    public Tracer getTracer(final @Nullable String instrumentationName,
+                            final @Nullable Filter filter) {
+        return getTracer(instrumentationName, null, null, Collections.emptyList(), filter);
+    }
+
+    /**
+     * Returns a tracer with version and optional tracer-level filter.
+     * <p>
+     * Filter-aware tracers are not cached: each invocation returns an isolated tracer instance
+     * carrying its own filter reference.
+     *
+     * @param instrumentationName The name of the instrumentation.
+     * @param version The version of the instrumentation.
+     * @param filter filter used when creating message handlers from the tracer
+     * @return A tracer instance.
+     */
+    public Tracer getTracer(final @Nullable String instrumentationName,
+                            final @Nullable String version,
+                            final @Nullable Filter filter) {
+        return getTracer(instrumentationName, version, null, Collections.emptyList(), filter);
     }
 
     /**
@@ -126,10 +173,31 @@ public class TracerProvider {
                 toAttributeSignature(resolvedAttributes));
         return tracersByScope.computeIfAbsent(key, ignored ->
                 new TracerImpl(
+                        this,
                         resolvedInstrumentationName,
                         resolvedVersion,
                         resolvedSchemaUrl,
                         resolvedAttributes));
+    }
+
+    public Tracer getTracer(final @Nullable String instrumentationName,
+                            final @Nullable String version,
+                            final @Nullable String schemaUrl,
+                            final @Nullable Collection<KeyValue> attributes,
+                            final @Nullable Filter filter) {
+        String normalizedInstrumentationName = normalizeInstrumentationName(instrumentationName);
+        String normalizedVersion = normalizeNullable(version);
+        String normalizedSchemaUrl = normalizeNullable(schemaUrl);
+        final String resolvedSchemaUrl = normalizedSchemaUrl == null ? defaultSchemaUrl : normalizedSchemaUrl;
+        final List<KeyValue> resolvedAttributes = copyAndNormalizeAttributes(attributes);
+        return new TracerImpl(
+                this,
+                normalizedInstrumentationName,
+                normalizedVersion,
+                resolvedSchemaUrl,
+                resolvedAttributes,
+                true,
+                filter);
     }
 
     public Tracer getTracer(final @Nullable InstrumentationScope instrumentationScope) {
@@ -141,6 +209,34 @@ public class TracerProvider {
                 instrumentationScope.getVersion(),
                 instrumentationScope.getSchemaUrl(),
                 instrumentationScope.getAttributes());
+    }
+
+    public Tracer getTracer(final @Nullable InstrumentationScope instrumentationScope,
+                            final @Nullable Filter filter) {
+        if (instrumentationScope == null) {
+            return getTracer(null, null, null, null, filter);
+        }
+        return getTracer(
+                instrumentationScope.getName(),
+                instrumentationScope.getVersion(),
+                instrumentationScope.getSchemaUrl(),
+                instrumentationScope.getAttributes(),
+                filter);
+    }
+
+    LogRecordFactory getDefaultEnrichingFactory(final @Nullable InstrumentationScope scope) {
+        return enrichingLogRecordFactory(new LogRecordFactoryImpl(), scope);
+    }
+
+    TracerMessageHandlerFactory buildMessageHandlerFactory(final @Nullable InstrumentationScope scope) {
+        return buildMessageHandlerFactory(scope, null);
+    }
+
+    TracerMessageHandlerFactory buildMessageHandlerFactory(final @Nullable InstrumentationScope scope,
+                                                           final @Nullable String filePath) {
+        String normalizedFilePath = normalizeNullable(filePath);
+        String resolvedFilePath = normalizedFilePath == null ? defaultFilePath : normalizedFilePath;
+        return new TracerMessageHandlerFactory(getDefaultEnrichingFactory(scope), resolvedFilePath);
     }
 
     public LogRecordFactory enrichingLogRecordFactory(final @Nonnull LogRecordFactory delegate,

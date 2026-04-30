@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
+import com.threeamigos.common.util.implementations.messagehandler.otel.filters.FilterByClassName;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.StatusCode;
 import org.junit.jupiter.api.DisplayName;
@@ -182,5 +184,56 @@ class TracerImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         assertEquals((byte) 0x00, child.getSpanContext().getTraceFlags());
         assertFalse(child.getSpanContext().isSampled());
         assertFalse(child.getSpanContext().isRandom());
+    }
+
+    @Test
+    @DisplayName("detached tracer convenience handlers should return void handlers")
+    void detachedTracerConvenienceHandlersShouldReturnVoidHandlers() {
+        TracerImpl detached = new TracerImpl("orders", "1.0.0", "schema", Collections.emptyList());
+        FilterByClassName filter = new FilterByClassName();
+
+        MessageHandler console = detached.getConsoleMessageHandler(filter);
+        MessageHandler fileFromString = detached.getFileMessageHandler("x.log", filter);
+        MessageHandler fileFromFile = detached.getFileMessageHandler(new java.io.File("x.log"), filter);
+        MessageHandler inMemory = detached.getInMemoryMessageHandler(filter);
+        MessageHandler jul = detached.getJULMessageHandler(java.util.logging.Logger.getLogger("detached"), filter);
+        MessageHandler log4j = detached.getLog4JMessageHandler(
+                org.apache.logging.log4j.LogManager.getLogger("detached"), filter);
+        MessageHandler slf4j = detached.getSLF4JMessageHandler(
+                org.slf4j.LoggerFactory.getLogger("detached"), filter);
+        MessageHandler swing = detached.getSwingMessageHandler(filter);
+        MessageHandler voidHandler = detached.getVoidMessageHandler();
+
+        assertTrue(console instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
+        assertTrue(fileFromString instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
+        assertTrue(fileFromFile instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
+        assertTrue(inMemory instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
+        assertTrue(jul instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
+        assertTrue(log4j instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
+        assertTrue(slf4j instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
+        assertTrue(swing instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
+        assertTrue(voidHandler instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
+    }
+
+    @Test
+    @DisplayName("attached tracer convenience handlers should resolve explicit handler implementations")
+    void attachedTracerConvenienceHandlersShouldResolveExplicitImplementations() {
+        TracerProvider provider = TracerProvider.builder()
+                .serviceName("orders")
+                .build();
+        TracerImpl attached = (TracerImpl) provider.getTracer("orders-api", "1.0.0");
+
+        MessageHandler console = attached.getConsoleMessageHandler();
+        MessageHandler file = attached.getFileMessageHandler("target/tracer-impl-test.log");
+        MessageHandler inMemory = attached.getInMemoryMessageHandler();
+        MessageHandler swing = attached.getSwingMessageHandler();
+        MessageHandler voidHandler = attached.getVoidMessageHandler();
+
+        assertTrue(console instanceof com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler);
+        assertTrue(file instanceof com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler);
+        assertTrue(inMemory instanceof StructuredBackendMessageHandler);
+        assertTrue(swing instanceof StructuredBackendMessageHandler);
+        assertTrue(voidHandler instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
+        file.close();
     }
 }

@@ -3,6 +3,7 @@ package com.threeamigos.common.util.implementations.messagehandler.otel;
 import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.ExportLogsServiceRequestLogRecordFormatter;
 import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.RawJsonRecordFormatter;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Entity;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
@@ -234,6 +235,54 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
         assertTrue(result.contains("},\"schemaUrl\":\"https://opentelemetry.io/schemas/1.27.0\",\"logRecords\""));
         assertFalse(result.contains("\"resource\":{\"schemaUrl\""));
         assertFalse(result.contains("\"scope\":{\"schemaUrl\""));
+    }
+
+    @Test
+    @DisplayName("raw formatter should serialize resource entities when present")
+    void rawFormatterShouldSerializeResourceEntitiesWhenPresent() {
+        Entity entity = EntityFactory.create(
+                "service",
+                "https://opentelemetry.io/schemas/1.26.0",
+                Collections.singletonList(new KeyValueImpl("service.name", AnyValueFactory.ofString("checkout-api"))),
+                Collections.singletonList(new KeyValueImpl("service.namespace", AnyValueFactory.ofString("payments"))));
+
+        Resource resource = ResourceFactory.create(
+                "https://opentelemetry.io/schemas/1.26.0",
+                Collections.singletonList(entity),
+                Collections.singletonList(new KeyValueImpl("deployment.environment.name", AnyValueFactory.ofString("prod"))));
+
+        LogRecordImpl record = new LogRecordImpl();
+        record.setTimestamp(FIXED_TS);
+        record.setResource(resource);
+
+        String result = rawFormatter.format(record);
+        assertTrue(result.contains("\"resource\":{"));
+        assertTrue(result.contains("\"attributes\":[{\"key\":\"deployment.environment.name\""));
+        assertTrue(result.contains("\"entities\":[{\"type\":\"service\""));
+        assertTrue(result.contains("\"id\":[{\"key\":\"service.name\""));
+        assertTrue(result.contains("\"description\":[{\"key\":\"service.namespace\""));
+        assertTrue(result.contains("\"schemaUrl\":\"https://opentelemetry.io/schemas/1.26.0\""));
+    }
+
+    @Test
+    @DisplayName("export formatter should serialize resource entities in resource block only")
+    void exportFormatterShouldSerializeResourceEntitiesInResourceBlockOnly() {
+        Entity entity = EntityFactory.create(
+                "service",
+                null,
+                Collections.singletonList(new KeyValueImpl("service.name", AnyValueFactory.ofString("checkout-api"))),
+                Collections.emptyList());
+        Resource resource = ResourceFactory.create(
+                null,
+                Collections.singletonList(entity),
+                Collections.emptyList());
+        LogRecordImpl record = new LogRecordImpl();
+        record.setTimestamp(FIXED_TS);
+        record.setResource(resource);
+
+        String result = formatter.format(record);
+        assertTrue(result.contains("\"resource\":{\"entities\":[{\"type\":\"service\",\"id\":[{\"key\":\"service.name\""));
+        assertFalse(result.contains("\"logRecords\":[{\"resource\":"));
     }
 
     @Test

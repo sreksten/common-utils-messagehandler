@@ -5,9 +5,11 @@ import com.threeamigos.common.util.implementations.messagehandler.otel.AnyValueF
 import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordImpl;
 import com.threeamigos.common.util.implementations.messagehandler.otel.OpenTelemetryAttributeValidator;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Entity;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Resource;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 import jakarta.annotation.Nonnull;
 
@@ -35,6 +37,12 @@ public class RawJsonRecordFormatter implements LogRecordFormatter {
     private static final String F_TRACE_ID = "traceId";
     private static final String F_SPAN_ID = "spanId";
     private static final String F_EVENT_NAME = "eventName";
+    private static final String F_RESOURCE = "resource";
+    private static final String F_ENTITIES = "entities";
+    private static final String F_TYPE = "type";
+    private static final String F_ID = "id";
+    private static final String F_DESCRIPTION = "description";
+    private static final String F_SCHEMA_URL = "schemaUrl";
 
     private static final String F_KEY = "key";
     private static final String F_VALUE = "value";
@@ -50,6 +58,15 @@ public class RawJsonRecordFormatter implements LogRecordFormatter {
 
     private static final BigInteger NANOS_PER_SECOND = BigInteger.valueOf(1_000_000_000L);
     private static final BigInteger UINT64_MAX = BigInteger.ONE.shiftLeft(64).subtract(BigInteger.ONE);
+    private final boolean includeResource;
+
+    public RawJsonRecordFormatter() {
+        this(true);
+    }
+
+    public RawJsonRecordFormatter(final boolean includeResource) {
+        this.includeResource = includeResource;
+    }
 
     @Nonnull
     @Override
@@ -74,6 +91,7 @@ public class RawJsonRecordFormatter implements LogRecordFormatter {
                 first = appendInt(sb, first, F_SEVERITY_NUMBER, severityNumber.getValue());
             }
             first = appendBody(sb, first, logRecord.getBody());
+            first = appendResource(sb, first, logRecord.getResource());
             first = appendKeyValueArray(sb, first, logRecord.getAttributes());
             int droppedAttributesCount = droppedAttributesCount(logRecord);
             if (droppedAttributesCount != 0) {
@@ -228,6 +246,93 @@ public class RawJsonRecordFormatter implements LogRecordFormatter {
         sb.append('"').append(F_ATTRIBUTES).append("\":");
         appendKeyValueArrayInline(sb, attrs);
         return false;
+    }
+
+    private boolean appendResource(final StringBuilder sb,
+                                   final boolean first,
+                                   final Resource resource) {
+        if (!includeResource || resource == null) {
+            return first;
+        }
+        separator(sb, first);
+        sb.append('"').append(F_RESOURCE).append("\":{");
+        boolean firstResourceField = true;
+        List<KeyValue> attributes = resource.getAttributes();
+        if (attributes != null && !attributes.isEmpty()) {
+            sb.append('"').append(F_ATTRIBUTES).append("\":");
+            appendKeyValueArrayInline(sb, attributes);
+            firstResourceField = false;
+        }
+        List<Entity> entities = resource.getEntities();
+        if (entities != null && !entities.isEmpty()) {
+            if (!firstResourceField) {
+                sb.append(',');
+            }
+            appendEntities(sb, entities);
+            firstResourceField = false;
+        }
+        String schemaUrl = resource.getSchemaUrl();
+        if (schemaUrl != null) {
+            if (!firstResourceField) {
+                sb.append(',');
+            }
+            sb.append('"').append(F_SCHEMA_URL).append("\":\"").append(escape(schemaUrl)).append('"');
+        }
+        sb.append('}');
+        return false;
+    }
+
+    private static void appendEntities(final StringBuilder sb, final List<Entity> entities) {
+        sb.append('"').append(F_ENTITIES).append("\":[");
+        boolean firstEntity = true;
+        for (Entity entity : entities) {
+            if (entity == null) {
+                OpenTelemetryAttributeValidator.handleBundled("resourceContainsNullEntity");
+                continue;
+            }
+            if (!firstEntity) {
+                sb.append(',');
+            }
+            appendEntity(sb, entity);
+            firstEntity = false;
+        }
+        sb.append(']');
+    }
+
+    private static void appendEntity(final StringBuilder sb, final Entity entity) {
+        sb.append('{');
+        boolean firstEntityField = true;
+        String type = entity.getType();
+        if (type != null) {
+            sb.append('"').append(F_TYPE).append("\":\"").append(escape(type)).append('"');
+            firstEntityField = false;
+        }
+        List<KeyValue> id = entity.getId();
+        if (id != null && !id.isEmpty()) {
+            if (!firstEntityField) {
+                sb.append(',');
+            }
+            sb.append('"').append(F_ID).append("\":");
+            appendKeyValueArrayInline(sb, id);
+            firstEntityField = false;
+        }
+        List<KeyValue> description = entity.getDescription();
+        if (description != null && !description.isEmpty()) {
+            if (!firstEntityField) {
+                sb.append(',');
+            }
+            sb.append('"').append(F_DESCRIPTION).append("\":");
+            appendKeyValueArrayInline(sb, description);
+            firstEntityField = false;
+        }
+        String schemaUrl = entity.getSchemaUrl();
+        if (schemaUrl != null) {
+            if (!firstEntityField) {
+                sb.append(',');
+            }
+            sb.append('"').append(F_SCHEMA_URL).append("\":\"").append(escape(schemaUrl)).append('"');
+        }
+        sb.append('}');
     }
 
     private static void appendAnyValue(final StringBuilder sb, final AnyValue value) {

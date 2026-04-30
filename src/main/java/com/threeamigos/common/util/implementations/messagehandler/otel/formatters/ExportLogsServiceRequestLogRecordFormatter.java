@@ -3,6 +3,7 @@ package com.threeamigos.common.util.implementations.messagehandler.otel.formatte
 import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordImpl;
 import com.threeamigos.common.util.implementations.messagehandler.otel.OpenTelemetryAttributeValidator;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Entity;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
@@ -36,8 +37,12 @@ public class ExportLogsServiceRequestLogRecordFormatter implements LogRecordForm
     private static final String F_DROPPED_ATTRIBUTES_COUNT = "droppedAttributesCount";
     private static final String F_NAME = "name";
     private static final String F_VERSION = "version";
+    private static final String F_ENTITIES = "entities";
+    private static final String F_TYPE = "type";
+    private static final String F_ID = "id";
+    private static final String F_DESCRIPTION = "description";
 
-    private final RawJsonRecordFormatter rawJsonRecordFormatter = new RawJsonRecordFormatter();
+    private final RawJsonRecordFormatter rawJsonRecordFormatter = new RawJsonRecordFormatter(false);
 
     @Nonnull
     @Override
@@ -65,15 +70,77 @@ public class ExportLogsServiceRequestLogRecordFormatter implements LogRecordForm
 
     private static void appendResourceBlock(final StringBuilder sb, final Resource resource) {
         sb.append('"').append(F_RESOURCE).append("\":{");
+        boolean resourceFirst = true;
         List<KeyValue> attributes = resource.getAttributes() != null ? resource.getAttributes() : Collections.emptyList();
         if (!attributes.isEmpty()) {
+            resourceFirst = false;
             sb.append('"').append(F_ATTRIBUTES).append("\":");
             RawJsonRecordFormatter.appendKeyValueArrayInline(sb, attributes);
+        }
+        List<Entity> entities = resource.getEntities() != null ? resource.getEntities() : Collections.emptyList();
+        if (!entities.isEmpty()) {
+            if (!resourceFirst) {
+                sb.append(',');
+            }
+            appendEntities(sb, entities);
         }
         sb.append('}');
         if (resource.getSchemaUrl() != null) {
             sb.append(",\"").append(F_SCHEMA_URL).append("\":\"").append(RawJsonRecordFormatter.escape(resource.getSchemaUrl())).append('"');
         }
+    }
+
+    private static void appendEntities(final StringBuilder sb, final List<Entity> entities) {
+        sb.append('"').append(F_ENTITIES).append("\":[");
+        boolean firstEntity = true;
+        for (Entity entity : entities) {
+            if (entity == null) {
+                continue;
+            }
+            if (!firstEntity) {
+                sb.append(',');
+            }
+            appendEntity(sb, entity);
+            firstEntity = false;
+        }
+        sb.append(']');
+    }
+
+    private static void appendEntity(final StringBuilder sb, final Entity entity) {
+        sb.append('{');
+        boolean firstField = true;
+        if (entity.getType() != null) {
+            sb.append('"').append(F_TYPE).append("\":\"")
+                    .append(RawJsonRecordFormatter.escape(entity.getType())).append('"');
+            firstField = false;
+        }
+        List<KeyValue> id = entity.getId() != null ? entity.getId() : Collections.emptyList();
+        if (!id.isEmpty()) {
+            if (!firstField) {
+                sb.append(',');
+            }
+            sb.append('"').append(F_ID).append("\":");
+            RawJsonRecordFormatter.appendKeyValueArrayInline(sb, id);
+            firstField = false;
+        }
+        List<KeyValue> description = entity.getDescription() != null
+                ? entity.getDescription() : Collections.emptyList();
+        if (!description.isEmpty()) {
+            if (!firstField) {
+                sb.append(',');
+            }
+            sb.append('"').append(F_DESCRIPTION).append("\":");
+            RawJsonRecordFormatter.appendKeyValueArrayInline(sb, description);
+            firstField = false;
+        }
+        if (entity.getSchemaUrl() != null) {
+            if (!firstField) {
+                sb.append(',');
+            }
+            sb.append('"').append(F_SCHEMA_URL).append("\":\"")
+                    .append(RawJsonRecordFormatter.escape(entity.getSchemaUrl())).append('"');
+        }
+        sb.append('}');
     }
 
     private static void appendScopeBlock(final StringBuilder sb, final InstrumentationScope scope) {
