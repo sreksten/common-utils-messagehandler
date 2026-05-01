@@ -3,7 +3,6 @@ package com.threeamigos.common.util.implementations.messagehandler.otel;
 import com.threeamigos.common.util.implementations.messagehandler.AbstractMessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.CorrelationResolver;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Filter;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
@@ -21,9 +20,18 @@ import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.lang.reflect.Constructor;
 import java.util.logging.Logger;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -115,12 +123,11 @@ class TracerProviderUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
     @DisplayName("message handler created before span should still log active span trace and span ids")
     void messageHandlerCreatedBeforeSpanShouldStillLogActiveSpanTraceAndSpanIds() throws Exception {
         Path tempFile = Files.createTempFile("tracer-provider-correlation-", ".log");
-        SharedCorrelationResolver resolver = new SharedCorrelationResolver();
         TracerProvider provider = TracerProvider.builder()
                 .serviceName("orders")
-                .correlationResolver(resolver)
                 .defaultFilePath(tempFile.toAbsolutePath().toString())
                 .build();
+        assertNotNull(provider.getCorrelationResolver());
         Tracer tracer = provider.getTracer("orders-api", "1.0.0");
 
         MessageHandler handler = tracer.getFileMessageHandler(tempFile.toAbsolutePath().toString());
@@ -347,21 +354,16 @@ class TracerProviderUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
                 "1.0.0",
                 "https://resolver.schema",
                 Collections.emptyList());
-        provider.setCorrelationResolver(new CorrelationResolver() {
-            @Override
-            public SpanContext resolveSpanContext() {
-                return resolverContext;
-            }
+        TracerProvider.CorrelationScope token = provider.attachCorrelation(resolverContext, resolverScope);
 
-            @Override
-            public InstrumentationScope resolveInstrumentationScope() {
-                return resolverScope;
-            }
-        });
-
-        LogRecordFactory enrichedFactory =
-                provider.enrichingLogRecordFactory(new LogRecordFactoryImpl(), null);
-        LogRecord record = enrichedFactory.create(SeverityNumber.INFO, "hello");
+        LogRecord record;
+        try {
+            LogRecordFactory enrichedFactory =
+                    provider.enrichingLogRecordFactory(new LogRecordFactoryImpl(), null);
+            record = enrichedFactory.create(SeverityNumber.INFO, "hello");
+        } finally {
+            token.close();
+        }
 
         assertNotNull(record.getResource());
         assertNotNull(record.getInstrumentationScope());
@@ -388,13 +390,18 @@ class TracerProviderUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
                 (byte) 0x03,
                 false,
                 new TraceStateImpl());
-        provider.setCorrelationResolver(() -> resolverContext);
+        TracerProvider.CorrelationScope token = provider.attachCorrelation(resolverContext, null);
 
-        LogRecordFactory enrichedFactory = provider.enrichingLogRecordFactory(
-                new LogRecordFactoryImpl(),
-                null,
-                explicitContext);
-        LogRecord record = enrichedFactory.create();
+        LogRecord record;
+        try {
+            LogRecordFactory enrichedFactory = provider.enrichingLogRecordFactory(
+                    new LogRecordFactoryImpl(),
+                    null,
+                    explicitContext);
+            record = enrichedFactory.create();
+        } finally {
+            token.close();
+        }
 
         assertEquals(explicitContext.getTraceId(), record.getTraceId());
         assertEquals(explicitContext.getSpanId(), record.getSpanId());
@@ -410,26 +417,23 @@ class TracerProviderUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
                 "1.0.0",
                 "https://explicit.schema",
                 Collections.emptyList());
-        provider.setCorrelationResolver(new CorrelationResolver() {
-            @Override
-            public SpanContext resolveSpanContext() {
-                return null;
-            }
-
-            @Override
-            public InstrumentationScope resolveInstrumentationScope() {
-                return InstrumentationScopeFactory.create(
+        TracerProvider.CorrelationScope token = provider.attachCorrelation(
+                null,
+                InstrumentationScopeFactory.create(
                         "resolver-scope",
                         "1.0.0",
                         "https://resolver.schema",
-                        Collections.emptyList());
-            }
-        });
+                        Collections.emptyList()));
 
-        LogRecordFactory enrichedFactory = provider.enrichingLogRecordFactory(
-                new LogRecordFactoryImpl(),
-                explicitScope);
-        LogRecord record = enrichedFactory.create();
+        LogRecord record;
+        try {
+            LogRecordFactory enrichedFactory = provider.enrichingLogRecordFactory(
+                    new LogRecordFactoryImpl(),
+                    explicitScope);
+            record = enrichedFactory.create();
+        } finally {
+            token.close();
+        }
 
         assertNotNull(record.getInstrumentationScope());
         assertSame(explicitScope, record.getInstrumentationScope());
@@ -443,13 +447,89 @@ class TracerProviderUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         assertNull(provider.getDefaultResource());
         assertNull(provider.getDefaultSchemaUrl());
         assertTrue(provider.getDefaultCommonAttributes().isEmpty());
-        assertNull(provider.getCorrelationResolver());
+        assertNotNull(provider.getCorrelationResolver());
 
         provider.setDefaultSchemaUrl("   ");
         assertNull(provider.getDefaultSchemaUrl());
 
         provider.setDefaultCommonAttributes(null);
         assertTrue(provider.getDefaultCommonAttributes().isEmpty());
+
+        assertEquals("message-handler.log", provider.getDefaultFilePath());
+        provider.setDefaultFilePath("   ");
+        assertEquals("message-handler.log", provider.getDefaultFilePath());
+    }
+
+    @Test
+    @DisplayName("provider attachCorrelation should set and restore context without resolver exposure")
+    void providerAttachCorrelationShouldSetAndRestoreContextWithoutResolverExposure() {
+        TracerProvider provider = TracerProvider.createProvider();
+        CorrelationResolver resolver = provider.getCorrelationResolver();
+        SpanContext spanContext = new SpanContextImpl(
+                "5b8efff798038103d269b633813fc60c",
+                "eee19b7ec3c1b174",
+                (byte) 0x01,
+                false,
+                new TraceStateImpl());
+        InstrumentationScope scope = InstrumentationScopeFactory.create(
+                "orders",
+                "1.0.0",
+                "https://schema",
+                Collections.emptyList());
+
+        try (TracerProvider.CorrelationScope ignored = provider.attachCorrelation(spanContext, scope)) {
+            assertSame(spanContext, resolver.resolveSpanContext());
+            assertSame(scope, resolver.resolveInstrumentationScope());
+        }
+
+        assertNull(resolver.resolveSpanContext());
+        assertNull(resolver.resolveInstrumentationScope());
+
+        provider.attachCorrelation(spanContext).close();
+        provider.clearCorrelation();
+        assertNull(resolver.resolveSpanContext());
+    }
+
+    @Test
+    @DisplayName("provider wrap and context-aware executor helpers should propagate context")
+    void providerWrapAndContextAwareExecutorHelpersShouldPropagateContext() throws Exception {
+        TracerProvider provider = TracerProvider.createProvider();
+        CorrelationResolver resolver = provider.getCorrelationResolver();
+        SpanContext mainSpan = new SpanContextImpl(
+                "5b8efff798038103d269b633813fc60c",
+                "eee19b7ec3c1b174",
+                (byte) 0x01,
+                false,
+                new TraceStateImpl());
+        resolver.setActiveSpanContext(mainSpan);
+
+        ExecutorService raw = Executors.newSingleThreadExecutor();
+        try {
+            Executor contextAwareExecutor = provider.contextAwareExecutor(raw);
+            AtomicReference<SpanContext> seenByExecute = new AtomicReference<SpanContext>();
+            CountDownLatch latch = new CountDownLatch(1);
+            contextAwareExecutor.execute(new Runnable() {
+                @Override
+                public void run() {
+                    seenByExecute.set(resolver.resolveSpanContext());
+                    latch.countDown();
+                }
+            });
+            assertTrue(latch.await(5, TimeUnit.SECONDS));
+
+            ExecutorService contextAwareService = provider.contextAwareExecutorService(raw);
+            Future<SpanContext> second = contextAwareService.submit(provider.wrap(new Callable<SpanContext>() {
+                @Override
+                public SpanContext call() {
+                    return resolver.resolveSpanContext();
+                }
+            }));
+
+            assertSame(mainSpan, seenByExecute.get());
+            assertSame(mainSpan, second.get());
+        } finally {
+            raw.shutdownNow();
+        }
     }
 
     @Test
@@ -577,5 +657,32 @@ class TracerProviderUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
     }
 
     private static final class FilterProbe {
+    }
+
+    @Test
+    @DisplayName("TracerKey equals/hash should cover self and null comparisons")
+    void tracerKeyEqualsHashShouldCoverSelfAndNullComparisons() throws Exception {
+        Class<?> keyClass = Class.forName("com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider$TracerKey");
+        Constructor<?> constructor = keyClass.getDeclaredConstructors()[0];
+        constructor.setAccessible(true);
+        Class<?>[] parameterTypes = constructor.getParameterTypes();
+        Object[] args = new Object[parameterTypes.length];
+        for (int i = 0; i < parameterTypes.length; i++) {
+            Class<?> type = parameterTypes[i];
+            if (type == TracerProvider.class) {
+                args[i] = TracerProvider.createProvider();
+            } else if (type == String.class) {
+                args[i] = "x";
+            } else if (List.class.isAssignableFrom(type)) {
+                args[i] = Collections.singletonList("k=v");
+            } else {
+                args[i] = null;
+            }
+        }
+        Object key = constructor.newInstance(args);
+
+        assertTrue(key.equals(key));
+        assertFalse(key.equals(null));
+        assertNotNull(key.hashCode());
     }
 }

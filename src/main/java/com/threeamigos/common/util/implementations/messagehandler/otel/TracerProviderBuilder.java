@@ -1,6 +1,5 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
-import com.threeamigos.common.util.interfaces.messagehandler.otel.CorrelationResolver;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Resource;
 
@@ -19,7 +18,6 @@ public final class TracerProviderBuilder {
     private String schemaUrl;
     private final List<KeyValue> resourceAttributes = new ArrayList<>();
     private final List<KeyValue> commonAttributes = new ArrayList<>();
-    private CorrelationResolver correlationResolver;
     private String defaultFilePath;
     private Resource resource;
 
@@ -74,11 +72,6 @@ public final class TracerProviderBuilder {
         return this;
     }
 
-    public TracerProviderBuilder correlationResolver(final CorrelationResolver correlationResolver) {
-        this.correlationResolver = correlationResolver;
-        return this;
-    }
-
     public TracerProviderBuilder defaultFilePath(final String defaultFilePath) {
         this.defaultFilePath = defaultFilePath;
         return this;
@@ -92,7 +85,6 @@ public final class TracerProviderBuilder {
     public TracerProvider build() {
         TracerProvider provider = TracerProvider.createProvider();
         provider.setDefaultSchemaUrl(schemaUrl);
-        provider.setCorrelationResolver(correlationResolver);
         provider.setDefaultCommonAttributes(commonAttributes);
         provider.setDefaultFilePath(defaultFilePath);
 

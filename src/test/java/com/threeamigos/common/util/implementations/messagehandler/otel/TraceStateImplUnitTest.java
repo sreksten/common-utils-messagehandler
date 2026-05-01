@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -168,6 +169,57 @@ class TraceStateImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
 
         TraceState unchanged = state.set("vendor", AnyValueFactory.ofLong(1L));
         assertSame(state, unchanged);
+        assertEquals("ok", state.get("vendor").asString());
+    }
+
+    @Test
+    @DisplayName("lenient mode should ignore string AnyValue with null payload")
+    void lenientModeShouldIgnoreStringAnyValueWithNullPayload() {
+        setLenient(true);
+        TraceState state = new TraceStateImpl().set("vendor", AnyValueFactory.ofString("ok"));
+        AnyValue invalidString = new AnyValue() {
+            @Override
+            public Type getType() {
+                return Type.STRING;
+            }
+
+            @Override
+            public String asString() {
+                return null;
+            }
+
+            @Override
+            public boolean asBoolean() {
+                return false;
+            }
+
+            @Override
+            public long asLong() {
+                return 0;
+            }
+
+            @Override
+            public double asDouble() {
+                return 0;
+            }
+
+            @Override
+            public List<AnyValue> asArray() {
+                return Collections.emptyList();
+            }
+
+            @Override
+            public List<KeyValue> asKvList() {
+                return Collections.emptyList();
+            }
+
+            @Override
+            public byte[] asBytes() {
+                return new byte[0];
+            }
+        };
+
+        assertSame(state, state.set("vendor", invalidString));
         assertEquals("ok", state.get("vendor").asString());
     }
 

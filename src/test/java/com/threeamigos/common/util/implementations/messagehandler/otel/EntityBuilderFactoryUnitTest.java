@@ -269,6 +269,21 @@ class EntityBuilderFactoryUnitTest extends AbstractOtelValidatorLogTrapUnitTest 
         setLenient(ORIGINAL_LENIENT);
     }
 
+    @Test
+    @DisplayName("id string overloads should normalize null and blank id values in lenient mode")
+    void idStringOverloadsShouldNormalizeNullAndBlankIdValuesInLenientMode() {
+        setLenient(true);
+        Entity entity = new EntityBuilderImpl()
+                .withType("custom")
+                .withNoSchemaUrl()
+                .withIdString((String) null, null)
+                .withIdString(" ", " ")
+                .build();
+
+        assertEquals("unknown_id", entity.getId().get(0).getKey());
+        assertEquals("unknown", entity.getId().get(0).getValue().asString());
+    }
+
     private static void assertEntity(final String expectedType,
                                      final String expectedSchemaUrl,
                                      final Entity entity,

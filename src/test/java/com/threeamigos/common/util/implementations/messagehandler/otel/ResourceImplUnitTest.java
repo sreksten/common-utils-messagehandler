@@ -383,6 +383,64 @@ class ResourceFactoryUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
     }
 
     @Test
+    @DisplayName("resource should tolerate malformed entity id/description lists in lenient mode")
+    void resourceShouldTolerateMalformedEntityIdDescriptionListsInLenientMode() {
+        setLenient(true);
+        Entity malformed = new Entity() {
+            @Override
+            public String getType() {
+                return "custom";
+            }
+
+            @Override
+            public String getSchemaUrl() {
+                return "https://schema";
+            }
+
+            @Override
+            public List<KeyValue> getId() {
+                return Collections.singletonList(null);
+            }
+
+            @Override
+            public List<KeyValue> getDescription() {
+                return Collections.singletonList(new KeyValue() {
+                    @Override
+                    public String getKey() {
+                        return null;
+                    }
+
+                    @Override
+                    public AnyValue getValue() {
+                        return AnyValueFactory.ofString("v");
+                    }
+                });
+            }
+
+            @Override
+            public Entity merge(Entity other) {
+                return this;
+            }
+        };
+
+        Resource resource = ResourceFactory.create(
+                "https://schema",
+                Collections.singletonList(malformed),
+                Collections.singletonList(new KeyValueImpl("loose", AnyValueFactory.ofString("x"))));
+        assertNotNull(resource);
+    }
+
+    @Test
+    @DisplayName("resource merge should normalize blank schema URLs as absent")
+    void resourceMergeShouldNormalizeBlankSchemaUrlsAsAbsent() {
+        setLenient(true);
+        Resource base = ResourceFactory.create("   ", null, null);
+        Resource incoming = ResourceFactory.create("https://schema", null, null);
+        Resource merged = base.merge(incoming);
+        assertEquals("https://schema", merged.getSchemaUrl());
+    }
+
+    @Test
     @DisplayName("merge() should merge entities by type and drop loose attributes covered by merged entity keys")
     void mergeShouldMergeEntitiesAndDropCoveredLooseAttributes() {
         Entity baseService = EntityFactory.create(

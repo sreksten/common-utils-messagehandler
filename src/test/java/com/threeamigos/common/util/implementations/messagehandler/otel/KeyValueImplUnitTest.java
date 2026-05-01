@@ -19,6 +19,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @Tag("messageHandler")
 class KeyValueImplUnitTest {
 
+    @org.junit.jupiter.api.AfterEach
+    void restoreLenient() {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(false);
+    }
+
     @Test
     @DisplayName("constructor should reject null key")
     void constructorShouldRejectNullKey() {
@@ -105,5 +110,22 @@ class KeyValueImplUnitTest {
         assertNotEquals(left, differentValue);
         assertNotEquals(left, null);
         assertNotEquals(left, "service.name=checkout");
+        assertEquals(left, left);
+    }
+
+    @Test
+    @DisplayName("lenient mode should normalize invalid constructor values")
+    void lenientModeShouldNormalizeInvalidConstructorValues() {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(true);
+
+        KeyValueImpl fromNullTag = new KeyValueImpl((OTelTags) null, null);
+        KeyValueImpl fromNullKey = new KeyValueImpl((String) null, AnyValueFactory.ofString("x"));
+        KeyValueImpl fromBlankKey = new KeyValueImpl(" ", null);
+
+        assertEquals("unknown", fromNullTag.getKey());
+        assertEquals(AnyValue.Type.EMPTY, fromNullTag.getValue().getType());
+        assertEquals("unknown", fromNullKey.getKey());
+        assertEquals("unknown", fromBlankKey.getKey());
+        assertEquals(AnyValue.Type.EMPTY, fromBlankKey.getValue().getType());
     }
 }

@@ -287,6 +287,32 @@ class EnrichingLogRecordFactoryUnitTest {
     }
 
     @Test
+    @DisplayName("enrichment should set only missing span correlation fields")
+    void enrichmentShouldSetOnlyMissingSpanCorrelationFields() {
+        LogRecordFactory delegate = mock(LogRecordFactory.class);
+        LogRecordImpl record = new LogRecordImpl();
+        record.setTraceId("7b8efff798038103d269b633813fc60c");
+        record.setSpanId(" ");
+        record.setTraceFlags(0);
+        SpanContext explicit = new SpanContextImpl(
+                "5b8efff798038103d269b633813fc60c",
+                "eee19b7ec3c1b174",
+                (byte) 0x01,
+                false,
+                new TraceStateImpl());
+        when(delegate.create()).thenReturn(record);
+
+        EnrichingLogRecordFactory sut = new EnrichingLogRecordFactory(
+                delegate, null, null, Collections.<KeyValue>emptyList(), explicit);
+
+        LogRecord enriched = sut.create();
+        assertSame(record, enriched);
+        assertEquals("7b8efff798038103d269b633813fc60c", record.getTraceId());
+        assertEquals(explicit.getSpanId(), record.getSpanId());
+        assertEquals(0x01, record.getTraceFlags());
+    }
+
+    @Test
     @DisplayName("enrichRecord should throw in strict mode when record is null")
     void enrichRecordShouldThrowInStrictModeWhenRecordIsNull() {
         OpenTelemetryAttributeValidator.setLenientModeForTests(false);

@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
+import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordFactoryImpl;
+import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.ConsoleLogRecordFormatter;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
@@ -19,6 +21,13 @@ import java.io.PrintStream;
 public class ConsoleMessageHandler extends AbstractOutputMessageHandler {
 
     private static final Object PRINT_LOCK = new Object();
+
+    /**
+     * Creates a synchronous {@code ConsoleMessageHandler} that writes directly on the calling thread.
+     */
+    public ConsoleMessageHandler() {
+        this(new LogRecordFactoryImpl(), new ConsoleLogRecordFormatter(), false, 0, false);
+    }
 
     /**
      * Creates a synchronous {@code ConsoleMessageHandler} that writes directly on the calling thread.

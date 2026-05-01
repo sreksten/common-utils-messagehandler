@@ -15,6 +15,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -154,6 +155,26 @@ class ResourceBuilderFactoryUnitTest extends AbstractOtelValidatorLogTrapUnitTes
         assertEquals(1, resource.getEntities().size());
         assertEquals("service", resource.getEntities().get(0).getType());
         assertFalse(attributes.containsKey(OTelTags.SERVICE_NAME.getValue()));
+    }
+
+    @Test
+    @DisplayName("builder should ignore null entity in lenient mode")
+    void builderShouldIgnoreNullEntityInLenientMode() {
+        setLenient(true);
+        ResourceBuilderImpl builder = new ResourceBuilderImpl();
+        Resource resource = builder
+                .withServiceName("checkout")
+                .withNoServiceNamespace()
+                .withNoServiceVersion()
+                .withNoServiceInstanceId()
+                .withNoDeploymentEnvironmentName()
+                .withNoSchemaUrl()
+                .withEntity(null)
+                .withNoEntity()
+                .build();
+
+        assertNotNull(resource);
+        assertTrue(resource.getEntities().isEmpty());
     }
 
     private static Map<String, String> stringValuesByKey(final java.util.List<KeyValue> keyValues) {

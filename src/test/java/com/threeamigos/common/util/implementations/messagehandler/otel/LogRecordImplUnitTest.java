@@ -9,6 +9,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -70,6 +71,9 @@ class LogRecordImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
 
         assertDoesNotThrow(() -> record.setObservedTimestamp(Instant.parse("1969-12-31T23:59:59.999999999Z")));
         assertNull(record.getObservedTimestamp());
+
+        record.setObservedTimestamp(null);
+        assertNull(record.getObservedTimestamp());
     }
 
     @Test
@@ -129,6 +133,8 @@ class LogRecordImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
     @DisplayName("severity setters should keep number and text independent")
     void severitySettersShouldKeepNumberAndTextIndependent() {
         LogRecordImpl record = new LogRecordImpl();
+        record.setSeverityText(null);
+        assertNull(record.getSeverityText());
         record.setSeverityText("NOTICE");
         assertEquals("NOTICE", record.getSeverityText());
 
@@ -163,6 +169,8 @@ class LogRecordImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         assertEquals("evt", record.getEventName());
 
         record.setEventName("   ");
+        assertNull(record.getEventName());
+        record.setEventName(null);
         assertNull(record.getEventName());
     }
 
@@ -236,5 +244,20 @@ class LogRecordImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         assertEquals(128, record.getAttributes().size());
         assertEquals(1, record.getDroppedAttributesCount());
         assertEquals("k127", record.getAttributes().get(127).getKey());
+    }
+
+    @Test
+    @DisplayName("private bundle helpers should return fallback when key is missing")
+    void privateBundleHelpersShouldReturnFallbackWhenKeyMissing() throws Exception {
+        Method safeBundleFormat = LogRecordImpl.class.getDeclaredMethod("safeBundleFormat", String.class, Object[].class);
+        Method safeBundleGet = LogRecordImpl.class.getDeclaredMethod("safeBundleGet", String.class, String.class);
+        safeBundleFormat.setAccessible(true);
+        safeBundleGet.setAccessible(true);
+
+        String formatted = (String) safeBundleFormat.invoke(null, "missing.bundle.key", new Object[]{"x"});
+        String fetched = (String) safeBundleGet.invoke(null, "missing.bundle.key", "fallback");
+
+        assertEquals("missing.bundle.key", formatted);
+        assertEquals("fallback", fetched);
     }
 }

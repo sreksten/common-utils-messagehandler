@@ -2,7 +2,6 @@ package com.threeamigos.common.util.implementations.messagehandler.otel;
 
 import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.CorrelationResolver;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Filter;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
@@ -21,7 +20,10 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 
 /**
  * Stateful provider for creating and caching {@link Tracer} instances by instrumentation scope identity.
@@ -39,7 +41,7 @@ public class TracerProvider {
     private volatile Resource defaultResource;
     private volatile String defaultSchemaUrl;
     private volatile List<KeyValue> defaultCommonAttributes = Collections.emptyList();
-    private volatile CorrelationResolver correlationResolver;
+    private final CorrelationResolver correlationResolver = new CorrelationResolver();
     private volatile String defaultFilePath = "message-handler.log";
 
     public static TracerProvider getGlobal() {
@@ -80,14 +82,6 @@ public class TracerProvider {
 
     public @Nonnull List<KeyValue> getDefaultCommonAttributes() {
         return defaultCommonAttributes;
-    }
-
-    public void setCorrelationResolver(final @Nullable CorrelationResolver correlationResolver) {
-        this.correlationResolver = correlationResolver;
-    }
-
-    public @Nullable CorrelationResolver getCorrelationResolver() {
-        return correlationResolver;
     }
 
     public void setDefaultFilePath(final @Nullable String defaultFilePath) {
@@ -247,23 +241,47 @@ public class TracerProvider {
     public LogRecordFactory enrichingLogRecordFactory(final @Nonnull LogRecordFactory delegate,
                                                       final @Nullable InstrumentationScope scope,
                                                       final @Nullable SpanContext explicitSpanContext) {
-        CorrelationResolver resolver = correlationResolver;
-        if (resolver == null) {
-            return new EnrichingLogRecordFactory(
-                    delegate,
-                    defaultResource,
-                    scope,
-                    defaultCommonAttributes,
-                    explicitSpanContext);
-        }
         return new EnrichingLogRecordFactory(
                 delegate,
                 defaultResource,
                 scope,
                 defaultCommonAttributes,
                 explicitSpanContext,
-                resolver::resolveSpanContext,
-                resolver::resolveInstrumentationScope);
+                correlationResolver::resolveSpanContext,
+                correlationResolver::resolveInstrumentationScope);
+    }
+
+    public Runnable wrap(final Runnable task) {
+        return correlationResolver.wrap(task);
+    }
+
+    public <V> Callable<V> wrap(final Callable<V> task) {
+        return correlationResolver.wrap(task);
+    }
+
+    public Executor contextAwareExecutor(final Executor delegate) {
+        return correlationResolver.contextAwareExecutor(delegate);
+    }
+
+    public ExecutorService contextAwareExecutorService(final ExecutorService delegate) {
+        return correlationResolver.contextAwareExecutorService(delegate);
+    }
+
+    public CorrelationScope attachCorrelation(final @Nullable SpanContext spanContext,
+                                              final @Nullable InstrumentationScope instrumentationScope) {
+        return new CorrelationScope(correlationResolver.attach(spanContext, instrumentationScope));
+    }
+
+    public CorrelationScope attachCorrelation(final @Nullable SpanContext spanContext) {
+        return attachCorrelation(spanContext, null);
+    }
+
+    public void clearCorrelation() {
+        correlationResolver.clear();
+    }
+
+    CorrelationResolver getCorrelationResolver() {
+        return correlationResolver;
     }
 
     private static String normalizeInstrumentationName(final String instrumentationName) {
@@ -366,6 +384,19 @@ public class TracerProvider {
         @Override
         public int hashCode() {
             return Objects.hash(instrumentationName, version, schemaUrl, attributeSignature);
+        }
+    }
+
+    public static final class CorrelationScope implements AutoCloseable {
+        private final CorrelationResolver.ScopeToken token;
+
+        private CorrelationScope(final CorrelationResolver.ScopeToken token) {
+            this.token = token;
+        }
+
+        @Override
+        public void close() {
+            token.close();
         }
     }
 

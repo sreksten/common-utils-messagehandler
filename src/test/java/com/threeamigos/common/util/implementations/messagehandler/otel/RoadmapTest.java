@@ -34,7 +34,6 @@ class RoadmapTest {
                     .resourceAttribute(OTelTags.SERVICE_NAMESPACE, "payments")
                     .resourceAttribute(OTelTags.CLOUD_PROVIDER, "aws")
                     .commonAttribute("app.region", "eu-west-1")
-                    .correlationResolver(new SharedCorrelationResolver())
                     .build();
 
             Filter filter = new FilterByClassName();
@@ -137,7 +136,6 @@ class RoadmapTest {
                     .resourceAttribute(OTelTags.SERVICE_NAMESPACE, "payments")
                     .resourceAttribute(OTelTags.CLOUD_PROVIDER, "aws")
                     .commonAttribute("app.region", "eu-west-1")
-                    .correlationResolver(new SharedCorrelationResolver())
                     .build();
 
             Filter filter = new FilterByClassName();

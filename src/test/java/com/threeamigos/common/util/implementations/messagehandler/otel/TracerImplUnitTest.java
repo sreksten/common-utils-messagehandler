@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -213,6 +214,9 @@ class TracerImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         assertTrue(slf4j instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
         assertTrue(swing instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
         assertTrue(voidHandler instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
+
+        MessageHandler fileFromFileNoFilter = detached.getFileMessageHandler(new java.io.File("x.log"));
+        assertTrue(fileFromFileNoFilter instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
     }
 
     @Test
@@ -235,5 +239,52 @@ class TracerImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         assertTrue(swing instanceof StructuredBackendMessageHandler);
         assertTrue(voidHandler instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
         file.close();
+    }
+
+    @Test
+    @DisplayName("file handler should use provider default path when null or blank is passed")
+    void fileHandlerShouldUseProviderDefaultPathWhenNullOrBlankIsPassed() {
+        TracerProvider provider = TracerProvider.builder()
+                .serviceName("orders")
+                .defaultFilePath("target/tracer-impl-default-path.log")
+                .build();
+        TracerImpl tracer = (TracerImpl) provider.getTracer("orders-api", "1.0.0");
+
+        MessageHandler fromNull = tracer.getFileMessageHandler((String) null);
+        MessageHandler fromBlank = tracer.getFileMessageHandler("   ");
+        assertNotNull(fromNull);
+        assertNotNull(fromBlank);
+        fromNull.close();
+        fromBlank.close();
+    }
+
+    @Test
+    @DisplayName("applyFilterLevels should also evaluate source class branch")
+    void applyFilterLevelsShouldAlsoEvaluateSourceClassBranch() throws Exception {
+        TracerProvider provider = TracerProvider.builder().serviceName("orders").build();
+        TracerImpl tracer = (TracerImpl) provider.getTracer("orders-api", "1.0.0");
+        MessageHandler handler = tracer.getInMemoryMessageHandler();
+
+        FilterByClassName filter = new FilterByClassName();
+        filter.add(TracerImplUnitTest.class.getName(), com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber.INFO);
+
+        Method method = TracerImpl.class.getDeclaredMethod(
+                "applyFilterLevels",
+                MessageHandler.class,
+                Class.class,
+                com.threeamigos.common.util.interfaces.messagehandler.otel.Filter.class);
+        method.setAccessible(true);
+        assertDoesNotThrow(() -> method.invoke(tracer, handler, TracerImplUnitTest.class, filter));
+    }
+
+    @Test
+    @DisplayName("createFactory owner-null branch should return default factory")
+    void createFactoryOwnerNullBranchShouldReturnDefaultFactory() throws Exception {
+        TracerImpl detached = new TracerImpl("orders", "1.0.0", "schema", Collections.emptyList());
+        Method method = TracerImpl.class.getDeclaredMethod("createFactory", String.class);
+        method.setAccessible(true);
+        Object factory = method.invoke(detached, (String) null);
+        assertNotNull(factory);
+        assertTrue(factory instanceof TracerMessageHandlerFactory);
     }
 }

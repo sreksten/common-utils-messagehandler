@@ -79,6 +79,44 @@ class OpenTelemetryAttributeValidatorErrorHandlingUnitTest {
         assertTrue(OpenTelemetryAttributeValidator.isLenientMode());
     }
 
+    @Test
+    @DisplayName("report should create default throwable when null and fallback when trap fails")
+    void reportShouldCreateDefaultThrowableWhenNullAndFallbackWhenTrapFails() {
+        setLenient(true);
+
+        List<LoggedError> trapped = new ArrayList<>();
+        OpenTelemetryAttributeValidator.setLogTrapForTests((message, throwable) -> {
+            if ("explode".equals(message)) {
+                throw new RuntimeException("trap-failure");
+            }
+            trapped.add(new LoggedError(message, throwable));
+        });
+        OpenTelemetryAttributeValidator.report("null-throwable", null);
+        OpenTelemetryAttributeValidator.report("explode", new IllegalStateException("x"));
+        OpenTelemetryAttributeValidator.setLogTrapForTests(null);
+
+        assertTrue(hasMessageWithThrowable(trapped, "null-throwable", IllegalArgumentException.class));
+    }
+
+    @Test
+    @DisplayName("lenient bundled resolution should include args when key is missing")
+    void lenientBundledResolutionShouldIncludeArgsWhenKeyIsMissing() {
+        setLenient(true);
+
+        List<LoggedError> loggedErrors = trapLogs(() ->
+                OpenTelemetryAttributeValidator.reportBundled("missing.bundle.with.args", "a", 1));
+
+        assertTrue(loggedErrors.stream().anyMatch(record ->
+                record.message != null && record.message.contains("missing.bundle.with.args")));
+    }
+
+    @Test
+    @DisplayName("strict mode missing bundled key with args should not throw")
+    void strictModeMissingBundledKeyWithArgsShouldNotThrow() {
+        setLenient(false);
+        assertDoesNotThrow(() -> OpenTelemetryAttributeValidator.reportBundled("missing.bundle.with.args.strict", "x"));
+    }
+
     private static void setLenient(final boolean value) {
         OpenTelemetryAttributeValidator.setLenientModeForTests(value);
     }

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -223,6 +224,7 @@ class AnyValueImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         AnyValue value = AnyValueFactory.ofString("x");
         assertNotEquals(value, null);
         assertNotEquals(value, "x");
+        assertNotEquals(value, AnyValueFactory.ofLong(1L));
     }
 
     @Test
@@ -274,5 +276,49 @@ class AnyValueImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         assertNotSame(first, second);
         first[0] = 9;
         assertArrayEquals(new byte[]{1, 2, 3}, second);
+    }
+
+    @Test
+    @DisplayName("hashCode should execute all type branches")
+    void hashCodeShouldExecuteAllTypeBranches() {
+        assertNotEquals(0, AnyValueFactory.empty().hashCode());
+        assertNotEquals(0, AnyValueFactory.ofString("s").hashCode());
+        assertNotEquals(0, AnyValueFactory.ofBoolean(true).hashCode());
+        assertNotEquals(0, AnyValueFactory.ofLong(12L).hashCode());
+        assertNotEquals(0, AnyValueFactory.ofDouble(1.5d).hashCode());
+        assertNotEquals(0, AnyValueFactory.ofArray(Collections.<AnyValue>singletonList(AnyValueFactory.ofString("a"))).hashCode());
+        assertNotEquals(0, AnyValueFactory.ofKvList(Collections.<com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue>singletonList(
+                new KeyValueImpl("k", AnyValueFactory.ofString("v")))).hashCode());
+        assertNotEquals(0, AnyValueFactory.ofBytes(new byte[]{1}).hashCode());
+    }
+
+    @Test
+    @DisplayName("KVLIST equals/hash should fall back when duplicate keys exist")
+    void kvListEqualsAndHashShouldFallBackWhenDuplicateKeysExist() {
+        List<com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue> duplicatedA =
+                Arrays.<com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue>asList(
+                        new KeyValueImpl("k", AnyValueFactory.ofString("v1")),
+                        new KeyValueImpl("k", AnyValueFactory.ofString("v2")));
+        List<com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue> duplicatedB =
+                Arrays.<com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue>asList(
+                        new KeyValueImpl("k", AnyValueFactory.ofString("v2")),
+                        new KeyValueImpl("k", AnyValueFactory.ofString("v1")));
+        AnyValueImpl left = new AnyValueImpl(AnyValue.Type.KVLIST, null, false, 0L, 0.0d, null, duplicatedA, null);
+        AnyValueImpl right = new AnyValueImpl(AnyValue.Type.KVLIST, null, false, 0L, 0.0d, null, duplicatedB, null);
+
+        assertNotEquals(left, right);
+        assertNotEquals(0, left.hashCode());
+    }
+
+    @Test
+    @DisplayName("private KV helpers should cover null and invalid list branches")
+    void privateKvHelpersShouldCoverNullAndInvalidListBranches() throws Exception {
+        Method toUniqueMap = AnyValueImpl.class.getDeclaredMethod("toUniqueMap", List.class);
+        toUniqueMap.setAccessible(true);
+        assertEquals(null, toUniqueMap.invoke(null, new Object[]{null}));
+
+        List<com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue> withNullEntry =
+                Collections.<com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue>singletonList(null);
+        assertEquals(null, toUniqueMap.invoke(null, withNullEntry));
     }
 }

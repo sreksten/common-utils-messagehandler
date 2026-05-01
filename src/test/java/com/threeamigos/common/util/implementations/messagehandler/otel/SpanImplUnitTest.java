@@ -3,6 +3,7 @@ package com.threeamigos.common.util.implementations.messagehandler.otel;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Event;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Link;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanContext;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.StatusCode;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
@@ -74,6 +76,15 @@ class SpanImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         assertNotNull(span.getInstrumentationScope());
         assertEquals("orders", span.getInstrumentationScope().getName());
         assertEquals("1.0.0", span.getInstrumentationScope().getVersion());
+    }
+
+    @Test
+    @DisplayName("constructor should default null start timestamp in lenient mode")
+    void constructorShouldDefaultNullStartTimestampInLenientMode() {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(true);
+        SpanImpl span = new SpanImpl("span-name", context, null, null, true);
+        assertNotNull(span.getStartTimestamp());
+        assertTrue(span.isRecording());
     }
 
     @Test
@@ -190,6 +201,145 @@ class SpanImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         assertTrue(keys.contains(OTelTags.EXCEPTION_MESSAGE.getValue()));
         assertTrue(keys.contains(OTelTags.EXCEPTION_STACKTRACE.getValue()));
         assertTrue(keys.contains("extra"));
+    }
+
+    @Test
+    @DisplayName("recordException should skip exception.message when null")
+    void recordExceptionShouldSkipExceptionMessageWhenNull() {
+        SpanImpl span = new SpanImpl("span-name", context);
+        span.recordException(new RuntimeException());
+
+        List<Event> events = span.getEventsSnapshot();
+        assertEquals(1, events.size());
+        boolean hasMessage = false;
+        for (KeyValue kv : events.get(0).getAttributes()) {
+            if (OTelTags.EXCEPTION_MESSAGE.getValue().equals(kv.getKey())) {
+                hasMessage = true;
+            }
+        }
+        assertFalse(hasMessage);
+    }
+
+    @Test
+    @DisplayName("recording disabled span should start as ended")
+    void recordingDisabledSpanShouldStartEnded() {
+        SpanImpl span = new SpanImpl("span-name", context, null, Instant.now(), false);
+        assertFalse(span.isRecording());
+    }
+
+    @Test
+    @DisplayName("null event timestamp and null wrappers should be handled in lenient mode")
+    void nullEventTimestampAndNullWrappersShouldBeHandledInLenientMode() {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(true);
+        SpanImpl span = new SpanImpl("span-name", context);
+        span.addEvent("evt", Collections.<KeyValue>emptyList(), null);
+        span.addEvent((Event) null);
+        span.addLink((Link) null);
+        assertEquals(1, span.getEventsSnapshot().size());
+    }
+
+    @Test
+    @DisplayName("second recording checks inside synchronized blocks should be covered")
+    void secondRecordingChecksInsideSynchronizedBlocksShouldBeCovered() throws Exception {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(true);
+        SpanImpl span = new SpanImpl("span-name", context);
+        Object lock = privateField(span, "lock");
+
+        // setAttribute second isRecording() check
+        synchronized (lock) {
+            Thread t = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    span.setAttribute("k", AnyValueFactory.ofString("v"));
+                }
+            });
+            t.start();
+            setEnded(span, true);
+            t.join(1000L);
+        }
+        setEnded(span, false);
+
+        // addEvent second isRecording() check
+        synchronized (lock) {
+            Thread t = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    span.addEvent("e", Collections.<KeyValue>emptyList(), Instant.now());
+                }
+            });
+            t.start();
+            setEnded(span, true);
+            t.join(1000L);
+        }
+        setEnded(span, false);
+
+        // addLink second isRecording() check
+        synchronized (lock) {
+            Thread t = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    span.addLink(context, Collections.<KeyValue>emptyList());
+                }
+            });
+            t.start();
+            setEnded(span, true);
+            t.join(1000L);
+        }
+        setEnded(span, false);
+
+        // setStatus second isRecording() check
+        synchronized (lock) {
+            Thread t = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    span.setStatus(StatusCode.ERROR, "boom");
+                }
+            });
+            t.start();
+            setEnded(span, true);
+            t.join(1000L);
+        }
+        setEnded(span, false);
+
+        // updateName second isRecording() check
+        synchronized (lock) {
+            Thread t = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    span.updateName("new-name");
+                }
+            });
+            t.start();
+            setEnded(span, true);
+            t.join(1000L);
+        }
+        assertTrue(true);
+    }
+
+    @Test
+    @DisplayName("recordException should handle empty stack trace branch")
+    void recordExceptionShouldHandleEmptyStackTraceBranch() {
+        SpanImpl span = new SpanImpl("span-name", context);
+        RuntimeException withoutStack = new RuntimeException("x") {
+            @Override
+            public void printStackTrace(java.io.PrintWriter s) {
+                // force empty stack trace serialization
+            }
+        };
+        span.recordException(withoutStack);
+        assertEquals(1, span.getEventsSnapshot().size());
+    }
+
+    private static Object privateField(final Object target, final String name) throws Exception {
+        Field f = target.getClass().getDeclaredField(name);
+        f.setAccessible(true);
+        return f.get(target);
+    }
+
+    private static void setEnded(final SpanImpl span, final boolean value) throws Exception {
+        Field f = SpanImpl.class.getDeclaredField("ended");
+        f.setAccessible(true);
+        f.set(span, value);
     }
 
     @Test

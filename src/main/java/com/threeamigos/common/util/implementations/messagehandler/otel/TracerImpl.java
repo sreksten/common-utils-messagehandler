@@ -290,10 +290,7 @@ class TracerImpl implements Tracer {
         if (owner == null) {
             return null;
         }
-        if (!(owner.getCorrelationResolver() instanceof SharedCorrelationResolver)) {
-            return null;
-        }
-        SharedCorrelationResolver resolver = (SharedCorrelationResolver) owner.getCorrelationResolver();
+        CorrelationResolver resolver = owner.getCorrelationResolver();
         return resolver.attach(spanContext, instrumentationScope);
     }
 }

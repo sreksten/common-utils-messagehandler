@@ -32,6 +32,7 @@ class ContextImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         Context.Key key1 = sut.createKey("key");
         Context.Key key2 = sut.createKey("key");
         Context.Key nullName = sut.createKey(null);
+        Context.Key blankName = sut.createKey("   ");
 
         assertNotNull(key1);
         assertNotNull(key2);
@@ -41,6 +42,8 @@ class ContextImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         assertFalse(key1 == key2);
         assertNotNull(nullName.getName());
         assertFalse(nullName.getName().trim().isEmpty());
+        assertNotNull(blankName.getName());
+        assertFalse(blankName.getName().trim().isEmpty());
         assertNotSame("key", nullName.getName());
     }
 
