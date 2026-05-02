@@ -1,8 +1,13 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel.filters;
 
+import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.*;
 import jakarta.annotation.Nullable;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.*;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -48,6 +53,106 @@ public class FilterByClassName implements Filter {
     private final TreeMap<RegexHolder, Object> prunedClasses = new TreeMap<>(regexComparator);
 
     /**
+     * Loads class-severity mappings from a properties file path.
+     *
+     * @param filename properties filename/path
+     * @throws NullPointerException if {@code filename} is {@code null}
+     * @throws IllegalArgumentException if {@code filename} is blank
+     * @throws IOException if the file cannot be opened or read
+     */
+    public void loadPropertiesFromFile(final String filename) throws IOException {
+        Objects.requireNonNull(filename, MessageHandlerResourceBundle.get("filterByClassNameNullFilenameProvided"));
+        if (filename.trim().isEmpty()) {
+            throw new IllegalArgumentException(MessageHandlerResourceBundle.get("filterByClassNameBlankFilenameProvided"));
+        }
+        loadProperties(new File(filename));
+    }
+
+    /**
+     * Loads class-severity mappings from a classpath resource.
+     *
+     * @param resourceName classpath resource name/path
+     * @throws NullPointerException if {@code resourceName} is {@code null}
+     * @throws IllegalArgumentException if {@code resourceName} is blank or resource is not found
+     * @throws IOException if the resource cannot be read
+     */
+    public void loadPropertiesFromResource(final String resourceName) throws IOException {
+        Objects.requireNonNull(resourceName, MessageHandlerResourceBundle.get("filterByClassNameNullResourceNameProvided"));
+        if (resourceName.trim().isEmpty()) {
+            throw new IllegalArgumentException(MessageHandlerResourceBundle.get("filterByClassNameBlankResourceNameProvided"));
+        }
+        InputStream inputStream = Thread.currentThread().getContextClassLoader().getResourceAsStream(resourceName);
+        if (inputStream == null) {
+            throw new IllegalArgumentException(
+                    MessageHandlerResourceBundle.format("filterByClassNameResourceNotFound", resourceName));
+        }
+        try (InputStream stream = inputStream) {
+            loadProperties(stream);
+        }
+    }
+
+    /**
+     * Loads class-severity mappings from a properties file.
+     *
+     * @param file properties file
+     * @throws NullPointerException if {@code file} is {@code null}
+     * @throws IOException if the file cannot be opened or read
+     */
+    public void loadProperties(final File file) throws IOException {
+        Objects.requireNonNull(file, MessageHandlerResourceBundle.get("filterByClassNameNullFileProvided"));
+        try (InputStream inputStream = new FileInputStream(file)) {
+            loadProperties(inputStream);
+        }
+    }
+
+    /**
+     * Loads class-severity mappings from a properties {@link InputStream}.
+     * <p>
+     * The stream is consumed immediately and not closed by this method.
+     *
+     * @param inputStream input stream containing Java properties
+     * @throws NullPointerException if {@code inputStream} is {@code null}
+     * @throws IOException if the properties cannot be loaded
+     */
+    public void loadProperties(final InputStream inputStream) throws IOException {
+        Objects.requireNonNull(inputStream, MessageHandlerResourceBundle.get("filterByClassNameNullInputStreamProvided"));
+        Properties properties = new Properties();
+        properties.load(inputStream);
+        loadProperties(properties);
+    }
+
+    /**
+     * Adds multiple class severity mappings from a collection of properties.
+     * The property key must be a package or class name.
+     * The property value must be a valid severity level name or its numeric value.
+     * @param properties collection of class severity mappings
+     */
+    public void loadProperties(Properties properties) {
+        for (Map.Entry<Object, Object> entry : properties.entrySet()) {
+            String key = entry.getKey().toString();
+            if (key.startsWith(CLASS_PREFIX)) {
+                key = key.substring(CLASS_PREFIX.length());
+            }
+            String value = entry.getValue().toString();
+            if (OFF.equalsIgnoreCase(value)) {
+                prune(key);
+            } else {
+                if (value.startsWith(SEVERITY_PREFIX)) {
+                    value = value.substring(SEVERITY_PREFIX.length());
+                }
+                SeverityNumber severityNumber = parseSeverityNumberName(value);
+                if (severityNumber == null) {
+                    severityNumber = parseSeverityNumberValue(value);
+                }
+                if (severityNumber == null) {
+                    continue;
+                }
+                add(key, severityNumber);
+            }
+        }
+    }
+
+    /**
      * Completely disables logging for a class.
      * @param className name of a package or of a class
      */
@@ -83,37 +188,6 @@ public class FilterByClassName implements Filter {
     public void add(Collection<Map.Entry<String, SeverityNumber>> entries) {
         for (Map.Entry<String, SeverityNumber> entry : entries) {
             add(entry.getKey(), entry.getValue());
-        }
-    }
-
-    /**
-     * Adds multiple class severity mappings from a collection of properties.
-     * The property key must be a package or class name.
-     * The property value must be a valid severity level name or its numeric value.
-     * @param properties collection of class severity mappings
-     */
-    public void addProperties(Properties properties) {
-        for (Map.Entry<Object, Object> entry : properties.entrySet()) {
-            String key = entry.getKey().toString();
-            if (key.startsWith(CLASS_PREFIX)) {
-                key = key.substring(CLASS_PREFIX.length());
-            }
-            String value = entry.getValue().toString();
-            if (OFF.equalsIgnoreCase(value)) {
-                prune(key);
-            } else {
-                if (value.startsWith(SEVERITY_PREFIX)) {
-                    value = value.substring(SEVERITY_PREFIX.length());
-                }
-                SeverityNumber severityNumber = parseSeverityNumberName(value);
-                if (severityNumber == null) {
-                    severityNumber = parseSeverityNumberValue(value);
-                }
-                if (severityNumber == null) {
-                    continue;
-                }
-                add(key, severityNumber);
-            }
         }
     }
 

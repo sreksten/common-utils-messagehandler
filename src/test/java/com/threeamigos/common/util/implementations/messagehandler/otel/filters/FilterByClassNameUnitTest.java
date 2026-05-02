@@ -4,12 +4,17 @@ import com.threeamigos.common.util.implementations.messagehandler.otel.AnyValueF
 import com.threeamigos.common.util.implementations.messagehandler.otel.KeyValueFactory;
 import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordImpl;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.AbstractMap;
@@ -23,6 +28,7 @@ import java.util.Properties;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -74,8 +80,8 @@ class FilterByClassNameUnitTest {
     }
 
     @Test
-    @DisplayName("addProperties() should support prefixes, OFF, names, numeric values and ignore invalid values")
-    void addPropertiesShouldHandleAllParsingPaths() {
+    @DisplayName("loadProperties(Properties) should support prefixes, OFF, names, numeric values and ignore invalid values")
+    void loadPropertiesFromFileShouldHandleAllParsingPaths() {
         FilterByClassName filter = new FilterByClassName();
         Properties properties = new Properties();
         properties.setProperty("class.com\\.prefixed\\..*", "severity.DEBUG");
@@ -86,7 +92,7 @@ class FilterByClassNameUnitTest {
         properties.setProperty("class.com\\.outofrange\\..*", "999");
         properties.setProperty("class.com\\.negative\\..*", "-1");
 
-        filter.addProperties(properties);
+        filter.loadProperties(properties);
 
         assertEquals(3, filter.getClassSeverityMap().size());
         assertEquals(SeverityNumber.DEBUG, filter.getClassSeverityMap().get("com\\.prefixed\\..*"));
@@ -96,6 +102,71 @@ class FilterByClassNameUnitTest {
         assertFalse(filter.getClassSeverityMap().containsKey("com\\.invalid\\..*"));
         assertFalse(filter.getClassSeverityMap().containsKey("com\\.outofrange\\..*"));
         assertFalse(filter.getClassSeverityMap().containsKey("com\\.negative\\..*"));
+    }
+
+    @Test
+    @DisplayName("loadProperties(InputStream) should load properties and apply rules")
+    void loadPropertiesInputStreamShouldLoadAndApplyRulesFromFile() throws IOException {
+        FilterByClassName filter = new FilterByClassName();
+        String content = "class.com\\\\.stream\\\\..*=severity.WARN\n" +
+                "com\\\\.streamoff\\\\..*=OFF\n";
+        InputStream inputStream = new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
+
+        filter.loadProperties(inputStream);
+
+        assertEquals(SeverityNumber.WARN, filter.getClassSeverityMap().get("com\\.stream\\..*"));
+        assertTrue(filter.getPrunedClasses().contains("com\\.streamoff\\..*"));
+    }
+
+    @Test
+    @DisplayName("loadProperties(File) should load properties and fail fast on invalid input")
+    void loadPropertiesFileShouldLoadAndFailFastFromFile() throws IOException {
+        FilterByClassName filter = new FilterByClassName();
+        File file = Files.createTempFile("filter-by-class", ".properties").toFile();
+        Files.write(file.toPath(),
+                ("class.com\\\\.file\\\\..*=severity.ERROR\n").getBytes(StandardCharsets.UTF_8));
+        try {
+            filter.loadProperties(file);
+            assertEquals(SeverityNumber.ERROR, filter.getClassSeverityMap().get("com\\.file\\..*"));
+        } finally {
+            Files.deleteIfExists(file.toPath());
+        }
+
+        assertThrows(NullPointerException.class, () -> filter.loadProperties((File) null));
+        assertThrows(IOException.class, () -> filter.loadProperties(new File("missing-file-" + System.nanoTime() + ".properties")));
+    }
+
+    @Test
+    @DisplayName("loadPropertiesFromFile(String) should load properties and fail fast on invalid input")
+    void loadPropertiesStringShouldLoadAndFailFastFromFile() throws IOException {
+        FilterByClassName filter = new FilterByClassName();
+        File file = Files.createTempFile("filter-by-class-name", ".properties").toFile();
+        Files.write(file.toPath(),
+                ("class.com\\\\.filename\\\\..*=INFO\n").getBytes(StandardCharsets.UTF_8));
+        try {
+            filter.loadPropertiesFromFile(file.getAbsolutePath());
+            assertEquals(SeverityNumber.INFO, filter.getClassSeverityMap().get("com\\.filename\\..*"));
+        } finally {
+            Files.deleteIfExists(file.toPath());
+        }
+
+        assertThrows(NullPointerException.class, () -> filter.loadPropertiesFromFile((String) null));
+        assertThrows(IllegalArgumentException.class, () -> filter.loadPropertiesFromFile(" "));
+        assertThrows(IOException.class, () -> filter.loadPropertiesFromFile("missing-file-" + System.nanoTime() + ".properties"));
+    }
+
+    @Test
+    @DisplayName("loadPropertiesFromResource(String) should load properties and fail fast on invalid input")
+    void loadPropertiesFromResourceShouldLoadAndFailFast() throws IOException {
+        FilterByClassName filter = new FilterByClassName();
+
+        filter.loadPropertiesFromResource("otel/filters/filter-by-classname-test.properties");
+        assertEquals(SeverityNumber.WARN, filter.getClassSeverityMap().get("com\\.resource\\..*"));
+        assertTrue(filter.getPrunedClasses().contains("com\\.resourceoff\\..*"));
+
+        assertThrows(NullPointerException.class, () -> filter.loadPropertiesFromResource((String) null));
+        assertThrows(IllegalArgumentException.class, () -> filter.loadPropertiesFromResource(" "));
+        assertThrows(IllegalArgumentException.class, () -> filter.loadPropertiesFromResource("otel/filters/missing.properties"));
     }
 
     @Test
