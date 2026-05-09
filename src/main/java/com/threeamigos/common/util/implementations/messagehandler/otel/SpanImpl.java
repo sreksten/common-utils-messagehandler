@@ -6,10 +6,13 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.Event;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Link;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanData;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanDispatcher;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanContext;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.StatusCode;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.time.Instant;
@@ -42,6 +45,8 @@ final class SpanImpl implements Span {
     private final Instant startTimestamp;
     private final boolean recordingEnabled;
     private final AutoCloseable scopeToken;
+    private final String parentSpanId;
+    private final SpanDispatcher spanDispatcher;
     private final Map<String, AnyValue> attributes = new LinkedHashMap<>();
     private final List<Event> events = new ArrayList<>();
     private final List<Link> links = new ArrayList<>();
@@ -70,6 +75,17 @@ final class SpanImpl implements Span {
              final Instant startTimestamp,
              final boolean recordingEnabled,
              final AutoCloseable scopeToken) {
+        this(name, spanContext, instrumentationScope, startTimestamp, recordingEnabled, scopeToken, null, null);
+    }
+
+    SpanImpl(final String name,
+             final SpanContext spanContext,
+             final InstrumentationScope instrumentationScope,
+             final Instant startTimestamp,
+             final boolean recordingEnabled,
+             final AutoCloseable scopeToken,
+             final String parentSpanId,
+             final SpanDispatcher spanDispatcher) {
         this.name = OpenTelemetryAttributeValidator.requireNonBlank(name, "spanName");
         if (spanContext == null) {
             OpenTelemetryAttributeValidator.handleBundled("spanContextMustNotBeNull");
@@ -86,6 +102,8 @@ final class SpanImpl implements Span {
         }
         this.recordingEnabled = recordingEnabled;
         this.scopeToken = scopeToken;
+        this.parentSpanId = parentSpanId;
+        this.spanDispatcher = spanDispatcher;
         this.ended = !recordingEnabled;
     }
 
@@ -256,14 +274,17 @@ final class SpanImpl implements Span {
             OpenTelemetryAttributeValidator.handleBundled("endTimestampMustNotBeNull");
             effectiveEndTimestamp = Instant.now();
         }
+        SpanData spanDataToDispatch = null;
         synchronized (lock) {
             if (ended) {
                 return;
             }
             this.endTimestamp = effectiveEndTimestamp;
             this.ended = true;
+            spanDataToDispatch = snapshotSpanData();
         }
         closeScopeTokenQuietly();
+        dispatchSpanDataQuietly(spanDataToDispatch);
     }
 
     @Override
@@ -372,5 +393,89 @@ final class SpanImpl implements Span {
         } catch (Exception ex) {
             OpenTelemetryAttributeValidator.report(ex.getMessage(), ex);
         }
+    }
+
+    private void dispatchSpanDataQuietly(final SpanData spanData) {
+        if (spanDispatcher == null || spanData == null) {
+            return;
+        }
+        try {
+            spanDispatcher.dispatchSpan(spanData);
+        } catch (IOException ex) {
+            OpenTelemetryAttributeValidator.report(ex.getMessage(), ex);
+        } catch (RuntimeException ex) {
+            OpenTelemetryAttributeValidator.report(ex.getMessage(), ex);
+        }
+    }
+
+    private SpanData snapshotSpanData() {
+        final String snapshotName = this.name;
+        final SpanContext snapshotSpanContext = this.spanContext;
+        final String snapshotParentSpanId = this.parentSpanId;
+        final InstrumentationScope snapshotScope = this.instrumentationScope;
+        final Instant snapshotStart = this.startTimestamp;
+        final Instant snapshotEnd = this.endTimestamp;
+        final StatusCode snapshotStatusCode = this.statusCode;
+        final String snapshotStatusDescription = this.statusDescription;
+        final List<KeyValue> snapshotAttributes = getAttributesSnapshot();
+        final List<Event> snapshotEvents = new ArrayList<Event>(this.events);
+        final List<Link> snapshotLinks = new ArrayList<Link>(this.links);
+
+        return new SpanData() {
+            @Override
+            public String getName() {
+                return snapshotName;
+            }
+
+            @Override
+            public SpanContext getSpanContext() {
+                return snapshotSpanContext;
+            }
+
+            @Override
+            public String getParentSpanId() {
+                return snapshotParentSpanId;
+            }
+
+            @Override
+            public InstrumentationScope getInstrumentationScope() {
+                return snapshotScope;
+            }
+
+            @Override
+            public Instant getStartTimestamp() {
+                return snapshotStart;
+            }
+
+            @Override
+            public Instant getEndTimestamp() {
+                return snapshotEnd;
+            }
+
+            @Override
+            public StatusCode getStatusCode() {
+                return snapshotStatusCode;
+            }
+
+            @Override
+            public String getStatusDescription() {
+                return snapshotStatusDescription;
+            }
+
+            @Override
+            public List<KeyValue> getAttributes() {
+                return Collections.unmodifiableList(snapshotAttributes);
+            }
+
+            @Override
+            public List<Event> getEvents() {
+                return Collections.unmodifiableList(snapshotEvents);
+            }
+
+            @Override
+            public List<Link> getLinks() {
+                return Collections.unmodifiableList(snapshotLinks);
+            }
+        };
     }
 }

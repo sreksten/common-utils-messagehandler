@@ -1,7 +1,13 @@
 package com.threeamigos.common.util.implementations.messagehandler.utils;
 
 import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.ExportLogsServiceRequestLogRecordFormatter;
+import com.threeamigos.common.util.implementations.messagehandler.tracecontext.TraceContextGenerator;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordDispatcher;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Resource;
 
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
@@ -14,9 +20,13 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.math.BigInteger;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -51,7 +61,7 @@ import java.util.Objects;
  * Jaeger itself is often deployed without built-in collector auth and protected via reverse proxy/gateway.
  * For this reason, the dispatcher supports:
  * <ul>
- *   <li>HTTP Basic authentication (username + password)</li>
+ *   <li>HTTP Basic authentication (username and password)</li>
  *   <li>Bearer token authentication</li>
  *   <li>Additional custom headers</li>
  * </ul>
@@ -70,11 +80,12 @@ import java.util.Objects;
  *
  * @author Stefano Reksten
  */
-public class JaegerLogRecordDispatcher {
+public class JaegerLogRecordDispatcher implements LogRecordDispatcher {
 
     private static final int DEFAULT_CONNECT_TIMEOUT_MILLIS = 10_000;
     private static final int DEFAULT_READ_TIMEOUT_MILLIS = 10_000;
     private static final String APPLICATION_JSON = "application/json";
+    private static final BigInteger NANOS_PER_SECOND = BigInteger.valueOf(1_000_000_000L);
 
     private final URL endpoint;
     private final String username;
@@ -146,8 +157,35 @@ public class JaegerLogRecordDispatcher {
      * @throws IOException network/transport errors
      */
     public DispatchResult dispatch(final @Nonnull LogRecord logRecord) throws IOException {
+        return dispatch(logRecord, formatter);
+    }
+
+    /**
+     * Formats and dispatches a {@link LogRecord} using the provided formatter.
+     * <p>
+     * When the configured endpoint path targets OTLP traces ({@code /v1/traces}),
+     * the dispatcher transforms the log record into a synthetic span event payload
+     * so that the message becomes queryable in Jaeger.
+     *
+     * @param logRecord record to send
+     * @param logRecordFormatter formatter used for standard log export endpoints
+     * @return HTTP dispatch result
+     * @throws IOException network/transport errors
+     */
+    public DispatchResult dispatch(final @Nonnull LogRecord logRecord,
+                                   final @Nonnull LogRecordFormatter logRecordFormatter) throws IOException {
         Objects.requireNonNull(logRecord, "logRecord must not be null");
-        return dispatchFormatted(formatter.format(logRecord));
+        Objects.requireNonNull(logRecordFormatter, "logRecordFormatter must not be null");
+        String payload = shouldTransformLogsIntoTraceSpanEvents()
+                ? toExportTracesRequestJson(logRecord)
+                : logRecordFormatter.format(logRecord);
+        return dispatchFormatted(payload);
+    }
+
+    @Override
+    public void dispatchLogRecord(final @Nonnull LogRecord logRecord,
+                                  final @Nonnull LogRecordFormatter logRecordFormatter) throws IOException {
+        dispatch(logRecord, logRecordFormatter);
     }
 
     /**
@@ -213,6 +251,203 @@ public class JaegerLogRecordDispatcher {
                     + ", responseBody=" + result.getResponseBody());
         }
         return result;
+    }
+
+    private boolean shouldTransformLogsIntoTraceSpanEvents() {
+        String path = endpoint.getPath();
+        if (path == null) {
+            return false;
+        }
+        String normalizedPath = path.trim().toLowerCase(Locale.ROOT);
+        return normalizedPath.endsWith("/v1/traces");
+    }
+
+    private String toExportTracesRequestJson(final LogRecord logRecord) {
+        String traceId = normalizeHexId(logRecord.getTraceId(), 32);
+        if (traceId == null) {
+            traceId = TraceContextGenerator.generateTraceId();
+        }
+        String parentSpanId = normalizeHexId(logRecord.getSpanId(), 16);
+        String generatedSpanId = TraceContextGenerator.generateParentId();
+
+        Instant timestamp = logRecord.getTimestamp() == null ? Instant.now() : logRecord.getTimestamp();
+        String eventTimeNanos = toUnsignedNanosString(timestamp);
+        String endTimeNanos = toUnsignedNanosString(timestamp.plusNanos(1L));
+
+        String message = extractBodyAsString(logRecord);
+        String severity = normalizeNullable(logRecord.getSeverityText());
+        String scopeName = resolveScopeName(logRecord.getInstrumentationScope());
+        String scopeVersion = resolveScopeVersion(logRecord.getInstrumentationScope());
+        String serviceName = resolveServiceName(logRecord.getResource(), scopeName);
+
+        String eventName = normalizeNullable(logRecord.getEventName());
+        if (eventName == null) {
+            eventName = "log";
+        }
+        String spanName = severity == null ? "log-event" : "log-" + severity.toLowerCase(Locale.ROOT);
+
+        StringBuilder sb = new StringBuilder(768);
+        sb.append("{\"resourceSpans\":[{\"resource\":{\"attributes\":[");
+        appendStringKeyValueAttribute(sb, "service.name", serviceName);
+        sb.append("]},\"scopeSpans\":[{\"scope\":{");
+        boolean firstScopeField = true;
+        if (scopeName != null) {
+            sb.append("\"name\":\"").append(escapeJson(scopeName)).append('"');
+            firstScopeField = false;
+        }
+        if (scopeVersion != null) {
+            if (!firstScopeField) {
+                sb.append(',');
+            }
+            sb.append("\"version\":\"").append(escapeJson(scopeVersion)).append('"');
+        }
+        sb.append("},\"spans\":[{\"traceId\":\"").append(traceId)
+                .append("\",\"spanId\":\"").append(generatedSpanId).append('"');
+        if (parentSpanId != null) {
+            sb.append(",\"parentSpanId\":\"").append(parentSpanId).append('"');
+        }
+        sb.append(",\"name\":\"").append(escapeJson(spanName))
+                .append("\",\"startTimeUnixNano\":\"").append(eventTimeNanos)
+                .append("\",\"endTimeUnixNano\":\"").append(endTimeNanos)
+                .append("\",\"events\":[{\"timeUnixNano\":\"").append(eventTimeNanos)
+                .append("\",\"name\":\"").append(escapeJson(eventName))
+                .append("\",\"attributes\":[");
+        appendStringKeyValueAttribute(sb, "log.message", message);
+        if (severity != null) {
+            sb.append(',');
+            appendStringKeyValueAttribute(sb, "log.severity", severity);
+        }
+        sb.append("]}]}]}]}]}");
+        return sb.toString();
+    }
+
+    private static String extractBodyAsString(final LogRecord logRecord) {
+        if (logRecord.getBody() == null) {
+            return "";
+        }
+        String value = logRecord.getBody().asString();
+        return value == null ? "" : value;
+    }
+
+    private static String resolveScopeName(final InstrumentationScope scope) {
+        if (scope == null) {
+            return null;
+        }
+        return normalizeNullable(scope.getName());
+    }
+
+    private static String resolveScopeVersion(final InstrumentationScope scope) {
+        if (scope == null) {
+            return null;
+        }
+        return normalizeNullable(scope.getVersion());
+    }
+
+    private static String resolveServiceName(final Resource resource, final String scopeName) {
+        if (resource != null) {
+            List<KeyValue> attributes = resource.getAttributes();
+            if (attributes != null) {
+                for (KeyValue keyValue : attributes) {
+                    if (keyValue == null || keyValue.getKey() == null || keyValue.getValue() == null) {
+                        continue;
+                    }
+                    if ("service.name".equals(keyValue.getKey())) {
+                        String serviceName = normalizeNullable(keyValue.getValue().asString());
+                        if (serviceName != null) {
+                            return serviceName;
+                        }
+                    }
+                }
+            }
+        }
+        if (scopeName != null) {
+            return scopeName;
+        }
+        return "common-utils-messagehandler";
+    }
+
+    private static String toUnsignedNanosString(final Instant timestamp) {
+        Instant safeTimestamp = timestamp == null ? Instant.now() : timestamp;
+        BigInteger nanos = BigInteger.valueOf(safeTimestamp.getEpochSecond())
+                .multiply(NANOS_PER_SECOND)
+                .add(BigInteger.valueOf(safeTimestamp.getNano()));
+        if (nanos.signum() < 0) {
+            return "0";
+        }
+        return nanos.toString();
+    }
+
+    private static String normalizeHexId(final String id, final int expectedLength) {
+        String normalized = normalizeNullable(id);
+        if (normalized == null || normalized.length() != expectedLength) {
+            return null;
+        }
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        boolean allZero = true;
+        for (int i = 0; i < lower.length(); i++) {
+            char c = lower.charAt(i);
+            boolean isHexDigit = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+            if (!isHexDigit) {
+                return null;
+            }
+            if (c != '0') {
+                allZero = false;
+            }
+        }
+        return allZero ? null : lower;
+    }
+
+    private static void appendStringKeyValueAttribute(final StringBuilder sb,
+                                                      final String key,
+                                                      final String value) {
+        sb.append("{\"key\":\"").append(escapeJson(key))
+                .append("\",\"value\":{\"stringValue\":\"")
+                .append(escapeJson(value == null ? "" : value)).append("\"}}");
+    }
+
+    private static String escapeJson(final String value) {
+        if (value == null) {
+            return "";
+        }
+        StringBuilder escaped = new StringBuilder(value.length() + 16);
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '"':
+                    escaped.append("\\\"");
+                    break;
+                case '\\':
+                    escaped.append("\\\\");
+                    break;
+                case '\b':
+                    escaped.append("\\b");
+                    break;
+                case '\f':
+                    escaped.append("\\f");
+                    break;
+                case '\n':
+                    escaped.append("\\n");
+                    break;
+                case '\r':
+                    escaped.append("\\r");
+                    break;
+                case '\t':
+                    escaped.append("\\t");
+                    break;
+                default:
+                    if (c < 0x20) {
+                        String hex = Integer.toHexString(c);
+                        escaped.append("\\u");
+                        for (int j = hex.length(); j < 4; j++) {
+                            escaped.append('0');
+                        }
+                        escaped.append(hex);
+                    } else {
+                        escaped.append(c);
+                    }
+            }
+        }
+        return escaped.toString();
     }
 
     private void applyAuthentication(final HttpURLConnection connection) {

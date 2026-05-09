@@ -7,6 +7,7 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.Filter;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanDispatcher;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanContext;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
@@ -95,6 +96,7 @@ class TracerImpl implements Tracer {
             return Span.wrap(null);
         }
         SpanContext spanContext;
+        String parentSpanId = null;
         if (parentSpanContext == null || !parentSpanContext.isValid()) {
             spanContext = new SpanContextImpl(
                     TraceContextGenerator.generateTraceId(),
@@ -103,6 +105,7 @@ class TracerImpl implements Tracer {
                     false,
                     new TraceStateImpl());
         } else {
+            parentSpanId = parentSpanContext.getSpanId();
             spanContext = new SpanContextImpl(
                     parentSpanContext.getTraceId(),
                     TraceContextGenerator.generateParentId(),
@@ -111,13 +114,16 @@ class TracerImpl implements Tracer {
                     parentSpanContext.getTraceState());
         }
         AutoCloseable scopeToken = attachCorrelationScope(spanContext);
+        SpanDispatcher spanDispatcher = owner == null ? null : owner.getDefaultSpanDispatcher();
         return new SpanImpl(
                 normalizedName,
                 spanContext,
                 instrumentationScope,
                 java.time.Instant.now(),
                 true,
-                scopeToken);
+                scopeToken,
+                parentSpanId,
+                spanDispatcher);
     }
 
     @Override

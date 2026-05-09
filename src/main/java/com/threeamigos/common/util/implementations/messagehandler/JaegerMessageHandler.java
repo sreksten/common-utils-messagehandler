@@ -5,6 +5,7 @@ import com.threeamigos.common.util.implementations.messagehandler.otel.formatter
 import com.threeamigos.common.util.implementations.messagehandler.utils.JaegerLogRecordDispatcher;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordDispatcher;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
@@ -47,12 +48,12 @@ import java.util.function.Consumer;
  */
 public class JaegerMessageHandler extends AbstractOutputMessageHandler {
 
-    private final JaegerLogRecordDispatcher dispatcher;
+    private final LogRecordDispatcher dispatcher;
     private volatile Consumer<String> errorConsumer = System.err::println;
     private volatile boolean closeOnDispatchError = false;
 
     /**
-     * Creates a synchronous handler with default log-record factory/formatter and no authentication.
+     * Creates a synchronous handler with the default log-record factory / formatter and no authentication.
      *
      * @param endpointUrl OTLP HTTP endpoint (for example {@code http://localhost:4318/v1/logs})
      */
@@ -126,6 +127,15 @@ public class JaegerMessageHandler extends AbstractOutputMessageHandler {
                                 final boolean async,
                                 final int queueCapacity,
                                 final boolean registerShutdownHook) {
+        this(logRecordFactory, logRecordFormatter, (LogRecordDispatcher) dispatcher, async, queueCapacity, registerShutdownHook);
+    }
+
+    public JaegerMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
+                                final @Nonnull LogRecordFormatter logRecordFormatter,
+                                final @Nonnull LogRecordDispatcher dispatcher,
+                                final boolean async,
+                                final int queueCapacity,
+                                final boolean registerShutdownHook) {
         super(logRecordFactory, logRecordFormatter);
         this.dispatcher = Objects.requireNonNull(dispatcher, MessageHandlerResourceBundle.get("nullDispatcherProvided"));
         initializeOutputDispatch(async, queueCapacity, registerShutdownHook,
@@ -166,10 +176,9 @@ public class JaegerMessageHandler extends AbstractOutputMessageHandler {
     }
 
     private void dispatchRecord(final LogRecord logRecord) {
-        final String payload = getLogRecordFormatter().format(logRecord);
         dispatch(() -> {
             try {
-                dispatcher.dispatchFormatted(payload);
+                dispatcher.dispatchLogRecord(logRecord, getLogRecordFormatter());
             } catch (IOException e) {
                 handleDispatchFailure(e);
             }

@@ -5,6 +5,8 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.Instrumentatio
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Link;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanData;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanDispatcher;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanContext;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.StatusCode;
 import org.junit.jupiter.api.AfterEach;
@@ -18,6 +20,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -359,6 +362,33 @@ class SpanImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
             }
         }
         assertEquals("custom.type", exceptionTypeValue);
+    }
+
+    @Test
+    @DisplayName("end should dispatch snapshot to configured span dispatcher")
+    void endShouldDispatchSnapshotToConfiguredSpanDispatcher() {
+        AtomicReference<SpanData> captured = new AtomicReference<SpanData>();
+        SpanDispatcher dispatcher = captured::set;
+        SpanImpl span = new SpanImpl(
+                "span-name",
+                context,
+                null,
+                Instant.now(),
+                true,
+                null,
+                "abcdabcdabcdabcd",
+                dispatcher);
+        span.setAttribute("k", AnyValueFactory.ofString("v"));
+        span.addEvent("event-1");
+
+        span.end();
+
+        SpanData snapshot = captured.get();
+        assertNotNull(snapshot);
+        assertEquals("span-name", snapshot.getName());
+        assertEquals("abcdabcdabcdabcd", snapshot.getParentSpanId());
+        assertEquals(1, snapshot.getAttributes().size());
+        assertEquals(1, snapshot.getEvents().size());
     }
 
     @Test

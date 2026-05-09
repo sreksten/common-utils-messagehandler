@@ -7,6 +7,7 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.Instrumentatio
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Resource;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanDispatcher;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanContext;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
 import jakarta.annotation.Nonnull;
@@ -43,6 +44,7 @@ public class TracerProvider {
     private volatile List<KeyValue> defaultCommonAttributes = Collections.emptyList();
     private final CorrelationResolver correlationResolver = new CorrelationResolver();
     private volatile String defaultFilePath = "message-handler.log";
+    private volatile SpanDispatcher defaultSpanDispatcher;
 
     public static TracerProvider getGlobal() {
         return INSTANCE;
@@ -91,6 +93,14 @@ public class TracerProvider {
 
     public @Nonnull String getDefaultFilePath() {
         return defaultFilePath;
+    }
+
+    public void setDefaultSpanDispatcher(final @Nullable SpanDispatcher defaultSpanDispatcher) {
+        this.defaultSpanDispatcher = defaultSpanDispatcher;
+    }
+
+    public @Nullable SpanDispatcher getDefaultSpanDispatcher() {
+        return defaultSpanDispatcher;
     }
 
     /**

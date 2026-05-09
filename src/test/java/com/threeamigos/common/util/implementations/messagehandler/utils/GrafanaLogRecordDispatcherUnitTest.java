@@ -1,7 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler.utils;
 
 import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordFactoryImpl;
-import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordImpl;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 import org.junit.jupiter.api.DisplayName;
@@ -30,19 +29,19 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@DisplayName("JaegerLogRecordDispatcher unit tests")
+@DisplayName("GrafanaLogRecordDispatcher unit tests")
 @Tag("unit")
 @Tag("messageHandler")
-class JaegerLogRecordDispatcherUnitTest {
+class GrafanaLogRecordDispatcherUnitTest {
 
     @Test
     @DisplayName("dispatch(LogRecord) should post formatted OTLP JSON and return response")
     void dispatchShouldPostFormattedLogRecord() throws Exception {
         StubConnection connection = new StubConnection(200, "ok", null);
-        JaegerLogRecordDispatcher dispatcher = dispatcherWithConnection(connection);
-        LogRecord record = new LogRecordFactoryImpl().create(SeverityNumber.INFO, "hello jaeger");
+        GrafanaLogRecordDispatcher dispatcher = dispatcherWithConnection(connection);
+        LogRecord record = new LogRecordFactoryImpl().create(SeverityNumber.INFO, "hello grafana");
 
-        JaegerLogRecordDispatcher.DispatchResult result = dispatcher.dispatch(record);
+        GrafanaLogRecordDispatcher.DispatchResult result = dispatcher.dispatch(record);
 
         assertEquals(200, result.getStatusCode());
         assertTrue(result.isSuccessful());
@@ -51,38 +50,36 @@ class JaegerLogRecordDispatcherUnitTest {
         assertEquals("application/json", connection.requestProperties.get("Content-Type"));
         assertEquals("application/json", connection.requestProperties.get("Accept"));
         assertNotNull(connection.requestProperties.get("User-Agent"));
-        assertTrue(connection.writtenBody().contains("\"body\":{\"stringValue\":\"hello jaeger\"}"));
+        assertTrue(connection.writtenBody().contains("\"resourceLogs\""));
+        assertTrue(connection.writtenBody().contains("\"body\":{\"stringValue\":\"hello grafana\"}"));
         assertTrue(connection.disconnected);
     }
 
     @Test
-    @DisplayName("dispatch(LogRecord) should transform logs into span events when endpoint is /v1/traces")
-    void dispatchShouldTransformLogsIntoSpanEventsForTraceEndpoint() throws Exception {
-        StubConnection connection = new StubConnection(200, "ok", null);
-        JaegerLogRecordDispatcher dispatcher = new JaegerLogRecordDispatcher("http://localhost:4318/v1/traces");
-        replaceEndpoint(dispatcher, urlFor(connection, "/v1/traces"));
+    @DisplayName("dispatch(LogRecord) should use Loki push payload for /loki/api/v1/push endpoint")
+    void dispatchShouldUseLokiPushPayloadForLokiEndpoint() throws Exception {
+        StubConnection connection = new StubConnection(204, "", null);
+        GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher("http://localhost:3100/loki/api/v1/push");
+        replaceEndpoint(dispatcher, urlFor(connection, "/loki/api/v1/push"));
+        LogRecord record = new LogRecordFactoryImpl().create(SeverityNumber.INFO, "hello loki");
 
-        LogRecordImpl record = (LogRecordImpl) new LogRecordFactoryImpl().create(SeverityNumber.INFO, "hello jaeger");
-        record.setTraceId("0123456789abcdef0123456789abcdef");
-        record.setSpanId("89abcdef01234567");
+        GrafanaLogRecordDispatcher.DispatchResult result = dispatcher.dispatch(record);
 
-        JaegerLogRecordDispatcher.DispatchResult result = dispatcher.dispatch(record);
-
-        assertEquals(200, result.getStatusCode());
+        assertEquals(204, result.getStatusCode());
         assertTrue(result.isSuccessful());
-        String body = connection.writtenBody();
-        assertTrue(body.contains("\"resourceSpans\""));
-        assertTrue(body.contains("\"events\""));
-        assertTrue(body.contains("\"traceId\":\"0123456789abcdef0123456789abcdef\""));
-        assertTrue(body.contains("\"parentSpanId\":\"89abcdef01234567\""));
-        assertTrue(body.contains("hello jaeger"));
+        String payload = connection.writtenBody();
+        assertTrue(payload.contains("\"streams\""));
+        assertTrue(payload.contains("\"values\""));
+        assertTrue(payload.contains("\"service_name\""));
+        assertTrue(payload.contains("hello loki"));
+        assertFalse(payload.contains("\"resourceLogs\""));
     }
 
     @Test
     @DisplayName("dispatcher should use Basic authentication when username/password are configured")
     void dispatchShouldUseBasicAuthentication() throws Exception {
         StubConnection connection = new StubConnection(200, "ok", null);
-        JaegerLogRecordDispatcher dispatcher = new JaegerLogRecordDispatcher(
+        GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher(
                 "http://localhost:4318/v1/logs", "alice", "secret");
         replaceEndpoint(dispatcher, urlFor(connection));
 
@@ -98,18 +95,18 @@ class JaegerLogRecordDispatcherUnitTest {
     void dispatchShouldPreferBearerAndApplyHeaders() throws Exception {
         StubConnection connection = new StubConnection(200, "ok", null);
         Map<String, String> headers = new LinkedHashMap<String, String>();
-        headers.put("X-Tenant", "payments");
+        headers.put("X-Scope-OrgID", "tenant-1");
         headers.put(" ", "ignored");
         headers.put("X-Null", null);
 
-        JaegerLogRecordDispatcher dispatcher = new JaegerLogRecordDispatcher(
+        GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher(
                 "http://localhost:4318/v1/logs", "alice", "secret", "token-123", 2_000, 2_000, headers);
         replaceEndpoint(dispatcher, urlFor(connection));
 
         dispatcher.dispatchFormatted("{\"resourceLogs\":[]}");
 
         assertEquals("Bearer token-123", connection.requestProperties.get("Authorization"));
-        assertEquals("payments", connection.requestProperties.get("X-Tenant"));
+        assertEquals("tenant-1", connection.requestProperties.get("X-Scope-OrgID"));
         assertFalse(connection.requestProperties.containsKey("X-Null"));
     }
 
@@ -117,7 +114,7 @@ class JaegerLogRecordDispatcherUnitTest {
     @DisplayName("dispatchOrThrow should fail for non-2xx status")
     void dispatchOrThrowShouldFailOnNon2xx() throws Exception {
         StubConnection connection = new StubConnection(500, null, "boom");
-        JaegerLogRecordDispatcher dispatcher = dispatcherWithConnection(connection);
+        GrafanaLogRecordDispatcher dispatcher = dispatcherWithConnection(connection);
         LogRecord record = new LogRecordFactoryImpl().create(SeverityNumber.ERROR, "fail");
 
         IOException thrown = assertThrows(IOException.class, () -> dispatcher.dispatchOrThrow(record));
@@ -128,7 +125,7 @@ class JaegerLogRecordDispatcherUnitTest {
     @Test
     @DisplayName("dispatch methods should reject null arguments")
     void dispatchMethodsShouldRejectNulls() {
-        JaegerLogRecordDispatcher dispatcher = new JaegerLogRecordDispatcher("http://localhost:4318/v1/logs");
+        GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher("http://localhost:4318/v1/logs");
         assertThrows(NullPointerException.class, () -> dispatcher.dispatch(null));
         assertThrows(NullPointerException.class, () -> dispatcher.dispatchFormatted(null));
     }
@@ -136,30 +133,30 @@ class JaegerLogRecordDispatcherUnitTest {
     @Test
     @DisplayName("constructor should validate endpoint, auth config and timeout values")
     void constructorShouldValidateInputs() {
-        assertThrows(IllegalArgumentException.class, () -> new JaegerLogRecordDispatcher(" "));
-        assertThrows(IllegalArgumentException.class, () -> new JaegerLogRecordDispatcher("not-a-url"));
-        assertThrows(IllegalArgumentException.class, () -> new JaegerLogRecordDispatcher(
+        assertThrows(IllegalArgumentException.class, () -> new GrafanaLogRecordDispatcher(" "));
+        assertThrows(IllegalArgumentException.class, () -> new GrafanaLogRecordDispatcher("not-a-url"));
+        assertThrows(IllegalArgumentException.class, () -> new GrafanaLogRecordDispatcher(
                 "http://localhost:4318/v1/logs", "user", null));
-        assertThrows(IllegalArgumentException.class, () -> new JaegerLogRecordDispatcher(
+        assertThrows(IllegalArgumentException.class, () -> new GrafanaLogRecordDispatcher(
                 "http://localhost:4318/v1/logs", null, "pass"));
-        assertThrows(IllegalArgumentException.class, () -> new JaegerLogRecordDispatcher(
+        assertThrows(IllegalArgumentException.class, () -> new GrafanaLogRecordDispatcher(
                 "http://localhost:4318/v1/logs", null, null, null, 0, 1000, null));
-        assertThrows(IllegalArgumentException.class, () -> new JaegerLogRecordDispatcher(
+        assertThrows(IllegalArgumentException.class, () -> new GrafanaLogRecordDispatcher(
                 "http://localhost:4318/v1/logs", null, null, null, 1000, 0, null));
     }
 
     @Test
     @DisplayName("private helpers should cover null branches")
     void privateHelpersShouldCoverNullBranches() throws Exception {
-        Method readStream = JaegerLogRecordDispatcher.class.getDeclaredMethod("readStream", InputStream.class);
+        Method readStream = GrafanaLogRecordDispatcher.class.getDeclaredMethod("readStream", InputStream.class);
         readStream.setAccessible(true);
         assertEquals("", readStream.invoke(null, new Object[]{null}));
 
-        Method closeInput = JaegerLogRecordDispatcher.class.getDeclaredMethod("closeQuietly", InputStream.class);
+        Method closeInput = GrafanaLogRecordDispatcher.class.getDeclaredMethod("closeQuietly", InputStream.class);
         closeInput.setAccessible(true);
         closeInput.invoke(null, new Object[]{null});
 
-        Method closeOutput = JaegerLogRecordDispatcher.class.getDeclaredMethod("closeQuietly", java.io.OutputStream.class);
+        Method closeOutput = GrafanaLogRecordDispatcher.class.getDeclaredMethod("closeQuietly", java.io.OutputStream.class);
         closeOutput.setAccessible(true);
         closeOutput.invoke(null, new Object[]{null});
     }
@@ -167,21 +164,21 @@ class JaegerLogRecordDispatcherUnitTest {
     @Test
     @DisplayName("DispatchResult should report success only for 2xx statuses")
     void dispatchResultShouldReportSuccessRange() throws Exception {
-        Constructor<?> constructor = JaegerLogRecordDispatcher.DispatchResult.class
+        Constructor<?> constructor = GrafanaLogRecordDispatcher.DispatchResult.class
                 .getDeclaredConstructor(int.class, String.class);
         constructor.setAccessible(true);
-        JaegerLogRecordDispatcher.DispatchResult ok =
-                (JaegerLogRecordDispatcher.DispatchResult) constructor.newInstance(299, null);
-        JaegerLogRecordDispatcher.DispatchResult redirect =
-                (JaegerLogRecordDispatcher.DispatchResult) constructor.newInstance(302, "r");
+        GrafanaLogRecordDispatcher.DispatchResult ok =
+                (GrafanaLogRecordDispatcher.DispatchResult) constructor.newInstance(299, null);
+        GrafanaLogRecordDispatcher.DispatchResult redirect =
+                (GrafanaLogRecordDispatcher.DispatchResult) constructor.newInstance(302, "r");
 
         assertTrue(ok.isSuccessful());
         assertEquals("", ok.getResponseBody());
         assertFalse(redirect.isSuccessful());
     }
 
-    private static JaegerLogRecordDispatcher dispatcherWithConnection(final StubConnection connection) throws Exception {
-        JaegerLogRecordDispatcher dispatcher = new JaegerLogRecordDispatcher("http://localhost:4318/v1/logs");
+    private static GrafanaLogRecordDispatcher dispatcherWithConnection(final StubConnection connection) throws Exception {
+        GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher("http://localhost:4318/v1/logs");
         replaceEndpoint(dispatcher, urlFor(connection));
         return dispatcher;
     }
@@ -199,8 +196,8 @@ class JaegerLogRecordDispatcherUnitTest {
         });
     }
 
-    private static void replaceEndpoint(final JaegerLogRecordDispatcher dispatcher, final URL url) throws Exception {
-        Field endpointField = JaegerLogRecordDispatcher.class.getDeclaredField("endpoint");
+    private static void replaceEndpoint(final GrafanaLogRecordDispatcher dispatcher, final URL url) throws Exception {
+        Field endpointField = GrafanaLogRecordDispatcher.class.getDeclaredField("endpoint");
         endpointField.setAccessible(true);
         endpointField.set(dispatcher, url);
     }
