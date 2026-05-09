@@ -2,6 +2,8 @@ package com.threeamigos.common.util.implementations.messagehandler.otel;
 
 import com.threeamigos.common.util.implementations.messagehandler.otel.filters.FilterByClassName;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.StatusCode;
 import org.junit.jupiter.api.DisplayName;
@@ -129,6 +131,20 @@ class TracerImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         assertNull(nullNameTracer.getInstrumentationScope().getName());
         assertEquals("1.0.0", nullNameTracer.getInstrumentationScope().getVersion());
         assertNull(nullNameTracer.getInstrumentationScope().getSchemaUrl());
+    }
+
+    @Test
+    @DisplayName("tracer should expose tracer-aware log record factory")
+    void tracerShouldExposeTracerAwareLogRecordFactory() {
+        TracerProvider provider = TracerProvider.createProvider();
+        TracerImpl tracer = (TracerImpl) provider.getTracer("orders", "1.0.0");
+
+        LogRecordFactory factory = tracer.getLogRecordFactory();
+        LogRecord record = factory.create();
+
+        assertNotNull(factory);
+        assertNotNull(record.getInstrumentationScope());
+        assertEquals("orders", record.getInstrumentationScope().getName());
     }
 
     @Test

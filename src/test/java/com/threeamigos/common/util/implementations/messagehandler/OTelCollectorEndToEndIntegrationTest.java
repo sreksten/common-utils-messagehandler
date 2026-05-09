@@ -1,9 +1,9 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
-import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordFactoryImpl;
 import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
 import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.ExportLogsServiceRequestLogRecordFormatter;
 import com.threeamigos.common.util.implementations.messagehandler.utils.GrafanaLogRecordDispatcher;
+import com.threeamigos.common.util.implementations.messagehandler.utils.GrafanaSpanDispatcher;
 import com.threeamigos.common.util.implementations.messagehandler.utils.JaegerSpanDispatcher;
 import com.threeamigos.common.util.implementations.messagehandler.utils.OTelCollectorDispatcher;
 import com.threeamigos.common.util.implementations.messagehandler.utils.OTelCollectorSpanDispatcher;
@@ -25,6 +25,7 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -40,11 +41,13 @@ class OTelCollectorEndToEndIntegrationTest {
     @DisplayName("should emit logs and spans through collector fan-out and retrieve from Loki and Jaeger")
     void shouldEmitLogsAndSpansThroughCollectorFanOutAndRetrieveFromLokiAndJaeger() throws Exception {
         String jaegerTracesEndpoint = readEnvOrDefault("JAEGER_OTLP_TRACES_ENDPOINT", "http://localhost:4318/v1/traces");
+        String tempoTracesEndpoint = readEnvOrDefault("TEMPO_OTLP_TRACES_ENDPOINT", "http://localhost:14318/v1/traces");
         String jaegerQueryBase = readEnvOrDefault("JAEGER_QUERY_TRACE_ENDPOINT", "http://localhost:16686");
         String lokiPushEndpoint = readEnvOrDefault("GRAFANA_LOKI_PUSH_ENDPOINT", "http://localhost:3100/loki/api/v1/push");
         String lokiQueryEndpoint = readEnvOrDefault("GRAFANA_LOKI_QUERY_ENDPOINT", "http://localhost:3100/loki/api/v1/query_range");
 
         assumeEndpointReachable(jaegerTracesEndpoint, "Jaeger traces endpoint");
+        assumeEndpointReachable(tempoTracesEndpoint, "Tempo traces endpoint");
         assumeEndpointReachable(jaegerQueryBase, "Jaeger query endpoint");
         assumeEndpointReachable(lokiPushEndpoint, "Loki push endpoint");
         assumeEndpointReachable(lokiQueryEndpoint, "Loki query endpoint");
@@ -52,13 +55,18 @@ class OTelCollectorEndToEndIntegrationTest {
         String serviceName = "MyTestService";
         String serviceVersion = "1.0-alpha";
         String spanName = "otel-collector-e2e-span";
-        String logMessage = "Hello OTel Collector! " + System.currentTimeMillis();
+        String flowToken = "search-flow-" + System.currentTimeMillis();
+        String firstLogMessage = "user started a search [" + flowToken + "]";
+        String secondLogMessage = "user displays search results [" + flowToken + "]";
+        String thirdLogMessage = "search completed [" + flowToken + "]";
+        List<String> expectedMessages = Arrays.asList(firstLogMessage, secondLogMessage, thirdLogMessage);
 
         OTelCollectorDispatcher logCollector = new OTelCollectorDispatcher();
         logCollector.addDispatcher(new GrafanaLogRecordDispatcher(lokiPushEndpoint));
 
         OTelCollectorSpanDispatcher spanCollector = new OTelCollectorSpanDispatcher();
         spanCollector.addDispatcher(new JaegerSpanDispatcher(jaegerTracesEndpoint));
+        spanCollector.addDispatcher(new GrafanaSpanDispatcher(tempoTracesEndpoint));
 
         TracerProvider provider = TracerProvider.builder()
                 .serviceName(serviceName)
@@ -67,10 +75,8 @@ class OTelCollectorEndToEndIntegrationTest {
         provider.setDefaultSpanDispatcher(spanCollector);
         Tracer tracer = provider.getTracer(serviceName, serviceVersion);
 
-        LogRecordFactory logRecordFactory = provider.enrichingLogRecordFactory(
-                new LogRecordFactoryImpl(),
-                tracer.getInstrumentationScope());
-        MessageHandler handler = new GrafanaMessageHandler(
+        LogRecordFactory logRecordFactory = tracer.getLogRecordFactory();
+        GrafanaMessageHandler handler = new GrafanaMessageHandler(
                 logRecordFactory,
                 new ExportLogsServiceRequestLogRecordFormatter(),
                 logCollector,
@@ -78,36 +84,41 @@ class OTelCollectorEndToEndIntegrationTest {
                 0,
                 false);
         List<String> errors = new ArrayList<String>();
-        ((GrafanaMessageHandler) handler).setErrorConsumer(errors::add);
+        handler.setErrorConsumer(errors::add);
 
         Span span = tracer.createSpan(spanName);
         String traceId = span.getSpanContext().getTraceId();
+        String spanId = span.getSpanContext().getSpanId();
         try {
-            handler.info(logMessage);
+            handler.info(firstLogMessage);
+            handler.info(secondLogMessage);
+            handler.info(thirdLogMessage);
             span.end();
         } finally {
             handler.close();
         }
 
-        boolean foundInLoki = waitForLokiMessage(lokiQueryEndpoint, serviceName, logMessage, 30_000L);
-        boolean foundInJaeger = waitForJaegerTrace(jaegerQueryBase, traceId, spanName, 30_000L);
+        boolean foundInLoki = waitForLokiMessages(lokiQueryEndpoint, serviceName, flowToken, spanId, expectedMessages, 30_000L);
+        boolean foundInJaeger = waitForJaegerTrace(jaegerQueryBase, traceId, spanId, spanName, expectedMessages, 30_000L);
 
-        assertTrue(foundInLoki, "Could not find log message in Loki");
-        assertTrue(foundInJaeger, "Could not find span in Jaeger for traceId=" + traceId);
+        assertTrue(foundInLoki, "Could not find all logs in Loki for traceId=" + traceId + ", spanId=" + spanId);
+        assertTrue(foundInJaeger, "Could not find span and related log events in Jaeger for traceId=" + traceId + ", spanId=" + spanId);
         assertEquals(0, errors.size(), "Unexpected log dispatch errors: " + errors);
     }
 
-    private static boolean waitForLokiMessage(final String queryEndpoint,
-                                              final String serviceName,
-                                              final String message,
-                                              final long timeoutMillis) throws Exception {
+    private static boolean waitForLokiMessages(final String queryEndpoint,
+                                               final String serviceName,
+                                               final String flowToken,
+                                               final String spanId,
+                                               final List<String> messages,
+                                               final long timeoutMillis) throws Exception {
         long deadline = System.currentTimeMillis() + timeoutMillis;
-        String queryExpr = "{service_name=\"" + serviceName + "\"} |= \"" + message + "\"";
+        String queryExpr = "{service_name=\"" + serviceName + "\"} |= \"" + flowToken + "\"";
         String encodedQuery = URLEncoder.encode(queryExpr, "UTF-8");
         while (System.currentTimeMillis() < deadline) {
             String url = queryEndpoint + "?query=" + encodedQuery + "&limit=20";
             HttpResult result = get(url);
-            if (result.statusCode >= 200 && result.statusCode < 300 && result.body.contains(message)) {
+            if (containsAllMessagesForSpan(result, spanId, messages)) {
                 return true;
             }
             Thread.sleep(500L);
@@ -115,28 +126,62 @@ class OTelCollectorEndToEndIntegrationTest {
         return false;
     }
 
+    private static boolean containsAllMessagesForSpan(final HttpResult result,
+                                                      final String spanId,
+                                                      final List<String> messages) {
+        if (result.statusCode < 200 || result.statusCode >= 300) {
+            return false;
+        }
+        if (!result.body.contains(spanId)) {
+            return false;
+        }
+        for (String message : messages) {
+            if (!result.body.contains(message)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private static boolean waitForJaegerTrace(final String queryBase,
                                               final String traceId,
+                                              final String spanId,
                                               final String expectedSpanName,
+                                              final List<String> expectedMessages,
                                               final long timeoutMillis) throws Exception {
         long deadline = System.currentTimeMillis() + timeoutMillis;
         String encodedTraceId = URLEncoder.encode(traceId, "UTF-8");
         while (System.currentTimeMillis() < deadline) {
             HttpResult v3 = get(normalizeBaseUrl(queryBase) + "/api/v3/traces/" + encodedTraceId);
-            if (v3.statusCode >= 200 && v3.statusCode < 300
-                    && v3.body.contains(traceId)
-                    && v3.body.contains(expectedSpanName)) {
+            if (containsExpectedJaegerContent(v3, traceId, spanId, expectedSpanName, expectedMessages)) {
                 return true;
             }
             HttpResult legacy = get(normalizeBaseUrl(queryBase) + "/api/traces/" + encodedTraceId);
-            if (legacy.statusCode >= 200 && legacy.statusCode < 300
-                    && legacy.body.contains(traceId)
-                    && legacy.body.contains(expectedSpanName)) {
+            if (containsExpectedJaegerContent(legacy, traceId, spanId, expectedSpanName, expectedMessages)) {
                 return true;
             }
             Thread.sleep(500L);
         }
         return false;
+    }
+
+    private static boolean containsExpectedJaegerContent(final HttpResult result,
+                                                         final String traceId,
+                                                         final String spanId,
+                                                         final String expectedSpanName,
+                                                         final List<String> expectedMessages) {
+        if (result.statusCode < 200 || result.statusCode >= 300) {
+            return false;
+        }
+        if (!result.body.contains(traceId) || !result.body.contains(expectedSpanName) || !result.body.contains(spanId)) {
+            return false;
+        }
+        for (String message : expectedMessages) {
+            if (!result.body.contains(message)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static HttpResult get(final String endpoint) throws Exception {

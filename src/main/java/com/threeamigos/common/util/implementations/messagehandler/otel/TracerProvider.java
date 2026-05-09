@@ -229,7 +229,7 @@ public class TracerProvider {
     }
 
     LogRecordFactory getDefaultEnrichingFactory(final @Nullable InstrumentationScope scope) {
-        return enrichingLogRecordFactory(new LogRecordFactoryImpl(), scope);
+        return getLogRecordFactory(scope);
     }
 
     TracerMessageHandlerFactory buildMessageHandlerFactory(final @Nullable InstrumentationScope scope) {
@@ -243,22 +243,44 @@ public class TracerProvider {
         return new TracerMessageHandlerFactory(getDefaultEnrichingFactory(scope), resolvedFilePath);
     }
 
-    public LogRecordFactory enrichingLogRecordFactory(final @Nonnull LogRecordFactory delegate,
-                                                      final @Nullable InstrumentationScope scope) {
-        return enrichingLogRecordFactory(delegate, scope, null);
+    public LogRecordFactory getLogRecordFactory() {
+        return getLogRecordFactory(null);
     }
 
-    public LogRecordFactory enrichingLogRecordFactory(final @Nonnull LogRecordFactory delegate,
-                                                      final @Nullable InstrumentationScope scope,
-                                                      final @Nullable SpanContext explicitSpanContext) {
+    public LogRecordFactory getLogRecordFactory(final @Nullable InstrumentationScope scope) {
+        return getLogRecordFactory(scope, null);
+    }
+
+    public LogRecordFactory getLogRecordFactory(final @Nullable InstrumentationScope scope,
+                                                final @Nullable SpanContext explicitSpanContext) {
         return new EnrichingLogRecordFactory(
-                delegate,
+                new LogRecordFactoryImpl(),
                 defaultResource,
                 scope,
                 defaultCommonAttributes,
                 explicitSpanContext,
                 correlationResolver::resolveSpanContext,
-                correlationResolver::resolveInstrumentationScope);
+                correlationResolver::resolveInstrumentationScope,
+                correlationResolver::resolveSpan);
+    }
+
+    /**
+     * @deprecated use {@link #getLogRecordFactory(InstrumentationScope)}.
+     */
+    @Deprecated
+    public LogRecordFactory enrichingLogRecordFactory(final @Nonnull LogRecordFactory delegate,
+                                                      final @Nullable InstrumentationScope scope) {
+        return getLogRecordFactory(scope);
+    }
+
+    /**
+     * @deprecated use {@link #getLogRecordFactory(InstrumentationScope, SpanContext)}.
+     */
+    @Deprecated
+    public LogRecordFactory enrichingLogRecordFactory(final @Nonnull LogRecordFactory delegate,
+                                                      final @Nullable InstrumentationScope scope,
+                                                      final @Nullable SpanContext explicitSpanContext) {
+        return getLogRecordFactory(scope, explicitSpanContext);
     }
 
     public Runnable wrap(final Runnable task) {

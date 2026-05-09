@@ -6,6 +6,7 @@ import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Filter;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanDispatcher;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanContext;
@@ -115,7 +116,7 @@ class TracerImpl implements Tracer {
         }
         AutoCloseable scopeToken = attachCorrelationScope(spanContext);
         SpanDispatcher spanDispatcher = owner == null ? null : owner.getDefaultSpanDispatcher();
-        return new SpanImpl(
+        Span span = new SpanImpl(
                 normalizedName,
                 spanContext,
                 instrumentationScope,
@@ -124,11 +125,23 @@ class TracerImpl implements Tracer {
                 scopeToken,
                 parentSpanId,
                 spanDispatcher);
+        if (owner != null) {
+            owner.getCorrelationResolver().setActiveSpan(span);
+        }
+        return span;
     }
 
     @Override
     public InstrumentationScope getInstrumentationScope() {
         return instrumentationScope;
+    }
+
+    @Override
+    public LogRecordFactory getLogRecordFactory() {
+        if (owner == null) {
+            return new LogRecordFactoryImpl();
+        }
+        return owner.getLogRecordFactory(instrumentationScope);
     }
 
     @Override

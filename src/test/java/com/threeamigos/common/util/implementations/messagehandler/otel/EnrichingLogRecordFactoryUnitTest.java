@@ -6,6 +6,7 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Resource;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanContext;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -25,6 +26,9 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -221,6 +225,41 @@ class EnrichingLogRecordFactoryUnitTest {
         assertEquals(0x01, record.getTraceFlags());
         assertNotNull(record.getInstrumentationScope());
         assertEquals("resolver-scope", record.getInstrumentationScope().getName());
+    }
+
+    @Test
+    @DisplayName("create should append message as event to active span when correlation matches")
+    void createShouldAppendMessageAsEventToActiveSpanWhenCorrelationMatches() {
+        LogRecordFactory delegate = mock(LogRecordFactory.class);
+        Span activeSpan = mock(Span.class);
+        SpanContext resolverSpan = new SpanContextImpl(
+                "4b8efff798038103d269b633813fc60c",
+                "ddd19b7ec3c1b174",
+                (byte) 0x01,
+                false,
+                new TraceStateImpl());
+        LogRecordImpl record = new LogRecordImpl();
+        record.setBody(AnyValueFactory.ofString("hello event"));
+        record.setSeverityText("INFO");
+        when(delegate.create()).thenReturn(record);
+        when(activeSpan.isRecording()).thenReturn(true);
+        when(activeSpan.getSpanContext()).thenReturn(resolverSpan);
+
+        EnrichingLogRecordFactory sut = new EnrichingLogRecordFactory(
+                delegate,
+                null,
+                null,
+                Collections.<KeyValue>emptyList(),
+                null,
+                () -> resolverSpan,
+                null,
+                () -> activeSpan);
+
+        sut.create();
+
+        assertEquals(resolverSpan.getTraceId(), record.getTraceId());
+        assertEquals(resolverSpan.getSpanId(), record.getSpanId());
+        verify(activeSpan).addEvent(eq("log"), anyList(), any());
     }
 
     @Test

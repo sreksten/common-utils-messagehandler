@@ -35,6 +35,7 @@ public class OtlpSpanDispatcher implements SpanDispatcher {
     private static final int DEFAULT_CONNECT_TIMEOUT_MILLIS = 10_000;
     private static final int DEFAULT_READ_TIMEOUT_MILLIS = 10_000;
     private static final String APPLICATION_JSON = "application/json";
+    private static final String DEFAULT_SERVICE_NAME = "common-utils-messagehandler";
     private static final BigInteger NANOS_PER_SECOND = BigInteger.valueOf(1_000_000_000L);
 
     private final URL endpoint;
@@ -125,11 +126,18 @@ public class OtlpSpanDispatcher implements SpanDispatcher {
         InstrumentationScope scope = spanData.getInstrumentationScope();
         String scopeName = scope == null ? null : normalizeNullable(scope.getName());
         String scopeVersion = scope == null ? null : normalizeNullable(scope.getVersion());
+        String serviceName = scopeName == null ? DEFAULT_SERVICE_NAME : scopeName;
         String startNs = toUnsignedNanosString(spanData.getStartTimestamp());
         String endNs = toUnsignedNanosString(spanData.getEndTimestamp());
 
         StringBuilder sb = new StringBuilder(1024);
-        sb.append("{\"resourceSpans\":[{\"scopeSpans\":[{\"scope\":{");
+        sb.append("{\"resourceSpans\":[{\"resource\":{\"attributes\":[");
+        appendStringKeyValueAttribute(sb, "service.name", serviceName);
+        if (scopeVersion != null) {
+            sb.append(',');
+            appendStringKeyValueAttribute(sb, "service.version", scopeVersion);
+        }
+        sb.append("]},\"scopeSpans\":[{\"scope\":{");
         boolean hasScopeField = false;
         if (scopeName != null) {
             sb.append("\"name\":\"").append(escapeJson(scopeName)).append('"');
@@ -199,6 +207,15 @@ public class OtlpSpanDispatcher implements SpanDispatcher {
 
         sb.append("}]}]}]}");
         return sb.toString();
+    }
+
+    private static void appendStringKeyValueAttribute(final StringBuilder sb,
+                                                      final String key,
+                                                      final String value) {
+        sb.append("{\"key\":\"").append(escapeJson(key))
+                .append("\",\"value\":{\"stringValue\":\"")
+                .append(escapeJson(value == null ? "" : value))
+                .append("\"}}");
     }
 
     private static void appendAttributes(final StringBuilder sb, final List<KeyValue> attributes) {

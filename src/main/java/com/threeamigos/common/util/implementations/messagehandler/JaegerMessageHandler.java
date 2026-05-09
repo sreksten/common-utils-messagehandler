@@ -26,6 +26,18 @@ import java.util.function.Consumer;
  * {@link ExportLogsServiceRequestLogRecordFormatter} by default and delegates the actual HTTP POST operation to
  * {@link JaegerLogRecordDispatcher}.
  *
+ * <h2>Recommended Usage</h2>
+ * <p>
+ * For Jaeger v2 setups, the preferred model is:
+ * <ul>
+ *   <li>export spans to Jaeger (or through an OpenTelemetry Collector) and</li>
+ *   <li>attach application messages as span events on the active span before {@code span.end()}.</li>
+ * </ul>
+ * This keeps events on the real span in Jaeger and avoids synthetic child spans with missing-parent warnings.
+ * <p>
+ * Use this handler when direct log dispatch to a Jaeger-facing endpoint is explicitly required.
+ * For log-native storage/query (for example Grafana Loki), use a dedicated log dispatcher/handler path.
+ *
  * <h2>Dispatch model</h2>
  * <p>
  * Inherits {@link AbstractOutputMessageHandler}'s execution modes:

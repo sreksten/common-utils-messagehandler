@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.interfaces.messagehandler.otel;
 
+import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordFactoryImpl;
 import com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Filter;
@@ -55,6 +56,18 @@ public interface Tracer {
      */
     default InstrumentationScope getInstrumentationScope() {
         return null;
+    }
+
+    /**
+     * Returns a log-record factory already configured for this tracer scope.
+     * <p>
+     * Implementations should enrich records with tracer/provider resource and
+     * correlation context when available.
+     *
+     * @return tracer-aware log-record factory
+     */
+    default LogRecordFactory getLogRecordFactory() {
+        return new LogRecordFactoryImpl();
     }
 
     default MessageHandler getConsoleMessageHandler() {

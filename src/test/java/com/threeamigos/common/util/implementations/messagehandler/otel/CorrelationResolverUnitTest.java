@@ -201,7 +201,7 @@ class CorrelationResolverUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
 
         CorrelationResolver.ScopeToken token = resolver.attach(spanContext, scope);
         try {
-            LogRecordFactory factory = provider.enrichingLogRecordFactory(new LogRecordFactoryImpl(), null);
+            LogRecordFactory factory = provider.getLogRecordFactory(null);
             LogRecord record = factory.create(SeverityNumber.INFO, "hello");
 
             assertSame(scope, record.getInstrumentationScope());

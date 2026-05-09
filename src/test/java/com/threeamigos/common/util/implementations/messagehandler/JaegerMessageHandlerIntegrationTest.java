@@ -1,6 +1,5 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
-import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordFactoryImpl;
 import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
 import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.ExportLogsServiceRequestLogRecordFormatter;
 import com.threeamigos.common.util.implementations.messagehandler.utils.JaegerLogRecordDispatcher;
@@ -56,9 +55,7 @@ class JaegerMessageHandlerIntegrationTest {
                 .serviceVersion(serviceVersion)
                 .build();
         Tracer tracer = provider.getTracer(serviceName, serviceVersion);
-        LogRecordFactory logRecordFactory = provider.enrichingLogRecordFactory(
-                new LogRecordFactoryImpl(),
-                tracer.getInstrumentationScope());
+        LogRecordFactory logRecordFactory = tracer.getLogRecordFactory();
         JaegerMessageHandler handler = new JaegerMessageHandler(
                 logRecordFactory,
                 new ExportLogsServiceRequestLogRecordFormatter(),

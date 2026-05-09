@@ -43,6 +43,10 @@ class OtlpSpanDispatcherUnitTest {
 
         String payload = connection.writtenBody();
         assertTrue(payload.contains("\"resourceSpans\""));
+        assertTrue(payload.contains("\"key\":\"service.name\""));
+        assertTrue(payload.contains("\"stringValue\":\"orders\""));
+        assertTrue(payload.contains("\"key\":\"service.version\""));
+        assertTrue(payload.contains("\"stringValue\":\"1.0.0\""));
         assertTrue(payload.contains("\"scopeSpans\""));
         assertTrue(payload.contains("\"traceId\":\"5b8efff798038103d269b633813fc60c\""));
         assertTrue(payload.contains("\"spanId\":\"eee19b7ec3c1b174\""));

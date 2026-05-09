@@ -21,6 +21,7 @@ public class EnrichingLogRecordFactory implements LogRecordFactory {
     private final SpanContext explicitSpanContext;
     private final Supplier<SpanContext> activeSpanContextResolver;
     private final Supplier<InstrumentationScope> activeInstrumentationScopeResolver;
+    private final Supplier<Span> activeSpanResolver;
 
     public EnrichingLogRecordFactory(
             LogRecordFactory delegate,
@@ -47,6 +48,25 @@ public class EnrichingLogRecordFactory implements LogRecordFactory {
             @Nullable SpanContext explicitSpanContext,
             @Nullable Supplier<SpanContext> activeSpanContextResolver,
             @Nullable Supplier<InstrumentationScope> activeInstrumentationScopeResolver) {
+        this(delegate,
+                resource,
+                scope,
+                commonAttributes,
+                explicitSpanContext,
+                activeSpanContextResolver,
+                activeInstrumentationScopeResolver,
+                null);
+    }
+
+    public EnrichingLogRecordFactory(
+            LogRecordFactory delegate,
+            Resource resource,
+            InstrumentationScope scope,
+            List<KeyValue> commonAttributes,
+            @Nullable SpanContext explicitSpanContext,
+            @Nullable Supplier<SpanContext> activeSpanContextResolver,
+            @Nullable Supplier<InstrumentationScope> activeInstrumentationScopeResolver,
+            @Nullable Supplier<Span> activeSpanResolver) {
         this.delegate = delegate;
         this.resource = resource;
         this.scope = scope;
@@ -54,6 +74,7 @@ public class EnrichingLogRecordFactory implements LogRecordFactory {
         this.explicitSpanContext = explicitSpanContext;
         this.activeSpanContextResolver = activeSpanContextResolver;
         this.activeInstrumentationScopeResolver = activeInstrumentationScopeResolver;
+        this.activeSpanResolver = activeSpanResolver;
     }
 
     @Override
@@ -116,6 +137,7 @@ public class EnrichingLogRecordFactory implements LogRecordFactory {
                 enrichTraceCorrelation(mutable, resolvedSpanContext);
             }
         }
+        appendAsActiveSpanEvent(mutable);
         return mutable;
     }
 
@@ -176,6 +198,53 @@ public class EnrichingLogRecordFactory implements LogRecordFactory {
         if (record.getTraceFlags() == 0 && (missingTraceId || missingSpanId)) {
             record.setTraceFlags(Byte.toUnsignedInt(spanContext.getTraceFlags()));
         }
+    }
+
+    private void appendAsActiveSpanEvent(final LogRecordImpl record) {
+        Span activeSpan = resolveActiveSpan();
+        if (activeSpan == null || !activeSpan.isRecording()) {
+            return;
+        }
+        SpanContext activeSpanContext = activeSpan.getSpanContext();
+        if (activeSpanContext == null || !activeSpanContext.isValid()) {
+            return;
+        }
+        if (!matchesActiveSpan(record, activeSpanContext)) {
+            return;
+        }
+        String message = record.getBody() == null ? null : record.getBody().asString();
+        if (isBlank(message)) {
+            return;
+        }
+        List<KeyValue> eventAttributes = new ArrayList<KeyValue>(3);
+        eventAttributes.add(KeyValueFactory.of("log.message", AnyValueFactory.ofString(message)));
+        String severity = record.getSeverityText();
+        if (!isBlank(severity)) {
+            eventAttributes.add(KeyValueFactory.of("log.severity", AnyValueFactory.ofString(severity)));
+        }
+        activeSpan.addEvent("log", eventAttributes, record.getTimestamp());
+    }
+
+    private Span resolveActiveSpan() {
+        if (activeSpanResolver == null) {
+            return null;
+        }
+        try {
+            return activeSpanResolver.get();
+        } catch (RuntimeException ex) {
+            OpenTelemetryAttributeValidator.report(ex.getMessage(), ex);
+            return null;
+        }
+    }
+
+    private static boolean matchesActiveSpan(final LogRecordImpl record, final SpanContext activeSpanContext) {
+        if (!isBlank(record.getTraceId()) && !record.getTraceId().equalsIgnoreCase(activeSpanContext.getTraceId())) {
+            return false;
+        }
+        if (!isBlank(record.getSpanId()) && !record.getSpanId().equalsIgnoreCase(activeSpanContext.getSpanId())) {
+            return false;
+        }
+        return true;
     }
 
     private void mergeMissingAttributes(final LogRecordImpl record) {

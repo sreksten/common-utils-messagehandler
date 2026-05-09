@@ -358,8 +358,7 @@ class TracerProviderUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
 
         LogRecord record;
         try {
-            LogRecordFactory enrichedFactory =
-                    provider.enrichingLogRecordFactory(new LogRecordFactoryImpl(), null);
+            LogRecordFactory enrichedFactory = provider.getLogRecordFactory(null);
             record = enrichedFactory.create(SeverityNumber.INFO, "hello");
         } finally {
             token.close();
@@ -394,10 +393,7 @@ class TracerProviderUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
 
         LogRecord record;
         try {
-            LogRecordFactory enrichedFactory = provider.enrichingLogRecordFactory(
-                    new LogRecordFactoryImpl(),
-                    null,
-                    explicitContext);
+            LogRecordFactory enrichedFactory = provider.getLogRecordFactory(null, explicitContext);
             record = enrichedFactory.create();
         } finally {
             token.close();
@@ -427,9 +423,7 @@ class TracerProviderUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
 
         LogRecord record;
         try {
-            LogRecordFactory enrichedFactory = provider.enrichingLogRecordFactory(
-                    new LogRecordFactoryImpl(),
-                    explicitScope);
+            LogRecordFactory enrichedFactory = provider.getLogRecordFactory(explicitScope);
             record = enrichedFactory.create();
         } finally {
             token.close();

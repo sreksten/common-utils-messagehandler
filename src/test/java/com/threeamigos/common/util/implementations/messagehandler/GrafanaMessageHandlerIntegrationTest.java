@@ -1,6 +1,5 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
-import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordFactoryImpl;
 import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
 import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.ExportLogsServiceRequestLogRecordFormatter;
 import com.threeamigos.common.util.implementations.messagehandler.utils.GrafanaLogRecordDispatcher;
@@ -55,9 +54,7 @@ class GrafanaMessageHandlerIntegrationTest {
                 .serviceVersion(serviceVersion)
                 .build();
         Tracer tracer = provider.getTracer(serviceName, serviceVersion);
-        LogRecordFactory logRecordFactory = provider.enrichingLogRecordFactory(
-                new LogRecordFactoryImpl(),
-                tracer.getInstrumentationScope());
+        LogRecordFactory logRecordFactory = tracer.getLogRecordFactory();
 
         MessageHandler handler = new GrafanaMessageHandler(
                 logRecordFactory,

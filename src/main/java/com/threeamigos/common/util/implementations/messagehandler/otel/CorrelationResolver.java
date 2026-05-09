@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanContext;
 import jakarta.annotation.Nullable;
 
@@ -27,6 +28,7 @@ public class CorrelationResolver {
 
     private final ThreadLocal<SpanContext> activeSpanContext = new ThreadLocal<>();
     private final ThreadLocal<InstrumentationScope> activeInstrumentationScope = new ThreadLocal<>();
+    private final ThreadLocal<Span> activeSpan = new ThreadLocal<Span>();
 
     public @Nullable SpanContext resolveSpanContext() {
         return activeSpanContext.get();
@@ -34,6 +36,10 @@ public class CorrelationResolver {
 
     public @Nullable InstrumentationScope resolveInstrumentationScope() {
         return activeInstrumentationScope.get();
+    }
+
+    public @Nullable Span resolveSpan() {
+        return activeSpan.get();
     }
 
     public void setActiveSpanContext(final @Nullable SpanContext spanContext) {
@@ -52,9 +58,18 @@ public class CorrelationResolver {
         activeInstrumentationScope.set(instrumentationScope);
     }
 
+    public void setActiveSpan(final @Nullable Span span) {
+        if (span == null) {
+            activeSpan.remove();
+            return;
+        }
+        activeSpan.set(span);
+    }
+
     public void clear() {
         activeSpanContext.remove();
         activeInstrumentationScope.remove();
+        activeSpan.remove();
     }
 
     /**
@@ -66,11 +81,19 @@ public class CorrelationResolver {
      */
     public ScopeToken attach(final @Nullable SpanContext spanContext,
                              final @Nullable InstrumentationScope instrumentationScope) {
+        return attach(spanContext, instrumentationScope, null);
+    }
+
+    public ScopeToken attach(final @Nullable SpanContext spanContext,
+                             final @Nullable InstrumentationScope instrumentationScope,
+                             final @Nullable Span span) {
         SpanContext previousSpanContext = activeSpanContext.get();
         InstrumentationScope previousInstrumentationScope = activeInstrumentationScope.get();
+        Span previousSpan = activeSpan.get();
         setActiveSpanContext(spanContext);
         setActiveInstrumentationScope(instrumentationScope);
-        return new ScopeToken(this, previousSpanContext, previousInstrumentationScope);
+        setActiveSpan(span);
+        return new ScopeToken(this, previousSpanContext, previousInstrumentationScope, previousSpan);
     }
 
     /**
@@ -79,7 +102,7 @@ public class CorrelationResolver {
      * @return immutable snapshot of current correlation values
      */
     public CorrelationSnapshot capture() {
-        return new CorrelationSnapshot(activeSpanContext.get(), activeInstrumentationScope.get());
+        return new CorrelationSnapshot(activeSpanContext.get(), activeInstrumentationScope.get(), activeSpan.get());
     }
 
     /**
@@ -92,7 +115,7 @@ public class CorrelationResolver {
         if (snapshot == null) {
             return attach(null, null);
         }
-        return attach(snapshot.getSpanContext(), snapshot.getInstrumentationScope());
+        return attach(snapshot.getSpanContext(), snapshot.getInstrumentationScope(), snapshot.getSpan());
     }
 
     /**
@@ -178,11 +201,14 @@ public class CorrelationResolver {
     public static final class CorrelationSnapshot {
         private final SpanContext spanContext;
         private final InstrumentationScope instrumentationScope;
+        private final Span span;
 
         private CorrelationSnapshot(final SpanContext spanContext,
-                                    final InstrumentationScope instrumentationScope) {
+                                    final InstrumentationScope instrumentationScope,
+                                    final Span span) {
             this.spanContext = spanContext;
             this.instrumentationScope = instrumentationScope;
+            this.span = span;
         }
 
         public @Nullable SpanContext getSpanContext() {
@@ -191,6 +217,10 @@ public class CorrelationResolver {
 
         public @Nullable InstrumentationScope getInstrumentationScope() {
             return instrumentationScope;
+        }
+
+        public @Nullable Span getSpan() {
+            return span;
         }
     }
 
@@ -239,14 +269,17 @@ public class CorrelationResolver {
         private final CorrelationResolver owner;
         private final SpanContext previousSpanContext;
         private final InstrumentationScope previousInstrumentationScope;
+        private final Span previousSpan;
         private final AtomicBoolean closed = new AtomicBoolean(false);
 
         private ScopeToken(final CorrelationResolver owner,
                            final SpanContext previousSpanContext,
-                           final InstrumentationScope previousInstrumentationScope) {
+                           final InstrumentationScope previousInstrumentationScope,
+                           final Span previousSpan) {
             this.owner = owner;
             this.previousSpanContext = previousSpanContext;
             this.previousInstrumentationScope = previousInstrumentationScope;
+            this.previousSpan = previousSpan;
         }
 
         @Override
@@ -256,6 +289,7 @@ public class CorrelationResolver {
             }
             owner.setActiveSpanContext(previousSpanContext);
             owner.setActiveInstrumentationScope(previousInstrumentationScope);
+            owner.setActiveSpan(previousSpan);
         }
     }
 }

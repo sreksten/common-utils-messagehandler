@@ -56,6 +56,18 @@ import java.util.Objects;
  * <p>
  * This dispatcher remains useful in both cases because the endpoint is fully configurable.
  *
+ * <h2>Recommended Usage</h2>
+ * <p>
+ * For Jaeger-first observability, prefer exporting spans with {@code JaegerSpanDispatcher}
+ * and attaching messages as span events before ending the span.
+ * This produces clean parent/child traces in Jaeger and avoids "parent span ID ... is not in the trace"
+ * warnings caused by synthetic spans.
+ * <p>
+ * Use this dispatcher mainly as a compatibility/fallback transport when logs must be sent directly
+ * to a Jaeger-facing endpoint.
+ * For log-native backends (for example Grafana Loki), use a log dispatcher such as
+ * {@code GrafanaLogRecordDispatcher}.
+ *
  * <h2>Authentication</h2>
  * <p>
  * Jaeger itself is often deployed without built-in collector auth and protected via reverse proxy/gateway.
