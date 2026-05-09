@@ -264,25 +264,6 @@ public class TracerProvider {
                 correlationResolver::resolveSpan);
     }
 
-    /**
-     * @deprecated use {@link #getLogRecordFactory(InstrumentationScope)}.
-     */
-    @Deprecated
-    public LogRecordFactory enrichingLogRecordFactory(final @Nonnull LogRecordFactory delegate,
-                                                      final @Nullable InstrumentationScope scope) {
-        return getLogRecordFactory(scope);
-    }
-
-    /**
-     * @deprecated use {@link #getLogRecordFactory(InstrumentationScope, SpanContext)}.
-     */
-    @Deprecated
-    public LogRecordFactory enrichingLogRecordFactory(final @Nonnull LogRecordFactory delegate,
-                                                      final @Nullable InstrumentationScope scope,
-                                                      final @Nullable SpanContext explicitSpanContext) {
-        return getLogRecordFactory(scope, explicitSpanContext);
-    }
-
     public Runnable wrap(final Runnable task) {
         return correlationResolver.wrap(task);
     }
