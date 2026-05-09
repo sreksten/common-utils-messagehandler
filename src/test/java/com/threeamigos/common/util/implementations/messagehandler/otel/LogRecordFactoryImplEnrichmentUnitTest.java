@@ -33,10 +33,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-@DisplayName("EnrichingLogRecordFactory unit tests")
+@DisplayName("LogRecordFactoryImpl enrichment unit tests")
 @Tag("unit")
 @Tag("messageHandler")
-class EnrichingLogRecordFactoryUnitTest {
+class LogRecordFactoryImplEnrichmentUnitTest {
 
     @org.junit.jupiter.api.AfterEach
     void cleanupLenientAndTrap() {
@@ -56,8 +56,8 @@ class EnrichingLogRecordFactoryUnitTest {
         when(delegate.create("msg", throwable)).thenReturn(genericRecord);
         when(delegate.create(throwable)).thenReturn(genericRecord);
 
-        EnrichingLogRecordFactory sut =
-                new EnrichingLogRecordFactory(delegate, null, null, null);
+        LogRecordFactoryImpl sut =
+                new LogRecordFactoryImpl(delegate, null, null, null);
 
         assertSame(genericRecord, sut.create());
         assertSame(genericRecord, sut.create(SeverityNumber.INFO, "msg"));
@@ -86,7 +86,7 @@ class EnrichingLogRecordFactoryUnitTest {
 
         when(delegate.create()).thenReturn(record);
 
-        EnrichingLogRecordFactory sut = new EnrichingLogRecordFactory(
+        LogRecordFactoryImpl sut = new LogRecordFactoryImpl(
                 delegate,
                 resource,
                 scope,
@@ -112,8 +112,8 @@ class EnrichingLogRecordFactoryUnitTest {
 
         when(delegate.create()).thenReturn(record);
 
-        EnrichingLogRecordFactory sut =
-                new EnrichingLogRecordFactory(delegate, null, null, null);
+        LogRecordFactoryImpl sut =
+                new LogRecordFactoryImpl(delegate, null, null, null);
 
         LogRecord enriched = sut.create();
 
@@ -135,7 +135,7 @@ class EnrichingLogRecordFactoryUnitTest {
 
         when(delegate.create()).thenReturn(record);
 
-        EnrichingLogRecordFactory sut = new EnrichingLogRecordFactory(
+        LogRecordFactoryImpl sut = new LogRecordFactoryImpl(
                 delegate,
                 null,
                 null,
@@ -163,7 +163,7 @@ class EnrichingLogRecordFactoryUnitTest {
 
         when(delegate.create()).thenReturn(record);
 
-        EnrichingLogRecordFactory sut = new EnrichingLogRecordFactory(
+        LogRecordFactoryImpl sut = new LogRecordFactoryImpl(
                 delegate,
                 null,
                 null,
@@ -208,7 +208,7 @@ class EnrichingLogRecordFactoryUnitTest {
 
         when(delegate.create()).thenReturn(record);
 
-        EnrichingLogRecordFactory sut = new EnrichingLogRecordFactory(
+        LogRecordFactoryImpl sut = new LogRecordFactoryImpl(
                 delegate,
                 null,
                 null,
@@ -245,7 +245,7 @@ class EnrichingLogRecordFactoryUnitTest {
         when(activeSpan.isRecording()).thenReturn(true);
         when(activeSpan.getSpanContext()).thenReturn(resolverSpan);
 
-        EnrichingLogRecordFactory sut = new EnrichingLogRecordFactory(
+        LogRecordFactoryImpl sut = new LogRecordFactoryImpl(
                 delegate,
                 null,
                 null,
@@ -291,7 +291,7 @@ class EnrichingLogRecordFactoryUnitTest {
 
         when(delegate.create()).thenReturn(record);
 
-        EnrichingLogRecordFactory sut = new EnrichingLogRecordFactory(
+        LogRecordFactoryImpl sut = new LogRecordFactoryImpl(
                 delegate,
                 providerResource,
                 providerScope,
@@ -341,7 +341,7 @@ class EnrichingLogRecordFactoryUnitTest {
                 new TraceStateImpl());
         when(delegate.create()).thenReturn(record);
 
-        EnrichingLogRecordFactory sut = new EnrichingLogRecordFactory(
+        LogRecordFactoryImpl sut = new LogRecordFactoryImpl(
                 delegate, null, null, Collections.<KeyValue>emptyList(), explicit);
 
         LogRecord enriched = sut.create();
@@ -355,7 +355,7 @@ class EnrichingLogRecordFactoryUnitTest {
     @DisplayName("enrichRecord should throw in strict mode when record is null")
     void enrichRecordShouldThrowInStrictModeWhenRecordIsNull() {
         OpenTelemetryAttributeValidator.setLenientModeForTests(false);
-        EnrichingLogRecordFactory sut = new EnrichingLogRecordFactory(
+        LogRecordFactoryImpl sut = new LogRecordFactoryImpl(
                 mock(LogRecordFactory.class),
                 null,
                 null,
@@ -371,7 +371,7 @@ class EnrichingLogRecordFactoryUnitTest {
         OpenTelemetryAttributeValidator.setLogTrapForTests((message, throwable) -> {
             // no-op trap for lenient assertions
         });
-        EnrichingLogRecordFactory sut = new EnrichingLogRecordFactory(
+        LogRecordFactoryImpl sut = new LogRecordFactoryImpl(
                 mock(LogRecordFactory.class),
                 null,
                 null,
@@ -393,7 +393,7 @@ class EnrichingLogRecordFactoryUnitTest {
         LogRecordImpl record = new LogRecordImpl();
         when(delegate.create()).thenReturn(record);
 
-        EnrichingLogRecordFactory sut = new EnrichingLogRecordFactory(
+        LogRecordFactoryImpl sut = new LogRecordFactoryImpl(
                 delegate,
                 null,
                 null,
@@ -482,7 +482,7 @@ class EnrichingLogRecordFactoryUnitTest {
             }
         };
 
-        EnrichingLogRecordFactory sut = new EnrichingLogRecordFactory(
+        LogRecordFactoryImpl sut = new LogRecordFactoryImpl(
                 delegate,
                 null,
                 null,

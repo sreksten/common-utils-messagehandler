@@ -17,8 +17,8 @@ class TracerMessageHandlerFactoryUnitTest extends AbstractOtelValidatorLogTrapUn
     @Test
     @DisplayName("factory should create all handler backends")
     void factoryShouldCreateAllHandlerBackends() {
-        LogRecordFactory enrichingFactory = new LogRecordFactoryImpl();
-        TracerMessageHandlerFactory factory = new TracerMessageHandlerFactory(enrichingFactory, "target/factory-test.log");
+        LogRecordFactory logRecordFactory = new LogRecordFactoryImpl();
+        TracerMessageHandlerFactory factory = new TracerMessageHandlerFactory(logRecordFactory, "target/factory-test.log");
 
         MessageHandler console = factory.createConsole();
         MessageHandler file = factory.createFile("target/factory-test-explicit.log");

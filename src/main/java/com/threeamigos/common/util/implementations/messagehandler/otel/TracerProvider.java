@@ -228,10 +228,6 @@ public class TracerProvider {
                 filter);
     }
 
-    LogRecordFactory getDefaultEnrichingFactory(final @Nullable InstrumentationScope scope) {
-        return getLogRecordFactory(scope);
-    }
-
     TracerMessageHandlerFactory buildMessageHandlerFactory(final @Nullable InstrumentationScope scope) {
         return buildMessageHandlerFactory(scope, null);
     }
@@ -240,7 +236,7 @@ public class TracerProvider {
                                                            final @Nullable String filePath) {
         String normalizedFilePath = normalizeNullable(filePath);
         String resolvedFilePath = normalizedFilePath == null ? defaultFilePath : normalizedFilePath;
-        return new TracerMessageHandlerFactory(getDefaultEnrichingFactory(scope), resolvedFilePath);
+        return new TracerMessageHandlerFactory(getLogRecordFactory(scope), resolvedFilePath);
     }
 
     public LogRecordFactory getLogRecordFactory() {
@@ -253,8 +249,7 @@ public class TracerProvider {
 
     public LogRecordFactory getLogRecordFactory(final @Nullable InstrumentationScope scope,
                                                 final @Nullable SpanContext explicitSpanContext) {
-        return new EnrichingLogRecordFactory(
-                new LogRecordFactoryImpl(),
+        return new LogRecordFactoryImpl(
                 defaultResource,
                 scope,
                 defaultCommonAttributes,

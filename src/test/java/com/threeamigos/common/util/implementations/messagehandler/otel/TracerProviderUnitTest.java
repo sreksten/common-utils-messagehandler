@@ -337,8 +337,8 @@ class TracerProviderUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
     }
 
     @Test
-    @DisplayName("enriching factory should apply provider defaults and resolver correlation")
-    void enrichingFactoryShouldApplyProviderDefaultsAndResolverCorrelation() {
+    @DisplayName("log record factory should apply provider defaults and resolver correlation")
+    void logRecordFactoryShouldApplyProviderDefaultsAndResolverCorrelation() {
         TracerProvider provider = TracerProvider.createProvider();
         provider.setDefaultResource(ResourceFactory.create("https://provider.schema", null, null));
         provider.setDefaultCommonAttributes(Collections.singletonList(

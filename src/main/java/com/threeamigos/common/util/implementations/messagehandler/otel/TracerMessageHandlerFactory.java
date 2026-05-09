@@ -21,54 +21,54 @@ import org.apache.logging.log4j.Logger;
  */
 final class TracerMessageHandlerFactory {
 
-    private final LogRecordFactory enrichingFactory;
+    private final LogRecordFactory logRecordFactory;
     private final String defaultFilePath;
     private final LogRecordFormatter formatter = new RawJsonRecordFormatter();
 
-    TracerMessageHandlerFactory(final LogRecordFactory enrichingFactory,
+    TracerMessageHandlerFactory(final LogRecordFactory logRecordFactory,
                                 final String defaultFilePath) {
-        this.enrichingFactory = enrichingFactory;
+        this.logRecordFactory = logRecordFactory;
         this.defaultFilePath = defaultFilePath;
     }
 
     MessageHandler createConsole() {
-        return new ConsoleMessageHandler(enrichingFactory, formatter);
+        return new ConsoleMessageHandler(logRecordFactory, formatter);
     }
 
     MessageHandler createFile(final String filePath) {
-        return new FileMessageHandler(enrichingFactory, formatter, filePath);
+        return new FileMessageHandler(logRecordFactory, formatter, filePath);
     }
 
     MessageHandler createInMemory() {
-        return new StructuredBackendMessageHandler(new InMemoryMessageHandler(), enrichingFactory, formatter);
+        return new StructuredBackendMessageHandler(new InMemoryMessageHandler(), logRecordFactory, formatter);
     }
 
     MessageHandler createJUL(final String loggerName) {
-        return new StructuredBackendMessageHandler(new JULMessageHandler(loggerName), enrichingFactory, formatter);
+        return new StructuredBackendMessageHandler(new JULMessageHandler(loggerName), logRecordFactory, formatter);
     }
 
     MessageHandler createJUL(final java.util.logging.Logger logger) {
-        return new StructuredBackendMessageHandler(new JULMessageHandler(logger), enrichingFactory, formatter);
+        return new StructuredBackendMessageHandler(new JULMessageHandler(logger), logRecordFactory, formatter);
     }
 
     MessageHandler createLog4J(final String loggerName) {
-        return new StructuredBackendMessageHandler(new Log4JMessageHandler(loggerName), enrichingFactory, formatter);
+        return new StructuredBackendMessageHandler(new Log4JMessageHandler(loggerName), logRecordFactory, formatter);
     }
 
     MessageHandler createLog4J(final Logger logger) {
-        return new StructuredBackendMessageHandler(new Log4JMessageHandler(logger), enrichingFactory, formatter);
+        return new StructuredBackendMessageHandler(new Log4JMessageHandler(logger), logRecordFactory, formatter);
     }
 
     MessageHandler createSLF4J(final String loggerName) {
-        return new StructuredBackendMessageHandler(new SLF4JMessageHandler(loggerName), enrichingFactory, formatter);
+        return new StructuredBackendMessageHandler(new SLF4JMessageHandler(loggerName), logRecordFactory, formatter);
     }
 
     MessageHandler createSLF4J(final org.slf4j.Logger logger) {
-        return new StructuredBackendMessageHandler(new SLF4JMessageHandler(logger), enrichingFactory, formatter);
+        return new StructuredBackendMessageHandler(new SLF4JMessageHandler(logger), logRecordFactory, formatter);
     }
 
     MessageHandler createSwing() {
-        return new StructuredBackendMessageHandler(new SwingMessageHandler(), enrichingFactory, formatter);
+        return new StructuredBackendMessageHandler(new SwingMessageHandler(), logRecordFactory, formatter);
     }
 
     MessageHandler createVoid() {

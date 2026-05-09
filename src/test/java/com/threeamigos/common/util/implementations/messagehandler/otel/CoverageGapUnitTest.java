@@ -100,9 +100,9 @@ class CoverageGapUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
     }
 
     @Test
-    @DisplayName("enriching factory resolver exception and tracer null-owner branches should be covered")
-    void enrichingFactoryResolverExceptionAndTracerNullOwnerBranchesShouldBeCovered() {
-        EnrichingLogRecordFactory factory = new EnrichingLogRecordFactory(
+    @DisplayName("log record factory resolver exception and tracer null-owner branches should be covered")
+    void logRecordFactoryResolverExceptionAndTracerNullOwnerBranchesShouldBeCovered() {
+        LogRecordFactoryImpl factory = new LogRecordFactoryImpl(
                 new LogRecordFactoryImpl(),
                 null,
                 null,
