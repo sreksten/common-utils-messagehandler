@@ -14,6 +14,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Base class for output-oriented handlers that optionally dispatch write operations asynchronously.
+ * It is an opt-in extension over {@link AbstractMessageHandler}; handlers that do not extend this
+ * class remain synchronous unless they implement their own threading model.
  * <p>
  * Subclasses call {@link #initializeOutputDispatch} once from their constructor to configure the
  * dispatch mode. Two modes are supported:
@@ -46,6 +48,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * exits, the caller thread performs one additional drain pass to capture tasks enqueued in the
  * window between the interrupt and the worker's own drain, then calls {@link #closeOutput()} to
  * release the underlying output resource.
+ * <p>
+ * @author Stefano Reksten
  */
 public abstract class AbstractOutputMessageHandler extends AbstractMessageHandler implements AutoCloseable {
 

@@ -28,8 +28,13 @@ import jakarta.annotation.Nonnull;
  * {@code MessageHandler} extends {@link AutoCloseable}, so any handler can be used in a
  * try-with-resources block. The default {@link #close()} implementation is a no-op; output-oriented
  * handlers ({@link com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler},
- * {@link com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler}) override it
+ * {@link com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler},
+ * {@link com.threeamigos.common.util.implementations.messagehandler.JaegerMessageHandler},
+ * {@link com.threeamigos.common.util.implementations.messagehandler.GrafanaMessageHandler}) override it
  * to flush and release their underlying resources.
+ * <p>
+ * Asynchronous dispatch is not part of this interface contract. It is optional and only available
+ * in specific output-oriented implementations that provide async queue/worker semantics.
  * <p>
  * The default implementation base class is
  * {@link com.threeamigos.common.util.implementations.messagehandler.AbstractMessageHandler}.
@@ -87,7 +92,9 @@ public interface MessageHandler extends
      * <p>
      * The default implementation is a no-op. Output-oriented handlers
      * ({@link com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler},
-     * {@link com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler})
+     * {@link com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler},
+     * {@link com.threeamigos.common.util.implementations.messagehandler.JaegerMessageHandler},
+     * {@link com.threeamigos.common.util.implementations.messagehandler.GrafanaMessageHandler})
      * override this method to flush pending writes and close the underlying output resource.
      * <p>
      * This method does not declare {@code throws Exception}, narrowing the {@link AutoCloseable}

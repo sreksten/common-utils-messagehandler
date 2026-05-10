@@ -12,10 +12,15 @@ import java.util.function.Supplier;
 
 /**
  * An abstract implementation of the {@link MessageHandler} interface that checks if a given message level is enabled
- * before forwarding the message to the concrete implementation. If the message parameter is null, an exception is
- * thrown. If the parameter is a Supplier, and the supplier returns null, an exception is thrown.<br/>
+ * before forwarding the message to the concrete implementation. Null message inputs are silently ignored:
+ * if a message string is {@code null}, if a message supplier is {@code null}, or if a supplier produces
+ * {@code null}, the call is treated as a no-op.<br/>
+ * Null severity values are normalized to {@link SeverityNumber#INFO}.<br/>
  * The advantage of using a Supplier is that if the message level is deactivated, the message construction can be
  * skipped, saving resources.
+ * <p>
+ * This base class provides level filtering and dispatch semantics only. It does not provide asynchronous dispatch;
+ * async support is available only in handlers based on {@link AbstractOutputMessageHandler}.
  * <p>
  * Levels enabled by default: INFO*, WARN*, ERROR*, FATAL*.
  * <p>
