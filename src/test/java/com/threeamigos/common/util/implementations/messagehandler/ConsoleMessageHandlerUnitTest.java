@@ -466,7 +466,7 @@ class ConsoleMessageHandlerUnitTest {
         ArgumentCaptor<String> captor = forClass(String.class);
         verify(stream, times(1)).println(captor.capture());
         String actual = captor.getValue();
-        String regex = "^\\[[^\\]]+\\] \\[" + Pattern.quote(level) + "\\] " + Pattern.quote(message) + "$";
+        String regex = "^\\[[^]]+] \\[" + Pattern.quote(level) + "] " + Pattern.quote(message) + "$";
         assertTrue(actual.matches(regex), () -> "Unexpected message: " + actual);
     }
 

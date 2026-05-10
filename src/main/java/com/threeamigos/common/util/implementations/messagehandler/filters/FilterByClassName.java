@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.implementations.messagehandler.otel.filters;
+package com.threeamigos.common.util.implementations.messagehandler.filters;
 
 import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.*;

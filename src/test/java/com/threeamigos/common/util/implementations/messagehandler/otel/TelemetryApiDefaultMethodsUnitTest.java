@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
+import com.threeamigos.common.util.implementations.messagehandler.filters.FilterByClassName;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanContext;
@@ -38,21 +39,21 @@ class TelemetryApiDefaultMethodsUnitTest {
         };
 
         MessageHandler console = tracer.getConsoleMessageHandler();
-        MessageHandler consoleWithFilter = tracer.getConsoleMessageHandler(new com.threeamigos.common.util.implementations.messagehandler.otel.filters.FilterByClassName());
+        MessageHandler consoleWithFilter = tracer.getConsoleMessageHandler(new FilterByClassName());
         MessageHandler fileByString = tracer.getFileMessageHandler("x.log");
-        MessageHandler fileByStringWithFilter = tracer.getFileMessageHandler("x.log", new com.threeamigos.common.util.implementations.messagehandler.otel.filters.FilterByClassName());
+        MessageHandler fileByStringWithFilter = tracer.getFileMessageHandler("x.log", new FilterByClassName());
         MessageHandler fileByFile = tracer.getFileMessageHandler(new File("x.log"));
-        MessageHandler fileByFileWithFilter = tracer.getFileMessageHandler(new File("x.log"), new com.threeamigos.common.util.implementations.messagehandler.otel.filters.FilterByClassName());
+        MessageHandler fileByFileWithFilter = tracer.getFileMessageHandler(new File("x.log"), new FilterByClassName());
         MessageHandler inMemory = tracer.getInMemoryMessageHandler();
-        MessageHandler inMemoryWithFilter = tracer.getInMemoryMessageHandler(new com.threeamigos.common.util.implementations.messagehandler.otel.filters.FilterByClassName());
+        MessageHandler inMemoryWithFilter = tracer.getInMemoryMessageHandler(new FilterByClassName());
         MessageHandler jul = tracer.getJULMessageHandler(java.util.logging.Logger.getLogger("default"));
-        MessageHandler julWithFilter = tracer.getJULMessageHandler(java.util.logging.Logger.getLogger("default"), new com.threeamigos.common.util.implementations.messagehandler.otel.filters.FilterByClassName());
+        MessageHandler julWithFilter = tracer.getJULMessageHandler(java.util.logging.Logger.getLogger("default"), new FilterByClassName());
         MessageHandler log4j = tracer.getLog4JMessageHandler(org.apache.logging.log4j.LogManager.getLogger("default"));
-        MessageHandler log4jWithFilter = tracer.getLog4JMessageHandler(org.apache.logging.log4j.LogManager.getLogger("default"), new com.threeamigos.common.util.implementations.messagehandler.otel.filters.FilterByClassName());
+        MessageHandler log4jWithFilter = tracer.getLog4JMessageHandler(org.apache.logging.log4j.LogManager.getLogger("default"), new FilterByClassName());
         MessageHandler slf4j = tracer.getSLF4JMessageHandler(org.slf4j.LoggerFactory.getLogger("default"));
-        MessageHandler slf4jWithFilter = tracer.getSLF4JMessageHandler(org.slf4j.LoggerFactory.getLogger("default"), new com.threeamigos.common.util.implementations.messagehandler.otel.filters.FilterByClassName());
+        MessageHandler slf4jWithFilter = tracer.getSLF4JMessageHandler(org.slf4j.LoggerFactory.getLogger("default"), new FilterByClassName());
         MessageHandler swing = tracer.getSwingMessageHandler();
-        MessageHandler swingWithFilter = tracer.getSwingMessageHandler(new com.threeamigos.common.util.implementations.messagehandler.otel.filters.FilterByClassName());
+        MessageHandler swingWithFilter = tracer.getSwingMessageHandler(new FilterByClassName());
         MessageHandler voidHandler = tracer.getVoidMessageHandler();
         tracer.getInstrumentationScope();
 

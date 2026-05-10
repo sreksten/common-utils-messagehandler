@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.implementations.messagehandler.otel.filters;
+package com.threeamigos.common.util.implementations.messagehandler.filters;
 
 import com.threeamigos.common.util.implementations.messagehandler.otel.AnyValueFactory;
 import com.threeamigos.common.util.implementations.messagehandler.otel.KeyValueFactory;
@@ -17,21 +17,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
-import java.util.AbstractMap;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("FilterByClassName unit tests")
 @Tag("unit")
@@ -150,7 +138,7 @@ class FilterByClassNameUnitTest {
             Files.deleteIfExists(file.toPath());
         }
 
-        assertThrows(NullPointerException.class, () -> filter.loadPropertiesFromFile((String) null));
+        assertThrows(NullPointerException.class, () -> filter.loadPropertiesFromFile(null));
         assertThrows(IllegalArgumentException.class, () -> filter.loadPropertiesFromFile(" "));
         assertThrows(IOException.class, () -> filter.loadPropertiesFromFile("missing-file-" + System.nanoTime() + ".properties"));
     }
@@ -164,7 +152,7 @@ class FilterByClassNameUnitTest {
         assertEquals(SeverityNumber.WARN, filter.getClassSeverityMap().get("com\\.resource\\..*"));
         assertTrue(filter.getPrunedClasses().contains("com\\.resourceoff\\..*"));
 
-        assertThrows(NullPointerException.class, () -> filter.loadPropertiesFromResource((String) null));
+        assertThrows(NullPointerException.class, () -> filter.loadPropertiesFromResource(null));
         assertThrows(IllegalArgumentException.class, () -> filter.loadPropertiesFromResource(" "));
         assertThrows(IllegalArgumentException.class, () -> filter.loadPropertiesFromResource("otel/filters/missing.properties"));
     }
@@ -298,12 +286,12 @@ class FilterByClassNameUnitTest {
         Object holderB = newRegexHolder("abc.*");
         Object holderC = newRegexHolder("ac.*");
 
-        assertTrue(holderA.equals(holderA2));
-        assertFalse(holderA.equals("not-a-holder"));
+        assertEquals(holderA, holderA2);
+        assertNotEquals("not-a-holder", holderA);
         assertEquals(holderA.hashCode(), holderA2.hashCode());
-        assertEquals("ab.*", invokeNoArg(holderA, "getOriginalRegex"));
-        assertEquals(Boolean.TRUE, invoke(holderA, "matches", new Class<?>[]{String.class}, "ab.test"));
-        assertEquals(Boolean.FALSE, invoke(holderA, "matches", new Class<?>[]{String.class}, "zz.test"));
+        assertEquals("ab.*", invokeNoArg(holderA));
+        assertEquals(Boolean.TRUE, invoke(holderA, new Class<?>[]{String.class}, "ab.test"));
+        assertEquals(Boolean.FALSE, invoke(holderA, new Class<?>[]{String.class}, "zz.test"));
 
         @SuppressWarnings("unchecked")
         Comparator<Object> comparator = (Comparator<Object>) newRegexComparator();
@@ -319,9 +307,7 @@ class FilterByClassNameUnitTest {
         LogRecordImpl record = new LogRecordImpl();
         record.setSeverityNumber(severityNumber);
         List<KeyValue> attrs = new ArrayList<>();
-        for (KeyValue attribute : attributes) {
-            attrs.add(attribute);
-        }
+        Collections.addAll(attrs, attributes);
         record.setAttributes(attrs);
         return record;
     }
@@ -332,7 +318,7 @@ class FilterByClassNameUnitTest {
 
     private static Object newRegexHolder(final String regex) throws Exception {
         Class<?> holderClass = Class.forName(
-                "com.threeamigos.common.util.implementations.messagehandler.otel.filters.FilterByClassName$RegexHolder");
+                "com.threeamigos.common.util.implementations.messagehandler.filters.FilterByClassName$RegexHolder");
         Constructor<?> constructor = holderClass.getDeclaredConstructor(String.class);
         constructor.setAccessible(true);
         return constructor.newInstance(regex);
@@ -340,21 +326,21 @@ class FilterByClassNameUnitTest {
 
     private static Object newRegexComparator() throws Exception {
         Class<?> comparatorClass = Class.forName(
-                "com.threeamigos.common.util.implementations.messagehandler.otel.filters.FilterByClassName$RegexComparator");
+                "com.threeamigos.common.util.implementations.messagehandler.filters.FilterByClassName$RegexComparator");
         Constructor<?> constructor = comparatorClass.getDeclaredConstructor();
         constructor.setAccessible(true);
         return constructor.newInstance();
     }
 
-    private static Object invokeNoArg(final Object target, final String methodName) throws Exception {
-        Method method = target.getClass().getDeclaredMethod(methodName);
+    private static Object invokeNoArg(final Object target) throws Exception {
+        Method method = target.getClass().getDeclaredMethod("getOriginalRegex");
         method.setAccessible(true);
         return method.invoke(target);
     }
 
-    private static Object invoke(final Object target, final String methodName, final Class<?>[] signature,
+    private static Object invoke(final Object target, final Class<?>[] signature,
                                  final Object... args) throws Exception {
-        Method method = target.getClass().getDeclaredMethod(methodName, signature);
+        Method method = target.getClass().getDeclaredMethod("matches", signature);
         method.setAccessible(true);
         return method.invoke(target, args);
     }
