@@ -413,25 +413,31 @@ class CompositeMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null info message supplier is provided")
-    void shouldThrowAnExceptionIfANullInfoMessageSupplierIsProvided() {
+    @DisplayName("Should ignore null info message supplier")
+    void shouldIgnoreNullInfoMessageSupplier() {
         // Given
         CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
         // When
         Supplier<String> infoMessageSupplier = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.info(infoMessageSupplier));
+        assertDoesNotThrow(() -> sut.info(infoMessageSupplier));
+        for (MessageHandler messageHandler : sut.getMessageHandlers()) {
+            verify(messageHandler, never()).info(anyString());
+        }
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null info message is provided")
-    void shouldThrowAnExceptionIfANullInfoMessageIsProvided() {
+    @DisplayName("Should ignore null info message")
+    void shouldIgnoreNullInfoMessage() {
         // Given
         CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
         // When
         String infoMessage = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.info(infoMessage));
+        assertDoesNotThrow(() -> sut.info(infoMessage));
+        for (MessageHandler messageHandler : sut.getMessageHandlers()) {
+            verify(messageHandler, never()).info(anyString());
+        }
     }
 
     @Test
@@ -525,25 +531,31 @@ class CompositeMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null warn message supplier is provided")
-    void shouldThrowAnExceptionIfANullWarnMessageSupplierIsProvided() {
+    @DisplayName("Should ignore null warn message supplier")
+    void shouldIgnoreNullWarnMessageSupplier() {
         // Given
         CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
         // When
         Supplier<String> warnMessageSupplier = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.warn(warnMessageSupplier));
+        assertDoesNotThrow(() -> sut.warn(warnMessageSupplier));
+        for (MessageHandler messageHandler : sut.getMessageHandlers()) {
+            verify(messageHandler, never()).warn(anyString());
+        }
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null warn message is provided")
-    void shouldThrowAnExceptionIfANullWarnMessageIsProvided() {
+    @DisplayName("Should ignore null warn message")
+    void shouldIgnoreNullWarnMessage() {
         // Given
         CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
         // When
         String warnMessage = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.warn(warnMessage));
+        assertDoesNotThrow(() -> sut.warn(warnMessage));
+        for (MessageHandler messageHandler : sut.getMessageHandlers()) {
+            verify(messageHandler, never()).warn(anyString());
+        }
     }
 
     @Test
@@ -607,25 +619,31 @@ class CompositeMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null fatal message supplier is provided")
-    void shouldThrowAnExceptionIfANullFatalMessageSupplierIsProvided() {
+    @DisplayName("Should ignore null fatal message supplier")
+    void shouldIgnoreNullFatalMessageSupplier() {
         // Given
         CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
         // When
         Supplier<String> fatalMessageSupplier = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.fatal(fatalMessageSupplier));
+        assertDoesNotThrow(() -> sut.fatal(fatalMessageSupplier));
+        for (MessageHandler messageHandler : sut.getMessageHandlers()) {
+            verify(messageHandler, never()).fatal(anyString());
+        }
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null fatal message is provided")
-    void shouldThrowAnExceptionIfANullFatalMessageIsProvided() {
+    @DisplayName("Should ignore null fatal message")
+    void shouldIgnoreNullFatalMessage() {
         // Given
         CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
         // When
         String fatalMessage = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.fatal(fatalMessage));
+        assertDoesNotThrow(() -> sut.fatal(fatalMessage));
+        for (MessageHandler messageHandler : sut.getMessageHandlers()) {
+            verify(messageHandler, never()).fatal(anyString());
+        }
     }
 
     @Test
@@ -701,25 +719,31 @@ class CompositeMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null error message supplier is provided")
-    void shouldThrowAnExceptionIfANullErrorMessageSupplierIsProvided() {
+    @DisplayName("Should ignore null error message supplier")
+    void shouldIgnoreNullErrorMessageSupplier() {
         // Given
         CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
         // When
         Supplier<String> errorMessageSupplier = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.error(errorMessageSupplier));
+        assertDoesNotThrow(() -> sut.error(errorMessageSupplier));
+        for (MessageHandler messageHandler : sut.getMessageHandlers()) {
+            verify(messageHandler, never()).error(anyString());
+        }
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null error message is provided")
-    void shouldThrowAnExceptionIfANullErrorMessageIsProvided() {
+    @DisplayName("Should ignore null error message")
+    void shouldIgnoreNullErrorMessage() {
         // Given
         CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
         // When
         String errorMessage = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.error(errorMessage));
+        assertDoesNotThrow(() -> sut.error(errorMessage));
+        for (MessageHandler messageHandler : sut.getMessageHandlers()) {
+            verify(messageHandler, never()).error(anyString());
+        }
     }
 
     @Test
@@ -783,27 +807,33 @@ class CompositeMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null debug message supplier is provided")
-    void shouldThrowAnExceptionIfANullDebugMessageSupplierIsProvided() {
+    @DisplayName("Should ignore null debug message supplier")
+    void shouldIgnoreNullDebugMessageSupplier() {
         // Given
         CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
         sut.setDebugEnabled(true);
         // When
         Supplier<String> debugMessageSupplier = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.debug(debugMessageSupplier));
+        assertDoesNotThrow(() -> sut.debug(debugMessageSupplier));
+        for (MessageHandler messageHandler : sut.getMessageHandlers()) {
+            verify(messageHandler, never()).debug(anyString());
+        }
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null debug message is provided")
-    void shouldThrowAnExceptionIfANullDebugMessageIsProvided() {
+    @DisplayName("Should ignore null debug message")
+    void shouldIgnoreNullDebugMessage() {
         // Given
         CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
         sut.setDebugEnabled(true);
         // When
         String debugMessage = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.debug(debugMessage));
+        assertDoesNotThrow(() -> sut.debug(debugMessage));
+        for (MessageHandler messageHandler : sut.getMessageHandlers()) {
+            verify(messageHandler, never()).debug(anyString());
+        }
     }
 
     @Test
@@ -869,27 +899,33 @@ class CompositeMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null trace message supplier is provided")
-    void shouldThrowAnExceptionIfANullTraceMessageSupplierIsProvided() {
+    @DisplayName("Should ignore null trace message supplier")
+    void shouldIgnoreNullTraceMessageSupplier() {
         // Given
         CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
         sut.setTraceEnabled(true);
         // When
         Supplier<String> traceMessageSupplier = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.trace(traceMessageSupplier));
+        assertDoesNotThrow(() -> sut.trace(traceMessageSupplier));
+        for (MessageHandler messageHandler : sut.getMessageHandlers()) {
+            verify(messageHandler, never()).trace(anyString());
+        }
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null trace message is provided")
-    void shouldThrowAnExceptionIfANullTraceMessageIsProvided() {
+    @DisplayName("Should ignore null trace message")
+    void shouldIgnoreNullTraceMessage() {
         // Given
         CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
         sut.setTraceEnabled(true);
         // When
         String traceMessage = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.trace(traceMessage));
+        assertDoesNotThrow(() -> sut.trace(traceMessage));
+        for (MessageHandler messageHandler : sut.getMessageHandlers()) {
+            verify(messageHandler, never()).trace(anyString());
+        }
     }
 
     @Test

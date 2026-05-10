@@ -22,14 +22,15 @@ class InMemoryMessageHandlerUnitTest {
     private static final String SECOND_MESSAGE = "Second message";
 
     @Test
-    @DisplayName("Should throw an exception if a null info message is provided")
-    void shouldThrowAnExceptionIfANullInfoMessageIsProvided() {
+    @DisplayName("Should ignore null info message")
+    void shouldIgnoreNullInfoMessage() {
         // Given
         InMemoryMessageHandler sut = new InMemoryMessageHandler();
         // When
         String infoMessage = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.info(infoMessage));
+        assertDoesNotThrow(() -> sut.info(infoMessage));
+        assertEquals(0, sut.getAllMessages().size(), "Null info should be ignored");
     }
 
     @Test
@@ -54,14 +55,15 @@ class InMemoryMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null warn message is provided")
-    void shouldThrowAnExceptionIfANullWarnMessageIsProvided() {
+    @DisplayName("Should ignore null warn message")
+    void shouldIgnoreNullWarnMessage() {
         // Given
         InMemoryMessageHandler sut = new InMemoryMessageHandler();
         // When
         String warnMessage = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.warn(warnMessage));
+        assertDoesNotThrow(() -> sut.warn(warnMessage));
+        assertEquals(0, sut.getAllMessages().size(), "Null warn should be ignored");
     }
 
     @Test
@@ -86,14 +88,15 @@ class InMemoryMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null error message is provided")
-    void shouldThrowAnExceptionIfANullErrorMessageIsProvided() {
+    @DisplayName("Should ignore null error message")
+    void shouldIgnoreNullErrorMessage() {
         // Given
         InMemoryMessageHandler sut = new InMemoryMessageHandler();
         // When
         String errorMessage = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.error(errorMessage));
+        assertDoesNotThrow(() -> sut.error(errorMessage));
+        assertEquals(0, sut.getAllMessages().size(), "Null error should be ignored");
     }
 
     @Test
@@ -118,14 +121,15 @@ class InMemoryMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null fatal message is provided")
-    void shouldThrowAnExceptionIfANullFatalMessageIsProvided() {
+    @DisplayName("Should ignore null fatal message")
+    void shouldIgnoreNullFatalMessage() {
         // Given
         InMemoryMessageHandler sut = new InMemoryMessageHandler();
         // When
         String fatalMessage = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.fatal(fatalMessage));
+        assertDoesNotThrow(() -> sut.fatal(fatalMessage));
+        assertEquals(0, sut.getAllMessages().size(), "Null fatal should be ignored");
     }
 
     @Test
@@ -150,15 +154,16 @@ class InMemoryMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null debug message is provided")
-    void shouldThrowAnExceptionIfANullDebugMessageIsProvided() {
+    @DisplayName("Should ignore null debug message")
+    void shouldIgnoreNullDebugMessage() {
         // Given
         InMemoryMessageHandler sut = new InMemoryMessageHandler();
         sut.setDebugEnabled(true);
         // When
         String debugMessage = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.debug(debugMessage));
+        assertDoesNotThrow(() -> sut.debug(debugMessage));
+        assertEquals(0, sut.getAllMessages().size(), "Null debug should be ignored");
     }
 
     @Test
@@ -184,15 +189,16 @@ class InMemoryMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null trace message is provided")
-    void shouldThrowAnExceptionIfANullTraceMessageIsProvided() {
+    @DisplayName("Should ignore null trace message")
+    void shouldIgnoreNullTraceMessage() {
         // Given
         InMemoryMessageHandler sut = new InMemoryMessageHandler();
         sut.setTraceEnabled(true);
         // When
         String traceMessage = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.trace(traceMessage));
+        assertDoesNotThrow(() -> sut.trace(traceMessage));
+        assertEquals(0, sut.getAllMessages().size(), "Null trace should be ignored");
     }
 
     @Test

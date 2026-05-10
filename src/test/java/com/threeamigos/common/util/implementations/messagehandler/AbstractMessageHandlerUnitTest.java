@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -116,33 +117,35 @@ class AbstractMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("message-based APIs should reject null values")
-    void messageApisShouldRejectNullValues() {
+    @DisplayName("message-based APIs should ignore null values")
+    void messageApisShouldIgnoreNullValues() {
         ProbeMessageHandler sut = new ProbeMessageHandler();
         sut.setDebugEnabled(true);
         sut.setTraceEnabled(true);
 
-        assertThrows(NullPointerException.class, () -> sut.info((String) null));
-        assertThrows(NullPointerException.class, () -> sut.warn((String) null));
-        assertThrows(NullPointerException.class, () -> sut.error((String) null));
-        assertThrows(NullPointerException.class, () -> sut.fatal((String) null));
-        assertThrows(NullPointerException.class, () -> sut.debug((String) null));
-        assertThrows(NullPointerException.class, () -> sut.trace((String) null));
+        assertDoesNotThrow(() -> sut.info((String) null));
+        assertDoesNotThrow(() -> sut.warn((String) null));
+        assertDoesNotThrow(() -> sut.error((String) null));
+        assertDoesNotThrow(() -> sut.fatal((String) null));
+        assertDoesNotThrow(() -> sut.debug((String) null));
+        assertDoesNotThrow(() -> sut.trace((String) null));
+        assertEquals(0, sut.callCount);
     }
 
     @Test
-    @DisplayName("supplier-based APIs should reject null suppliers")
-    void supplierApisShouldRejectNullSuppliers() {
+    @DisplayName("supplier-based APIs should ignore null suppliers")
+    void supplierApisShouldIgnoreNullSuppliers() {
         ProbeMessageHandler sut = new ProbeMessageHandler();
         sut.setDebugEnabled(true);
         sut.setTraceEnabled(true);
 
-        assertThrows(NullPointerException.class, () -> sut.info((java.util.function.Supplier<String>) null));
-        assertThrows(NullPointerException.class, () -> sut.warn((java.util.function.Supplier<String>) null));
-        assertThrows(NullPointerException.class, () -> sut.error((java.util.function.Supplier<String>) null));
-        assertThrows(NullPointerException.class, () -> sut.fatal((java.util.function.Supplier<String>) null));
-        assertThrows(NullPointerException.class, () -> sut.debug((java.util.function.Supplier<String>) null));
-        assertThrows(NullPointerException.class, () -> sut.trace((java.util.function.Supplier<String>) null));
+        assertDoesNotThrow(() -> sut.info((java.util.function.Supplier<String>) null));
+        assertDoesNotThrow(() -> sut.warn((java.util.function.Supplier<String>) null));
+        assertDoesNotThrow(() -> sut.error((java.util.function.Supplier<String>) null));
+        assertDoesNotThrow(() -> sut.fatal((java.util.function.Supplier<String>) null));
+        assertDoesNotThrow(() -> sut.debug((java.util.function.Supplier<String>) null));
+        assertDoesNotThrow(() -> sut.trace((java.util.function.Supplier<String>) null));
+        assertEquals(0, sut.callCount);
     }
 
     @Test
@@ -165,7 +168,7 @@ class AbstractMessageHandlerUnitTest {
         ProbeMessageHandler sut = new ProbeMessageHandler();
 
         assertThrows(NullPointerException.class, () -> sut.exception((Exception) null));
-        assertThrows(NullPointerException.class, () -> sut.exception(null, new RuntimeException("x")));
+        assertDoesNotThrow(() -> sut.exception(null, new RuntimeException("x")));
         assertThrows(NullPointerException.class, () -> sut.exception("prefix", null));
 
         RuntimeException ex = new RuntimeException("boom");
@@ -196,7 +199,9 @@ class AbstractMessageHandlerUnitTest {
         assertFalse(sut.isDebugEnabled());
         assertTrue(sut.isInfoEnabled());
 
-        assertThrows(NullPointerException.class, () -> sut.setEnabled(null, true));
+        sut.setInfoEnabled(false);
+        assertDoesNotThrow(() -> sut.setEnabled(null, true));
+        assertTrue(sut.isInfoEnabled());
     }
 
     @Test
@@ -222,9 +227,21 @@ class AbstractMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("isEnabled should reject null level")
-    void isEnabledShouldRejectNullLevel() {
+    @DisplayName("isEnabled should default null level to info")
+    void isEnabledShouldDefaultNullLevelToInfo() {
         ProbeMessageHandler sut = new ProbeMessageHandler();
-        assertThrows(NullPointerException.class, () -> sut.isEnabled(null));
+        assertEquals(sut.isInfoEnabled(), sut.isEnabled(null));
+    }
+
+    @Test
+    @DisplayName("log should default null level to info")
+    void logShouldDefaultNullLevelToInfo() {
+        ProbeMessageHandler sut = new ProbeMessageHandler();
+
+        sut.log(null, "msg");
+
+        assertEquals(1, sut.callCount);
+        assertEquals("INFO", sut.lastLevel);
+        assertEquals("msg", sut.lastMessage);
     }
 }

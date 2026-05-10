@@ -50,8 +50,12 @@ public abstract class AbstractMessageHandler implements MessageHandler {
                     1 << SeverityNumber.FATAL4.getValue()
             ;
 
+    private static SeverityNumber normalizeLevel(final SeverityNumber level) {
+        return level != null ? level : SeverityNumber.INFO;
+    }
+
     private static int levelMask(final SeverityNumber level) {
-        return 1 << level.getValue();
+        return 1 << normalizeLevel(level).getValue();
     }
 
     public void enable(final Collection<SeverityNumber> levels) {
@@ -87,17 +91,16 @@ public abstract class AbstractMessageHandler implements MessageHandler {
     }
 
     public boolean isEnabled(final @Nonnull SeverityNumber level) {
-        Objects.requireNonNull(level, MessageHandlerResourceBundle.get("nullLevelProvided"));
         return (enabledLevels & levelMask(level)) != 0;
     }
 
     public void setEnabled(final @Nonnull SeverityNumber level, final boolean enabled) {
-        Objects.requireNonNull(level, MessageHandlerResourceBundle.get("nullLevelProvided"));
+        SeverityNumber effectiveLevel = normalizeLevel(level);
         int newEnabledLevels = enabledLevels;
         if (enabled) {
-            newEnabledLevels |= levelMask(level);
+            newEnabledLevels |= levelMask(effectiveLevel);
         } else {
-            newEnabledLevels &= ~levelMask(level);
+            newEnabledLevels &= ~levelMask(effectiveLevel);
         }
         enabledLevels = newEnabledLevels;
     }
@@ -133,17 +136,26 @@ public abstract class AbstractMessageHandler implements MessageHandler {
     }
 
     public void log(final @Nonnull SeverityNumber level, final @Nonnull Supplier<String> message) {
-        if (isEnabled(level)) {
-            Objects.requireNonNull(message, MessageHandlerResourceBundle.get("nullMessageSupplierProvided"));
-            log(level, message.get());
+        if (message == null) {
+            return;
+        }
+        SeverityNumber effectiveLevel = normalizeLevel(level);
+        if (isEnabled(effectiveLevel)) {
+            String producedMessage = message.get();
+            if (producedMessage == null) {
+                return;
+            }
+            log(effectiveLevel, producedMessage);
         }
     }
 
     public void log(final @Nonnull SeverityNumber level, final @Nonnull String message) {
-        if (isEnabled(level)) {
-            Objects.requireNonNull(level, MessageHandlerResourceBundle.get("nullLevelProvided"));
-            Objects.requireNonNull(message, MessageHandlerResourceBundle.get("nullMessageProvided"));
-            handleMessage(level, message);
+        if (message == null) {
+            return;
+        }
+        SeverityNumber effectiveLevel = normalizeLevel(level);
+        if (isEnabled(effectiveLevel)) {
+            handleMessage(effectiveLevel, message);
         }
     }
 
@@ -157,7 +169,9 @@ public abstract class AbstractMessageHandler implements MessageHandler {
 
     public void log(final @Nonnull String message, final @Nonnull Throwable throwable) {
         if (isEnabled(SeverityNumber.ERROR)) {
-            Objects.requireNonNull(message, MessageHandlerResourceBundle.get("nullMessageProvided"));
+            if (message == null) {
+                return;
+            }
             Objects.requireNonNull(throwable, MessageHandlerResourceBundle.get("nullThrowableProvided"));
             handleThrowable(message, throwable);
         }

@@ -59,47 +59,53 @@ class SwingMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null info message is provided")
-    void shouldThrowAnExceptionIfANullInfoMessageIsProvided() {
-        SwingMessageHandler sut = new SwingMessageHandler();
-        assertThrows(NullPointerException.class, () -> sut.info((String) null));
+    @DisplayName("Should ignore null info message")
+    void shouldIgnoreNullInfoMessage() {
+        CapturingSwingMessageHandler sut = new CapturingSwingMessageHandler();
+        assertDoesNotThrow(() -> sut.info((String) null));
+        assertEquals(0, sut.calls);
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null warn message is provided")
-    void shouldThrowAnExceptionIfANullWarnMessageIsProvided() {
-        SwingMessageHandler sut = new SwingMessageHandler();
-        assertThrows(NullPointerException.class, () -> sut.warn((String) null));
+    @DisplayName("Should ignore null warn message")
+    void shouldIgnoreNullWarnMessage() {
+        CapturingSwingMessageHandler sut = new CapturingSwingMessageHandler();
+        assertDoesNotThrow(() -> sut.warn((String) null));
+        assertEquals(0, sut.calls);
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null fatal message is provided")
-    void shouldThrowAnExceptionIfANullFatalMessageIsProvided() {
-        SwingMessageHandler sut = new SwingMessageHandler();
-        assertThrows(NullPointerException.class, () -> sut.fatal((String) null));
+    @DisplayName("Should ignore null fatal message")
+    void shouldIgnoreNullFatalMessage() {
+        CapturingSwingMessageHandler sut = new CapturingSwingMessageHandler();
+        assertDoesNotThrow(() -> sut.fatal((String) null));
+        assertEquals(0, sut.calls);
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null error message is provided")
-    void shouldThrowAnExceptionIfANullErrorMessageIsProvided() {
-        SwingMessageHandler sut = new SwingMessageHandler();
-        assertThrows(NullPointerException.class, () -> sut.error((String) null));
+    @DisplayName("Should ignore null error message")
+    void shouldIgnoreNullErrorMessage() {
+        CapturingSwingMessageHandler sut = new CapturingSwingMessageHandler();
+        assertDoesNotThrow(() -> sut.error((String) null));
+        assertEquals(0, sut.calls);
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null debug message is provided")
-    void shouldThrowAnExceptionIfANullDebugMessageIsProvided() {
-        SwingMessageHandler sut = new SwingMessageHandler();
+    @DisplayName("Should ignore null debug message")
+    void shouldIgnoreNullDebugMessage() {
+        CapturingSwingMessageHandler sut = new CapturingSwingMessageHandler();
         sut.setDebugEnabled(true);
-        assertThrows(NullPointerException.class, () -> sut.debug((String) null));
+        assertDoesNotThrow(() -> sut.debug((String) null));
+        assertEquals(0, sut.calls);
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null trace message is provided")
-    void shouldThrowAnExceptionIfANullTraceMessageIsProvided() {
-        SwingMessageHandler sut = new SwingMessageHandler();
+    @DisplayName("Should ignore null trace message")
+    void shouldIgnoreNullTraceMessage() {
+        CapturingSwingMessageHandler sut = new CapturingSwingMessageHandler();
         sut.setTraceEnabled(true);
-        assertThrows(NullPointerException.class, () -> sut.trace((String) null));
+        assertDoesNotThrow(() -> sut.trace((String) null));
+        assertEquals(0, sut.calls);
     }
 
     @Test
@@ -110,10 +116,11 @@ class SwingMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null exception message is provided")
-    void shouldThrowAnExceptionIfANullExceptionMessageIsProvided() {
-        SwingMessageHandler sut = new SwingMessageHandler();
-        assertThrows(NullPointerException.class, () -> sut.exception(null, new RuntimeException("boom")));
+    @DisplayName("Should ignore null exception message")
+    void shouldIgnoreNullExceptionMessage() {
+        CapturingSwingMessageHandler sut = new CapturingSwingMessageHandler();
+        assertDoesNotThrow(() -> sut.exception(null, new RuntimeException("boom")));
+        assertEquals(0, sut.calls);
     }
 
     @Test

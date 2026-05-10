@@ -102,14 +102,15 @@ class ConsoleMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null info message is provided")
-    void shouldThrowAnExceptionIfANullInfoMessageIsProvided() {
+    @DisplayName("Should ignore null info message")
+    void shouldIgnoreNullInfoMessage() {
         // Given
         ConsoleMessageHandler sut = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
         // When
         String infoMessage = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.info(infoMessage));
+        assertDoesNotThrow(() -> sut.info(infoMessage));
+        verifyNoInteractions(out);
     }
 
     @Test
@@ -124,14 +125,15 @@ class ConsoleMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null warn message is provided")
-    void shouldThrowAnExceptionIfANullWarnMessageIsProvided() {
+    @DisplayName("Should ignore null warn message")
+    void shouldIgnoreNullWarnMessage() {
         // Given
         ConsoleMessageHandler sut = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
         // When
         String warnMessage = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.warn(warnMessage));
+        assertDoesNotThrow(() -> sut.warn(warnMessage));
+        verifyNoInteractions(out);
     }
 
     @Test
@@ -146,14 +148,15 @@ class ConsoleMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null error message is provided")
-    void shouldThrowAnExceptionIfANullErrorMessageIsProvided() {
+    @DisplayName("Should ignore null error message")
+    void shouldIgnoreNullErrorMessage() {
         // Given
         ConsoleMessageHandler sut = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
         // When
         String errorMessage = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.error(errorMessage));
+        assertDoesNotThrow(() -> sut.error(errorMessage));
+        verifyNoInteractions(err);
     }
 
     @Test
@@ -168,15 +171,16 @@ class ConsoleMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null debug message is provided")
-    void shouldThrowAnExceptionIfANullDebugMessageIsProvided() {
+    @DisplayName("Should ignore null debug message")
+    void shouldIgnoreNullDebugMessage() {
         // Given
         ConsoleMessageHandler sut = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
         sut.setDebugEnabled(true);
         // When
         String debugMessage = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.debug(debugMessage));
+        assertDoesNotThrow(() -> sut.debug(debugMessage));
+        verifyNoInteractions(out);
     }
 
     @Test
@@ -192,15 +196,16 @@ class ConsoleMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null trace message is provided")
-    void shouldThrowAnExceptionIfANullTraceMessageIsProvided() {
+    @DisplayName("Should ignore null trace message")
+    void shouldIgnoreNullTraceMessage() {
         // Given
         ConsoleMessageHandler sut = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
         sut.setTraceEnabled(true);
         // When
         String traceMessage = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.trace(traceMessage));
+        assertDoesNotThrow(() -> sut.trace(traceMessage));
+        verifyNoInteractions(out);
     }
 
     @Test
@@ -216,14 +221,15 @@ class ConsoleMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null fatal message is provided")
-    void shouldThrowAnExceptionIfANullFatalMessageIsProvided() {
+    @DisplayName("Should ignore null fatal message")
+    void shouldIgnoreNullFatalMessage() {
         // Given
         ConsoleMessageHandler sut = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
         // When
         String fatalMessage = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.fatal(fatalMessage));
+        assertDoesNotThrow(() -> sut.fatal(fatalMessage));
+        verifyNoInteractions(err);
     }
 
     @Test
