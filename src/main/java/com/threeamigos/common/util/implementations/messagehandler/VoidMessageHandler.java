@@ -17,10 +17,6 @@ public class VoidMessageHandler implements MessageHandler {
     }
 
     @Override
-    public void handleThrowable(@Nonnull String message, @Nonnull Throwable throwable) {
-    }
-
-    @Override
     public void debug(@Nonnull String message) {
     }
 

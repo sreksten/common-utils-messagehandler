@@ -78,16 +78,6 @@ public interface MessageHandler extends
     void handleMessage(final @Nonnull SeverityNumber level, final @Nonnull String message);
 
     /**
-     * Performs the actual error handling.
-     * <p>
-     * Called only when level handling is enabled
-     * and the message has been validated as non-null.
-     *
-     * @param message the validated, non-null info message to handle
-     */
-    void handleThrowable(final @Nonnull String message, final @Nonnull Throwable throwable);
-
-    /**
      * Releases any resources held by this handler.
      * <p>
      * The default implementation is a no-op. Output-oriented handlers

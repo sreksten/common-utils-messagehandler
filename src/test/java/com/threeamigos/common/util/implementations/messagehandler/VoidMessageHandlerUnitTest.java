@@ -20,7 +20,6 @@ class VoidMessageHandlerUnitTest {
 
         assertDoesNotThrow(() -> {
             sut.handleMessage(SeverityNumber.INFO, "message");
-            sut.handleThrowable("error", throwable);
             sut.debug("debug");
             sut.debug(() -> "debug");
             sut.error("error");

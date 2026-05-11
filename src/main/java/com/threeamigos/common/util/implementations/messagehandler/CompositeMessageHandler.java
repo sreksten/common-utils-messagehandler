@@ -444,7 +444,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
     }
 
     @Override
-    public void handleThrowable(@Nonnull String message, @Nonnull Throwable throwable) {
+    protected void handleExceptionInternal(@Nonnull String message, @Nonnull Throwable throwable) {
         forEachHandler(mh -> {
             String detail = ThrowableMessageFormatter.detail(throwable);
             if (message.isEmpty() || message.equals(throwable.getMessage()) || message.equals(detail)) {

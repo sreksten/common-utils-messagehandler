@@ -36,6 +36,16 @@ import java.util.function.Supplier;
  */
 public abstract class AbstractMessageHandler implements MessageHandler {
 
+    /**
+     * Performs the actual exception dispatch.
+     * <p>
+     * Called only when exception handling is enabled and the throwable has been validated as non-null.
+     *
+     * @param message contextual message to pair with the throwable
+     * @param throwable exception to dispatch
+     */
+    protected abstract void handleExceptionInternal(final @Nonnull String message, final @Nonnull Throwable throwable);
+
     private volatile int enabledLevels =
                     1 << SeverityNumber.INFO.getValue() |
                     1 << SeverityNumber.INFO2.getValue() |
@@ -168,7 +178,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
         if (isEnabled(SeverityNumber.ERROR)) {
             Objects.requireNonNull(throwable, MessageHandlerResourceBundle.get("nullThrowableProvided"));
             String throwableMessage = throwable.getMessage() != null ? throwable.getMessage() : throwable.toString();
-            handleThrowable(throwableMessage, throwable);
+            handleExceptionInternal(throwableMessage, throwable);
         }
     }
 
@@ -178,7 +188,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
                 return;
             }
             Objects.requireNonNull(throwable, MessageHandlerResourceBundle.get("nullThrowableProvided"));
-            handleThrowable(message, throwable);
+            handleExceptionInternal(message, throwable);
         }
     }
 

@@ -26,7 +26,7 @@ class StructuredBackendMessageHandlerUnitTest extends AbstractOtelValidatorLogTr
                 new StructuredBackendMessageHandler(backend, factory, new RawJsonRecordFormatter());
 
         handler.handleMessage(SeverityNumber.INFO, "hello");
-        handler.handleThrowable("boom", new IllegalStateException("x"));
+        handler.exception("boom", new IllegalStateException("x"));
         handler.close();
 
         List<String> messages = backend.getAllMessages();

@@ -242,7 +242,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
     }
 
     @Override
-    public void handleThrowable(@Nonnull String message, @Nonnull Throwable throwable) {
+    protected void handleExceptionInternal(@Nonnull String message, @Nonnull Throwable throwable) {
         LogRecord logRecord = logRecordFactory.create(message, throwable);
         writeMessage(logRecordFormatter.format(logRecord));
     }

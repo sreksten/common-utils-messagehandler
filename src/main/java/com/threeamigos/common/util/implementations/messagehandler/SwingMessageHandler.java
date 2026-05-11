@@ -113,7 +113,7 @@ public class SwingMessageHandler extends AbstractMessageHandler {
     }
 
     @Override
-    public void handleThrowable(@Nonnull String message, @Nonnull Throwable throwable) {
+    protected void handleExceptionInternal(@Nonnull String message, @Nonnull Throwable throwable) {
         showOptionPane(ThrowableMessageFormatter.withPrefix(message, throwable), MessageHandlerResourceBundle.get("exception"), JOptionPane.ERROR_MESSAGE);
     }
 }

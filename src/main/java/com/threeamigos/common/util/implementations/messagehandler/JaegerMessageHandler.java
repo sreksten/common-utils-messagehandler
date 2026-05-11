@@ -182,7 +182,7 @@ public class JaegerMessageHandler extends AbstractOutputMessageHandler {
     }
 
     @Override
-    public void handleThrowable(final @Nonnull String message, final @Nonnull Throwable throwable) {
+    protected void handleExceptionInternal(final @Nonnull String message, final @Nonnull Throwable throwable) {
         LogRecord logRecord = logRecordFactory.create(message, throwable);
         dispatchRecord(logRecord);
     }

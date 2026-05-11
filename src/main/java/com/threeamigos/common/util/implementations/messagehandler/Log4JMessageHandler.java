@@ -106,7 +106,7 @@ public class Log4JMessageHandler extends AbstractMessageHandler {
     }
 
     @Override
-    public void handleThrowable(@Nonnull String message, @Nonnull Throwable throwable) {
+    protected void handleExceptionInternal(@Nonnull String message, @Nonnull Throwable throwable) {
         String rendered = message.isEmpty() ? ThrowableMessageFormatter.detail(throwable) : message;
         logger.error(rendered, throwable);
     }

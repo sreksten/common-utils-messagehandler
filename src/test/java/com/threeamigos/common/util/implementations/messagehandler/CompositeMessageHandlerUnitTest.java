@@ -1020,12 +1020,12 @@ class CompositeMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("handleThrowable should treat empty message as plain exception")
-    void handleThrowableShouldTreatEmptyMessageAsPlainException() {
+    @DisplayName("exception should treat empty message as plain exception")
+    void exceptionShouldTreatEmptyMessageAsPlainException() {
         IllegalArgumentException exception = new IllegalArgumentException("boom");
         CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
 
-        sut.handleThrowable("", exception);
+        sut.exception("", exception);
 
         verify(firstMessageHandler, times(1)).exception(eq(exception));
         verify(secondMessageHandler, times(1)).exception(eq(exception));
@@ -1034,12 +1034,12 @@ class CompositeMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("handleThrowable should treat message equal to throwable detail as plain exception")
-    void handleThrowableShouldTreatDetailMessageAsPlainException() {
+    @DisplayName("exception should treat message equal to throwable detail as plain exception")
+    void exceptionShouldTreatDetailMessageAsPlainException() {
         RuntimeException exception = new RuntimeException((String) null);
         CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
 
-        sut.handleThrowable(exception.toString(), exception);
+        sut.exception(exception.toString(), exception);
 
         verify(firstMessageHandler, times(1)).exception(eq(exception));
         verify(secondMessageHandler, times(1)).exception(eq(exception));

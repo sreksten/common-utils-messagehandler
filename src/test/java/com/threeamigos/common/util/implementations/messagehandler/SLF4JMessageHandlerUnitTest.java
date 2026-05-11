@@ -118,7 +118,7 @@ class SLF4JMessageHandlerUnitTest {
         SLF4JMessageHandler handler = new SLF4JMessageHandler(logger);
         RuntimeException exception = new RuntimeException("boom");
 
-        handler.handleThrowable("", exception);
+        handler.exception("", exception);
 
         verify(logger).error("boom", (Throwable) exception);
     }

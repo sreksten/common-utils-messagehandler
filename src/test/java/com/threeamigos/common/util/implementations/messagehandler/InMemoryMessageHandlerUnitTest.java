@@ -404,7 +404,7 @@ class InMemoryMessageHandlerUnitTest {
         InMemoryMessageHandler sut = new InMemoryMessageHandler();
         RuntimeException exception = new RuntimeException("boom");
 
-        sut.handleThrowable("", exception);
+        sut.exception("", exception);
 
         assertEquals(1, sut.getAllExceptionMessages().size());
         assertEquals("boom", sut.getAllExceptionMessages().get(0));
@@ -412,12 +412,12 @@ class InMemoryMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Should store throwable detail when message is null")
-    void shouldStoreThrowableDetailWhenMessageIsNull() {
+    @DisplayName("Should store throwable detail when using exception(Throwable)")
+    void shouldStoreThrowableDetailWhenUsingExceptionThrowable() {
         InMemoryMessageHandler sut = new InMemoryMessageHandler();
         RuntimeException exception = new RuntimeException("boom");
 
-        sut.handleThrowable(null, exception);
+        sut.exception(exception);
 
         assertEquals(1, sut.getAllExceptionMessages().size());
         assertEquals("boom", sut.getAllExceptionMessages().get(0));

@@ -118,7 +118,7 @@ class Log4JMessageHandlerUnitTest {
         Log4JMessageHandler handler = new Log4JMessageHandler(logger);
         RuntimeException exception = new RuntimeException("boom");
 
-        handler.handleThrowable("", exception);
+        handler.exception("", exception);
 
         verify(logger).error("boom", (Throwable) exception);
     }

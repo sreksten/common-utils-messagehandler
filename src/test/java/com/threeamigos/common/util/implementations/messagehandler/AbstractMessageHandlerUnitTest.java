@@ -42,7 +42,7 @@ class AbstractMessageHandlerUnitTest {
         }
 
         @Override
-        public void handleThrowable(@Nonnull String message, @Nonnull Throwable throwable) {
+        protected void handleExceptionInternal(@Nonnull String message, @Nonnull Throwable throwable) {
             record("EXCEPTION", message, throwable);
         }
     }

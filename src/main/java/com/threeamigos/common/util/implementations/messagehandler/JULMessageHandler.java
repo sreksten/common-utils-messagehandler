@@ -99,7 +99,7 @@ public class JULMessageHandler extends AbstractMessageHandler {
     }
 
     @Override
-    public void handleThrowable(@Nonnull String message, @Nonnull Throwable throwable) {
+    protected void handleExceptionInternal(@Nonnull String message, @Nonnull Throwable throwable) {
         logger.log(Level.SEVERE, ThrowableMessageFormatter.withPrefix(message, throwable), throwable);
     }
 }

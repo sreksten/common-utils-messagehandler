@@ -60,7 +60,7 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     }
 
     @Override
-    public void handleThrowable(@Nonnull String message, @Nonnull Throwable throwable) {
+    protected void handleExceptionInternal(@Nonnull String message, @Nonnull Throwable throwable) {
         lock.lock();
         try {
             String rendered = renderThrowableMessage(message, throwable);

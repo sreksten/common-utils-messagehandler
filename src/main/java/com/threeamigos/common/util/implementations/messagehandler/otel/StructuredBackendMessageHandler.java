@@ -34,10 +34,10 @@ final class StructuredBackendMessageHandler extends AbstractMessageHandler {
     }
 
     @Override
-    public void handleThrowable(final @Nonnull String message, final @Nonnull Throwable throwable) {
+    protected void handleExceptionInternal(final @Nonnull String message, final @Nonnull Throwable throwable) {
         LogRecord logRecord = logRecordFactory.create(message, throwable);
         String formatted = logRecordFormatter.format(logRecord);
-        backend.handleThrowable(formatted, throwable);
+        backend.exception(formatted, throwable);
     }
 
     @Override
