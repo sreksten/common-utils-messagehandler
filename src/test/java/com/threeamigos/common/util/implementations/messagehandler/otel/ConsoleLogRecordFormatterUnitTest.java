@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
 import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.ConsoleLogRecordFormatter;
+import com.threeamigos.common.util.implementations.messagehandler.otel.OTelTags;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
@@ -247,6 +248,23 @@ class ConsoleLogRecordFormatterUnitTest {
         withNoBodyNoEvent.setBody(null);
         withNoBodyNoEvent.setEventName(null);
         assertEquals("2026-04-21T08:30:00Z [INFO  ] ", formatter.format(withNoBodyNoEvent));
+    }
+
+    @Test
+    @DisplayName("format() should append exception stacktrace attribute when present")
+    void formatShouldAppendExceptionStacktraceWhenPresent() {
+        LogRecordImpl record = new LogRecordImpl();
+        record.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
+        record.setSeverityText("ERROR");
+        record.setBody(AnyValueFactory.ofString("Failure while processing checkout"));
+        record.setAttributes(Collections.singletonList(
+                new KeyValueImpl(OTelTags.EXCEPTION_STACKTRACE.getValue(), AnyValueFactory.ofString("stack-line-1\nstack-line-2"))));
+
+        String result = formatter.format(record);
+
+        assertTrue(result.contains("Failure while processing checkout"));
+        assertTrue(result.contains("stack-line-1"));
+        assertTrue(result.contains("stack-line-2"));
     }
 
     @Test

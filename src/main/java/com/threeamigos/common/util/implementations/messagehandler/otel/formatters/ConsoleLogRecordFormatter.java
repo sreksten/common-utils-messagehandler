@@ -3,8 +3,10 @@ package com.threeamigos.common.util.implementations.messagehandler.otel.formatte
 import com.threeamigos.common.util.implementations.messagehandler.utils.ClassNameReducer;
 import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.implementations.messagehandler.otel.OpenTelemetryAttributeValidator;
+import com.threeamigos.common.util.implementations.messagehandler.otel.OTelTags;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
@@ -148,12 +150,36 @@ public class ConsoleLogRecordFormatter implements LogRecordFormatter {
     }
 
     private static String resolveMessage(final LogRecord logRecord) {
+        String stackTrace = resolveExceptionStackTrace(logRecord);
         AnyValue body = logRecord.getBody();
+        String baseMessage;
         if (body != null) {
-            return anyValueToString(body);
+            baseMessage = anyValueToString(body);
+        } else {
+            String eventName = logRecord.getEventName();
+            baseMessage = eventName == null ? "" : eventName;
         }
-        String eventName = logRecord.getEventName();
-        return eventName == null ? "" : eventName;
+        if (stackTrace.isEmpty()) {
+            return baseMessage;
+        }
+        if (baseMessage.isEmpty()) {
+            return stackTrace;
+        }
+        return baseMessage + System.lineSeparator() + stackTrace;
+    }
+
+    private static String resolveExceptionStackTrace(final LogRecord logRecord) {
+        for (KeyValue keyValue : logRecord.getAttributes()) {
+            if (keyValue == null || !OTelTags.EXCEPTION_STACKTRACE.getValue().equals(keyValue.getKey())) {
+                continue;
+            }
+            AnyValue value = keyValue.getValue();
+            if (value == null || value.getType() != AnyValue.Type.STRING || value.asString() == null) {
+                return "";
+            }
+            return value.asString();
+        }
+        return "";
     }
 
     private static String anyValueToString(final AnyValue value) {
