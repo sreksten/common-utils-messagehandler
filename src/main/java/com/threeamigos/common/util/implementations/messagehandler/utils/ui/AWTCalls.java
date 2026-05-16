@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.ui;
+package com.threeamigos.common.util.implementations.messagehandler.utils.ui;
 
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;

@@ -1,5 +1,6 @@
-package com.threeamigos.common.util.ui;
+package com.threeamigos.common.util.implementations.messagehandler.utils.ui;
 
+import com.threeamigos.common.util.implementations.messagehandler.utils.ui.AWTCalls;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

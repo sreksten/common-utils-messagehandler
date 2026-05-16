@@ -2,7 +2,7 @@ package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
-import com.threeamigos.common.util.ui.AWTCalls;
+import com.threeamigos.common.util.implementations.messagehandler.utils.ui.AWTCalls;
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
 
@@ -60,7 +60,7 @@ public class SwingMessageHandler extends AbstractMessageHandler {
     /**
      * Displays a modal {@link javax.swing.JOptionPane} dialog.
      * <p>
-     * Delegates to {@link com.threeamigos.common.util.ui.AWTCalls#showOptionPane(java.awt.Component, java.lang.String, java.lang.String, int)} which
+     * Delegates to {@link AWTCalls#showOptionPane(java.awt.Component, java.lang.String, java.lang.String, int)} which
      * handles headless environments (silently suppresses the dialog) and ensures the call
      * runs on the Event Dispatch Thread.
      *

@@ -64,6 +64,22 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
         this(new LogRecordFactoryImpl(), new ConsoleLogRecordFormatter(), filename, false, 0, false, null, true);
     }
 
+
+    /**
+     * Creates a synchronous {@code FileMessageHandler} that writes to the given file on the calling thread.
+     * <p>
+     * Parent directories are created automatically if they do not exist. Appends to the file if it
+     * already exists.
+     *
+     * @param filename path to the log file; must not be {@code null} or blank
+     * @param rotationPolicy rotation policy to use; must not be {@code null}
+     * @throws IllegalArgumentException if the path is null, blank, points to a directory,
+     *                                  is not writable, or cannot be created
+     */
+    public FileMessageHandler(final @Nonnull String filename, RotationPolicy rotationPolicy) {
+        this(new LogRecordFactoryImpl(), new ConsoleLogRecordFormatter(), filename, false, 0, false, rotationPolicy, true);
+    }
+
     /**
      * Creates a synchronous {@code FileMessageHandler} that writes to the given file on the calling thread.
      * <p>

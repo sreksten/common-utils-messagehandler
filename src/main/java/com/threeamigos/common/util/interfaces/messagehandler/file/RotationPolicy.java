@@ -5,6 +5,7 @@ import com.threeamigos.common.util.implementations.messagehandler.file.SizeRotat
 import jakarta.annotation.Nonnull;
 
 import java.nio.file.Path;
+import java.util.function.Supplier;
 
 /**
  * Strategy interface that controls when and how a log file is rotated.
