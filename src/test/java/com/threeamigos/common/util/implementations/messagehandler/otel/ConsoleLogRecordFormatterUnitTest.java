@@ -142,6 +142,20 @@ class ConsoleLogRecordFormatterUnitTest {
     }
 
     @Test
+    @DisplayName("format() should emit trace_flags when only flags are present")
+    void formatShouldEmitTraceFlagsWhenOnlyFlagsArePresent() {
+        LogRecordImpl record = new LogRecordImpl();
+        record.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
+        record.setSeverityText("INFO");
+        record.setTraceFlags(1);
+        record.setBody(AnyValueFactory.ofString("hello"));
+
+        String result = formatter.format(record);
+
+        assertEquals("2026-04-21T08:30:00Z [INFO  ] [trace_flags=01] hello", result);
+    }
+
+    @Test
     @DisplayName("format() should keep trace/span token before instrumentation scope")
     void formatShouldKeepTraceSpanTokenBeforeInstrumentationScope() {
         LogRecordImpl record = new LogRecordImpl();
@@ -297,6 +311,197 @@ class ConsoleLogRecordFormatterUnitTest {
         assertTrue(result.contains("Failure while processing checkout"));
         assertTrue(result.contains("stack-line-1"));
         assertTrue(result.contains("stack-line-2"));
+    }
+
+    @Test
+    @DisplayName("format() should keep only stacktrace when base message is empty")
+    void formatShouldKeepOnlyStacktraceWhenBaseMessageIsEmpty() {
+        LogRecordImpl record = new LogRecordImpl();
+        record.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
+        record.setSeverityText("ERROR");
+        record.setBody(null);
+        record.setEventName(null);
+        record.setAttributes(Collections.singletonList(
+                new KeyValueImpl(OTelTags.EXCEPTION_STACKTRACE.getValue(), AnyValueFactory.ofString("stack-only"))));
+
+        String result = formatter.format(record);
+
+        assertEquals("2026-04-21T08:30:00Z [ERROR ] stack-only", result);
+    }
+
+    @Test
+    @DisplayName("format() should ignore non-matching and malformed exception stacktrace attributes")
+    void formatShouldIgnoreNonMatchingAndMalformedExceptionStacktraceAttributes() {
+        LogRecordImpl nonMatchingFirst = new LogRecordImpl();
+        nonMatchingFirst.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
+        nonMatchingFirst.setSeverityText("INFO");
+        nonMatchingFirst.setBody(AnyValueFactory.ofString("hello"));
+        nonMatchingFirst.setAttributes(java.util.Arrays.<KeyValue>asList(
+                new KeyValueImpl("not.exception.stacktrace", AnyValueFactory.ofString("ignored")),
+                new KeyValueImpl(OTelTags.EXCEPTION_STACKTRACE.getValue(), AnyValueFactory.ofString("stack-present"))));
+        assertTrue(formatter.format(nonMatchingFirst).contains("stack-present"));
+
+        LogRecordImpl nullValue = new LogRecordImpl();
+        nullValue.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
+        nullValue.setSeverityText("INFO");
+        nullValue.setBody(AnyValueFactory.ofString("hello"));
+        nullValue.setAttributes(Collections.singletonList(new KeyValue() {
+            @Override
+            public String getKey() {
+                return OTelTags.EXCEPTION_STACKTRACE.getValue();
+            }
+
+            @Override
+            public AnyValue getValue() {
+                return null;
+            }
+        }));
+        assertEquals("2026-04-21T08:30:00Z [INFO  ] hello", formatter.format(nullValue));
+
+        LogRecordImpl nonStringValue = new LogRecordImpl();
+        nonStringValue.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
+        nonStringValue.setSeverityText("INFO");
+        nonStringValue.setBody(AnyValueFactory.ofString("hello"));
+        nonStringValue.setAttributes(Collections.singletonList(
+                new KeyValueImpl(OTelTags.EXCEPTION_STACKTRACE.getValue(), AnyValueFactory.ofLong(7L))));
+        assertEquals("2026-04-21T08:30:00Z [INFO  ] hello", formatter.format(nonStringValue));
+
+        LogRecordImpl nullStringPayload = new LogRecordImpl();
+        nullStringPayload.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
+        nullStringPayload.setSeverityText("INFO");
+        nullStringPayload.setBody(AnyValueFactory.ofString("hello"));
+        nullStringPayload.setAttributes(Collections.singletonList(new KeyValue() {
+            @Override
+            public String getKey() {
+                return OTelTags.EXCEPTION_STACKTRACE.getValue();
+            }
+
+            @Override
+            public AnyValue getValue() {
+                return new AnyValue() {
+                    @Override
+                    public Type getType() {
+                        return Type.STRING;
+                    }
+
+                    @Override
+                    public String asString() {
+                        return null;
+                    }
+
+                    @Override
+                    public boolean asBoolean() {
+                        return false;
+                    }
+
+                    @Override
+                    public long asLong() {
+                        return 0;
+                    }
+
+                    @Override
+                    public double asDouble() {
+                        return 0;
+                    }
+
+                    @Override
+                    public List<AnyValue> asArray() {
+                        return Collections.emptyList();
+                    }
+
+                    @Override
+                    public List<KeyValue> asKvList() {
+                        return Collections.emptyList();
+                    }
+
+                    @Override
+                    public byte[] asBytes() {
+                        return new byte[0];
+                    }
+                };
+            }
+        }));
+        assertEquals("2026-04-21T08:30:00Z [INFO  ] hello", formatter.format(nullStringPayload));
+    }
+
+    @Test
+    @DisplayName("format() should tolerate null attribute entries and null stacktrace value from custom records")
+    void formatShouldTolerateNullAttributeEntriesAndNullStacktraceValueFromCustomRecords() {
+        LogRecord customRecord = new LogRecord() {
+            @Override
+            public Instant getTimestamp() {
+                return Instant.parse("2026-04-21T08:30:00Z");
+            }
+
+            @Override
+            public Instant getObservedTimestamp() {
+                return null;
+            }
+
+            @Override
+            public String getTraceId() {
+                return null;
+            }
+
+            @Override
+            public String getSpanId() {
+                return null;
+            }
+
+            @Override
+            public int getTraceFlags() {
+                return 0;
+            }
+
+            @Override
+            public String getSeverityText() {
+                return "INFO";
+            }
+
+            @Override
+            public SeverityNumber getSeverityNumber() {
+                return SeverityNumber.INFO;
+            }
+
+            @Override
+            public AnyValue getBody() {
+                return AnyValueFactory.ofString("hello");
+            }
+
+            @Override
+            public com.threeamigos.common.util.interfaces.messagehandler.otel.Resource getResource() {
+                return null;
+            }
+
+            @Override
+            public InstrumentationScope getInstrumentationScope() {
+                return null;
+            }
+
+            @Override
+            public List<KeyValue> getAttributes() {
+                return java.util.Arrays.<KeyValue>asList(
+                        null,
+                        new KeyValue() {
+                            @Override
+                            public String getKey() {
+                                return OTelTags.EXCEPTION_STACKTRACE.getValue();
+                            }
+
+                            @Override
+                            public AnyValue getValue() {
+                                return null;
+                            }
+                        });
+            }
+
+            @Override
+            public String getEventName() {
+                return null;
+            }
+        };
+
+        assertEquals("2026-04-21T08:30:00Z [INFO  ] hello", formatter.format(customRecord));
     }
 
     @Test

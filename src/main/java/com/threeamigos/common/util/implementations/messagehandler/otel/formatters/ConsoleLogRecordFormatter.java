@@ -127,12 +127,10 @@ public class ConsoleLogRecordFormatter implements LogRecordFormatter {
             }
             token.append("span_id=").append(spanId);
         }
-        if (includeTraceFlags) {
-            if (token.length() > 0) {
-                token.append(' ');
-            }
-            token.append("trace_flags=").append(formatTraceFlags(logRecord.getTraceFlags()));
+        if (token.length() > 0) {
+            token.append(' ');
         }
+        token.append("trace_flags=").append(formatTraceFlags(logRecord.getTraceFlags()));
         return token.toString();
     }
 

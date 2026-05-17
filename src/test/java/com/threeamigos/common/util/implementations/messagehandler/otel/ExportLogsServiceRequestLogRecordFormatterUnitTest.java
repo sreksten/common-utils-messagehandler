@@ -15,6 +15,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -221,6 +222,24 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
         String result = formatter.format(record);
         assertTrue(result.contains("\"scope\":{\"droppedAttributesCount\":2}"));
         assertFalse(result.contains("\"scope\":{,\"droppedAttributesCount\""));
+    }
+
+    @Test
+    @DisplayName("appendEntityRefs helper should return early for null and empty entity lists")
+    void appendEntityRefsHelperShouldReturnEarlyForNullAndEmptyEntityLists() throws Exception {
+        Method appendEntityRefs = ExportLogsServiceRequestLogRecordFormatter.class.getDeclaredMethod(
+                "appendEntityRefs",
+                StringBuilder.class,
+                List.class);
+        appendEntityRefs.setAccessible(true);
+
+        StringBuilder nullEntities = new StringBuilder("x");
+        appendEntityRefs.invoke(null, nullEntities, null);
+        assertEquals("x", nullEntities.toString());
+
+        StringBuilder emptyEntities = new StringBuilder("y");
+        appendEntityRefs.invoke(null, emptyEntities, Collections.emptyList());
+        assertEquals("y", emptyEntities.toString());
     }
 
     @Test
