@@ -250,6 +250,27 @@ class TracerImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
     }
 
     @Test
+    @DisplayName("detached tracer logger overloads without filter should be non-blocking and return void handlers")
+    void detachedTracerLoggerOverloadsWithoutFilterShouldBeNonBlockingAndReturnVoidHandlers() {
+        TracerImpl detached = new TracerImpl("orders", "1.0.0", "schema", Collections.emptyList());
+
+        MessageHandler jul = detached.getJULMessageHandler(java.util.logging.Logger.getLogger("detached-jul"));
+        MessageHandler log4j = detached.getLog4JMessageHandler(
+                org.apache.logging.log4j.LogManager.getLogger("detached-log4j"));
+        MessageHandler slf4j = detached.getSLF4JMessageHandler(org.slf4j.LoggerFactory.getLogger("detached-slf4j"));
+
+        assertDoesNotThrow(() -> {
+            jul.info("x");
+            log4j.info("x");
+            slf4j.info("x");
+        });
+
+        assertTrue(jul instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
+        assertTrue(log4j instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
+        assertTrue(slf4j instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
+    }
+
+    @Test
     @DisplayName("attached tracer convenience handlers should resolve explicit handler implementations")
     void attachedTracerConvenienceHandlersShouldResolveExplicitImplementations() {
         TracerProvider provider = TracerProvider.builder()

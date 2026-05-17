@@ -40,6 +40,7 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -820,5 +821,59 @@ class TracerProviderUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         Object keyA = constructor.newInstance(argsA);
         Object keyB = constructor.newInstance(argsB);
         assertFalse(keyA.equals(keyB));
+    }
+
+    @Test
+    @DisplayName("TracerKey equals/hash should differ for mismatched instrumentation names")
+    void tracerKeyEqualsHashShouldDifferForMismatchedInstrumentationNames() throws Exception {
+        Class<?> keyClass = Class.forName("com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider$TracerKey");
+        Constructor<?> constructor = keyClass.getDeclaredConstructors()[0];
+        constructor.setAccessible(true);
+        Class<?>[] parameterTypes = constructor.getParameterTypes();
+        Object[] argsA = new Object[parameterTypes.length];
+        Object[] argsB = new Object[parameterTypes.length];
+        Object[] argsC = new Object[parameterTypes.length];
+        int stringIndex = 0;
+        for (int i = 0; i < parameterTypes.length; i++) {
+            Class<?> type = parameterTypes[i];
+            if (List.class.isAssignableFrom(type)) {
+                argsA[i] = Collections.singletonList("k=v");
+                argsB[i] = Collections.singletonList("k=v");
+                argsC[i] = Collections.singletonList("k=v");
+            } else if (type == String.class) {
+                if (stringIndex == 0) {
+                    argsA[i] = "n";
+                    argsB[i] = "n";
+                    argsC[i] = "n2";
+                } else if (stringIndex == 1) {
+                    argsA[i] = "v";
+                    argsB[i] = "v";
+                    argsC[i] = "v";
+                } else {
+                    argsA[i] = "s";
+                    argsB[i] = "s";
+                    argsC[i] = "s";
+                }
+                stringIndex++;
+            } else if (type == TracerProvider.class) {
+                TracerProvider provider = TracerProvider.createProvider();
+                argsA[i] = provider;
+                argsB[i] = provider;
+                argsC[i] = provider;
+            } else {
+                argsA[i] = null;
+                argsB[i] = null;
+                argsC[i] = null;
+            }
+        }
+
+        Object a = constructor.newInstance(argsA);
+        Object b = constructor.newInstance(argsB);
+        Object c = constructor.newInstance(argsC);
+
+        assertTrue(a.equals(b));
+        assertFalse(a.equals(c));
+        assertFalse(a.equals("not-a-key"));
+        assertNotEquals(a.hashCode(), c.hashCode());
     }
 }

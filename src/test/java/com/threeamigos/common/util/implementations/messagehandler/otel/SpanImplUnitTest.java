@@ -22,6 +22,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -204,6 +205,24 @@ class SpanImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         assertTrue(keys.contains(OTelTags.EXCEPTION_MESSAGE.getValue()));
         assertTrue(keys.contains(OTelTags.EXCEPTION_STACKTRACE.getValue()));
         assertTrue(keys.contains("extra"));
+    }
+
+    @Test
+    @DisplayName("scope token close failures should be swallowed when ending span")
+    void scopeTokenCloseFailuresShouldBeSwallowedWhenEndingSpan() {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(true);
+        SpanImpl span = new SpanImpl("span-name", context, null, Instant.now(), true, new AutoCloseable() {
+            @Override
+            public void close() {
+                throw new RuntimeException("scope-close");
+            }
+        });
+
+        span.setStatus(StatusCode.OK);
+        span.setStatus(StatusCode.ERROR, "ignored-because-ok");
+        assertDoesNotThrow(() -> span.end());
+        assertFalse(span.isRecording());
+        assertEquals(StatusCode.OK, span.getStatusCode());
     }
 
     @Test

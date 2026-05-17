@@ -4,6 +4,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -72,5 +74,23 @@ class TracerProviderBuilderUnitTest extends AbstractOtelValidatorLogTrapUnitTest
 
         assertNotNull(provider.getDefaultResource());
         assertTrue(provider.getDefaultResource().getAttributes().isEmpty());
+    }
+
+    @Test
+    @DisplayName("lenient invalid builder attributes should trigger validator trap and still build provider")
+    void lenientInvalidBuilderAttributesShouldTriggerValidatorTrapAndStillBuildProvider() {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(true);
+        AtomicInteger trapped = new AtomicInteger();
+        OpenTelemetryAttributeValidator.setLogTrapForTests((message, throwable) -> trapped.incrementAndGet());
+
+        TracerProvider provider = TracerProvider.builder()
+                .resourceAttribute((OTelTags) null, "x")
+                .resourceAttribute(" ", "x")
+                .commonAttribute(" ", "x")
+                .serviceName("svc")
+                .build();
+
+        assertNotNull(provider.getDefaultResource());
+        assertTrue(trapped.get() > 0);
     }
 }

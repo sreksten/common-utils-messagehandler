@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -116,5 +117,22 @@ class LogRecordFactoryImplUnitTest {
     void throwableFactoriesShouldRejectNullThrowable() {
         assertThrows(IllegalArgumentException.class, () -> factory.create((Throwable) null));
         assertThrows(IllegalArgumentException.class, () -> factory.create("prefix", null));
+    }
+
+    @Test
+    @DisplayName("lenient mode should allow null inputs across create overloads")
+    void lenientModeShouldAllowNullInputsAcrossCreateOverloads() {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(true);
+        OpenTelemetryAttributeValidator.setLogTrapForTests((message, throwable) -> {
+            // no-op: assert lenient non-throwing behavior
+        });
+
+        LogRecord fromSeverityAndBody = assertDoesNotThrow(() -> factory.create((SeverityNumber) null, null));
+        LogRecord fromMessageThrowable = assertDoesNotThrow(() -> factory.create((String) null, null));
+        LogRecord fromThrowable = assertDoesNotThrow(() -> factory.create((Throwable) null));
+
+        assertNotNull(fromSeverityAndBody);
+        assertNotNull(fromMessageThrowable);
+        assertNotNull(fromThrowable);
     }
 }

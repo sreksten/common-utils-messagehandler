@@ -18,6 +18,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -296,6 +297,26 @@ class EntityBuilderFactoryUnitTest extends AbstractOtelValidatorLogTrapUnitTest 
 
         assertEquals("unknown_id", entity.getId().get(0).getKey());
         assertEquals("value", entity.getId().get(0).getValue().asString());
+    }
+
+    @Test
+    @DisplayName("builder should tolerate null id and description lists in lenient mode")
+    void builderShouldTolerateNullIdAndDescriptionListsInLenientMode() {
+        setLenient(true);
+        try {
+            Entity entity = assertDoesNotThrow(() -> EntityBuilderFactory.getBuilder()
+                    .withType("x")
+                    .withNoSchemaUrl()
+                    .withId((List<KeyValue>) null)
+                    .withDescription((List<KeyValue>) null)
+                    .build());
+
+            assertEquals("x", entity.getType());
+            assertNotNull(entity.getId());
+            assertNotNull(entity.getDescription());
+        } finally {
+            setLenient(ORIGINAL_LENIENT);
+        }
     }
 
     private static void assertEntity(final String expectedType,
