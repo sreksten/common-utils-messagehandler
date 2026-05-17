@@ -9,6 +9,8 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Resource;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -36,6 +38,18 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
 
     private final ExportLogsServiceRequestLogRecordFormatter formatter = new ExportLogsServiceRequestLogRecordFormatter();
     private final RawJsonRecordFormatter rawFormatter = new RawJsonRecordFormatter();
+
+    @BeforeEach
+    void forceStrictValidatorMode() {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(false);
+        OpenTelemetryAttributeValidator.setLogTrapForTests(null);
+    }
+
+    @AfterEach
+    void resetValidatorMode() {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(false);
+        OpenTelemetryAttributeValidator.setLogTrapForTests(null);
+    }
 
     @Test
     @DisplayName("format() should reject null log records")
@@ -238,7 +252,7 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
     }
 
     @Test
-    @DisplayName("raw formatter should serialize resource entities when present")
+    @DisplayName("raw formatter should serialize resource entityRefs when present")
     void rawFormatterShouldSerializeResourceEntitiesWhenPresent() {
         Entity entity = EntityFactory.create(
                 "service",
@@ -258,14 +272,16 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
         String result = rawFormatter.format(record);
         assertTrue(result.contains("\"resource\":{"));
         assertTrue(result.contains("\"attributes\":[{\"key\":\"deployment.environment.name\""));
-        assertTrue(result.contains("\"entities\":[{\"type\":\"service\""));
-        assertTrue(result.contains("\"id\":[{\"key\":\"service.name\""));
-        assertTrue(result.contains("\"description\":[{\"key\":\"service.namespace\""));
+        assertTrue(result.contains("\"key\":\"service.name\""));
+        assertTrue(result.contains("\"key\":\"service.namespace\""));
+        assertTrue(result.contains("\"entityRefs\":[{\"type\":\"service\""));
+        assertTrue(result.contains("\"idKeys\":[\"service.name\"]"));
+        assertTrue(result.contains("\"descriptionKeys\":[\"service.namespace\"]"));
         assertTrue(result.contains("\"schemaUrl\":\"https://opentelemetry.io/schemas/1.26.0\""));
     }
 
     @Test
-    @DisplayName("export formatter should serialize resource entities in resource block only")
+    @DisplayName("export formatter should serialize resource entityRefs in resource block only")
     void exportFormatterShouldSerializeResourceEntitiesInResourceBlockOnly() {
         Entity entity = EntityFactory.create(
                 "service",
@@ -281,7 +297,8 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
         record.setResource(resource);
 
         String result = formatter.format(record);
-        assertTrue(result.contains("\"resource\":{\"entities\":[{\"type\":\"service\",\"id\":[{\"key\":\"service.name\""));
+        assertTrue(result.contains("\"resource\":{\"attributes\":[{\"key\":\"service.name\""));
+        assertTrue(result.contains("\"entityRefs\":[{\"type\":\"service\",\"idKeys\":[\"service.name\"]}]"));
         assertFalse(result.contains("\"logRecords\":[{\"resource\":"));
     }
 

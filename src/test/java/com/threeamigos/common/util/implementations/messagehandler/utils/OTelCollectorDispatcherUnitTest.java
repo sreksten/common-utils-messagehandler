@@ -11,10 +11,13 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("OTelCollectorDispatcher unit tests")
 @Tag("unit")
@@ -55,5 +58,48 @@ class OTelCollectorDispatcherUnitTest {
         LogRecordFormatter formatter = lr -> "{}";
         IOException ex = assertThrows(IOException.class, () -> collector.dispatchLogRecord(logRecord, formatter));
         assertEquals(2, ex.getSuppressed().length);
+    }
+
+    @Test
+    @DisplayName("delegate management APIs should handle nulls, duplicates and snapshots")
+    void delegateManagementApisShouldHandleNullsDuplicatesAndSnapshots() throws Exception {
+        LogRecordDispatcher first = (logRecord, formatter) -> {
+        };
+        LogRecordDispatcher second = (logRecord, formatter) -> {
+        };
+
+        OTelCollectorDispatcher collector = new OTelCollectorDispatcher();
+
+        collector.addDispatcher(null);
+        assertEquals(0, collector.snapshotDelegates().size());
+
+        collector.addDispatcher(first);
+        collector.addDispatcher(first);
+        assertEquals(1, collector.snapshotDelegates().size());
+
+        collector.removeDispatcher(null);
+        collector.removeDispatcher(second);
+        assertEquals(1, collector.snapshotDelegates().size());
+
+        collector.removeDispatcher(first);
+        assertEquals(0, collector.snapshotDelegates().size());
+
+        collector.setDelegates(null);
+        assertEquals(0, collector.snapshotDelegates().size());
+        collector.setDelegates(Collections.<LogRecordDispatcher>emptyList());
+        assertEquals(0, collector.snapshotDelegates().size());
+
+        collector.setDelegates(Arrays.asList(first, null, first, second));
+        List<LogRecordDispatcher> snapshot = collector.snapshotDelegates();
+        assertEquals(2, snapshot.size());
+        assertTrue(snapshot.contains(first));
+        assertTrue(snapshot.contains(second));
+
+        snapshot.clear();
+        assertEquals(2, collector.snapshotDelegates().size(), "snapshot must be a detached copy");
+
+        LogRecord logRecord = new LogRecordFactoryImpl().create(SeverityNumber.INFO, "x");
+        collector.setDelegates(Collections.<LogRecordDispatcher>emptyList());
+        collector.dispatchLogRecord(logRecord, lr -> "{}");
     }
 }

@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.messagehandler.otel.formatte
 
 import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.implementations.messagehandler.otel.AnyValueFactory;
+import com.threeamigos.common.util.implementations.messagehandler.otel.KeyValueFactory;
 import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordImpl;
 import com.threeamigos.common.util.implementations.messagehandler.otel.OpenTelemetryAttributeValidator;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
@@ -15,8 +16,14 @@ import jakarta.annotation.Nonnull;
 
 import java.math.BigInteger;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * A {@link LogRecordFormatter} that serializes a {@link LogRecord} as a naked JSON object
@@ -38,10 +45,10 @@ public class RawJsonRecordFormatter implements LogRecordFormatter {
     private static final String F_SPAN_ID = "spanId";
     private static final String F_EVENT_NAME = "eventName";
     private static final String F_RESOURCE = "resource";
-    private static final String F_ENTITIES = "entities";
+    private static final String F_ENTITY_REFS = "entityRefs";
     private static final String F_TYPE = "type";
-    private static final String F_ID = "id";
-    private static final String F_DESCRIPTION = "description";
+    private static final String F_ID_KEYS = "idKeys";
+    private static final String F_DESCRIPTION_KEYS = "descriptionKeys";
     private static final String F_SCHEMA_URL = "schemaUrl";
 
     private static final String F_KEY = "key";
@@ -257,8 +264,8 @@ public class RawJsonRecordFormatter implements LogRecordFormatter {
         separator(sb, first);
         sb.append('"').append(F_RESOURCE).append("\":{");
         boolean firstResourceField = true;
-        List<KeyValue> attributes = resource.getAttributes();
-        if (attributes != null && !attributes.isEmpty()) {
+        List<KeyValue> attributes = mergedResourceAttributes(resource);
+        if (!attributes.isEmpty()) {
             sb.append('"').append(F_ATTRIBUTES).append("\":");
             appendKeyValueArrayInline(sb, attributes);
             firstResourceField = false;
@@ -268,7 +275,7 @@ public class RawJsonRecordFormatter implements LogRecordFormatter {
             if (!firstResourceField) {
                 sb.append(',');
             }
-            appendEntities(sb, entities);
+            appendEntityRefsInline(sb, entities);
             firstResourceField = false;
         }
         String schemaUrl = resource.getSchemaUrl();
@@ -282,8 +289,56 @@ public class RawJsonRecordFormatter implements LogRecordFormatter {
         return false;
     }
 
-    private static void appendEntities(final StringBuilder sb, final List<Entity> entities) {
-        sb.append('"').append(F_ENTITIES).append("\":[");
+    static List<KeyValue> mergedResourceAttributes(final Resource resource) {
+        if (resource == null) {
+            return Collections.emptyList();
+        }
+        Map<String, KeyValue> attributesByKey = new LinkedHashMap<String, KeyValue>();
+        addAttributes(attributesByKey, resource.getAttributes());
+        List<Entity> entities = resource.getEntities();
+        if (entities != null) {
+            for (Entity entity : entities) {
+                if (entity == null) {
+                    OpenTelemetryAttributeValidator.handleBundled("resourceContainsNullEntity");
+                    continue;
+                }
+                addAttributes(attributesByKey, entity.getId());
+                addAttributes(attributesByKey, entity.getDescription());
+            }
+        }
+        return new ArrayList<KeyValue>(attributesByKey.values());
+    }
+
+    private static void addAttributes(final Map<String, KeyValue> attributesByKey,
+                                      final List<KeyValue> attributes) {
+        if (attributes == null) {
+            return;
+        }
+        for (KeyValue keyValue : attributes) {
+            if (keyValue == null) {
+                OpenTelemetryAttributeValidator.handleBundled("nullKeyValueEntryProvidedToFormatter");
+                continue;
+            }
+            String key = keyValue.getKey();
+            if (key == null) {
+                OpenTelemetryAttributeValidator.handleBundled("nullKeyValueKeyProvidedToFormatter");
+                continue;
+            }
+            String normalizedKey = key.trim();
+            if (normalizedKey.isEmpty() || attributesByKey.containsKey(normalizedKey)) {
+                continue;
+            }
+            AnyValue value = keyValue.getValue();
+            if (value == null) {
+                OpenTelemetryAttributeValidator.handleBundled("nullKeyValueValueProvidedToFormatter");
+                value = AnyValueFactory.empty();
+            }
+            attributesByKey.put(normalizedKey, KeyValueFactory.of(normalizedKey, value));
+        }
+    }
+
+    static void appendEntityRefsInline(final StringBuilder sb, final List<Entity> entities) {
+        sb.append('"').append(F_ENTITY_REFS).append("\":[");
         boolean firstEntity = true;
         for (Entity entity : entities) {
             if (entity == null) {
@@ -293,13 +348,13 @@ public class RawJsonRecordFormatter implements LogRecordFormatter {
             if (!firstEntity) {
                 sb.append(',');
             }
-            appendEntity(sb, entity);
+            appendEntityRef(sb, entity);
             firstEntity = false;
         }
         sb.append(']');
     }
 
-    private static void appendEntity(final StringBuilder sb, final Entity entity) {
+    private static void appendEntityRef(final StringBuilder sb, final Entity entity) {
         sb.append('{');
         boolean firstEntityField = true;
         String type = entity.getType();
@@ -307,22 +362,22 @@ public class RawJsonRecordFormatter implements LogRecordFormatter {
             sb.append('"').append(F_TYPE).append("\":\"").append(escape(type)).append('"');
             firstEntityField = false;
         }
-        List<KeyValue> id = entity.getId();
-        if (id != null && !id.isEmpty()) {
+        List<String> idKeys = entityAttributeKeys(entity.getId());
+        if (!idKeys.isEmpty()) {
             if (!firstEntityField) {
                 sb.append(',');
             }
-            sb.append('"').append(F_ID).append("\":");
-            appendKeyValueArrayInline(sb, id);
+            sb.append('"').append(F_ID_KEYS).append("\":");
+            appendStringArrayInline(sb, idKeys);
             firstEntityField = false;
         }
-        List<KeyValue> description = entity.getDescription();
-        if (description != null && !description.isEmpty()) {
+        List<String> descriptionKeys = entityAttributeKeys(entity.getDescription());
+        if (!descriptionKeys.isEmpty()) {
             if (!firstEntityField) {
                 sb.append(',');
             }
-            sb.append('"').append(F_DESCRIPTION).append("\":");
-            appendKeyValueArrayInline(sb, description);
+            sb.append('"').append(F_DESCRIPTION_KEYS).append("\":");
+            appendStringArrayInline(sb, descriptionKeys);
             firstEntityField = false;
         }
         String schemaUrl = entity.getSchemaUrl();
@@ -333,6 +388,40 @@ public class RawJsonRecordFormatter implements LogRecordFormatter {
             sb.append('"').append(F_SCHEMA_URL).append("\":\"").append(escape(schemaUrl)).append('"');
         }
         sb.append('}');
+    }
+
+    private static List<String> entityAttributeKeys(final List<KeyValue> attributes) {
+        if (attributes == null || attributes.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Set<String> keys = new LinkedHashSet<String>();
+        for (KeyValue keyValue : attributes) {
+            if (keyValue == null) {
+                OpenTelemetryAttributeValidator.handleBundled("nullKeyValueEntryProvidedToFormatter");
+                continue;
+            }
+            String key = keyValue.getKey();
+            if (key == null) {
+                OpenTelemetryAttributeValidator.handleBundled("nullKeyValueKeyProvidedToFormatter");
+                continue;
+            }
+            String normalized = key.trim();
+            if (!normalized.isEmpty()) {
+                keys.add(normalized);
+            }
+        }
+        return new ArrayList<String>(keys);
+    }
+
+    private static void appendStringArrayInline(final StringBuilder sb, final List<String> values) {
+        sb.append('[');
+        for (int i = 0; i < values.size(); i++) {
+            if (i > 0) {
+                sb.append(',');
+            }
+            sb.append('"').append(escape(values.get(i))).append('"');
+        }
+        sb.append(']');
     }
 
     private static void appendAnyValue(final StringBuilder sb, final AnyValue value) {

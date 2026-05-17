@@ -412,6 +412,19 @@ class InMemoryMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("Should store throwable detail when internal exception message is null")
+    void shouldStoreThrowableDetailWhenInternalExceptionMessageIsNull() {
+        InMemoryMessageHandler sut = new InMemoryMessageHandler();
+        RuntimeException exception = new RuntimeException("boom");
+
+        sut.handleExceptionInternal(null, exception);
+
+        assertEquals(1, sut.getAllExceptionMessages().size());
+        assertEquals("boom", sut.getAllExceptionMessages().get(0));
+        assertEquals("boom", sut.getLastMessage());
+    }
+
+    @Test
     @DisplayName("Should store throwable detail when using exception(Throwable)")
     void shouldStoreThrowableDetailWhenUsingExceptionThrowable() {
         InMemoryMessageHandler sut = new InMemoryMessageHandler();

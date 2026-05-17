@@ -4,6 +4,8 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -22,6 +24,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class LogRecordFactoryImplUnitTest {
 
     private final LogRecordFactoryImpl factory = new LogRecordFactoryImpl();
+
+    @BeforeEach
+    void forceStrictValidatorMode() {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(false);
+        OpenTelemetryAttributeValidator.setLogTrapForTests(null);
+    }
+
+    @AfterEach
+    void resetValidatorMode() {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(false);
+        OpenTelemetryAttributeValidator.setLogTrapForTests(null);
+    }
 
     @Test
     @DisplayName("create() should return an empty LogRecord instance")

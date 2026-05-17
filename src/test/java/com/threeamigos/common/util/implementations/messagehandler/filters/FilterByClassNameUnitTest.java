@@ -287,6 +287,7 @@ class FilterByClassNameUnitTest {
         Object holderC = newRegexHolder("ac.*");
 
         assertEquals(holderA, holderA2);
+        assertFalse(holderA.equals("not-a-holder"));
         assertNotEquals("not-a-holder", holderA);
         assertEquals(holderA.hashCode(), holderA2.hashCode());
         assertEquals("ab.*", invokeNoArg(holderA));

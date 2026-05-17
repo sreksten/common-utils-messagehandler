@@ -246,77 +246,42 @@ class SpanImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
     void secondRecordingChecksInsideSynchronizedBlocksShouldBeCovered() throws Exception {
         OpenTelemetryAttributeValidator.setLenientModeForTests(true);
         SpanImpl span = new SpanImpl("span-name", context);
-        Object lock = privateField(span, "lock");
+        runWhileSecondRecordingCheckShouldFail(span, new Runnable() {
+            @Override
+            public void run() {
+                span.setAttribute("k", AnyValueFactory.ofString("v"));
+            }
+        });
+        runWhileSecondRecordingCheckShouldFail(span, new Runnable() {
+            @Override
+            public void run() {
+                span.addEvent("e", Collections.<KeyValue>emptyList(), Instant.now());
+            }
+        });
+        runWhileSecondRecordingCheckShouldFail(span, new Runnable() {
+            @Override
+            public void run() {
+                span.addLink(context, Collections.<KeyValue>emptyList());
+            }
+        });
+        runWhileSecondRecordingCheckShouldFail(span, new Runnable() {
+            @Override
+            public void run() {
+                span.setStatus(StatusCode.ERROR, "boom");
+            }
+        });
+        runWhileSecondRecordingCheckShouldFail(span, new Runnable() {
+            @Override
+            public void run() {
+                span.updateName("new-name");
+            }
+        });
 
-        // setAttribute second isRecording() check
-        synchronized (lock) {
-            Thread t = new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    span.setAttribute("k", AnyValueFactory.ofString("v"));
-                }
-            });
-            t.start();
-            setEnded(span, true);
-            t.join(1000L);
-        }
-        setEnded(span, false);
-
-        // addEvent second isRecording() check
-        synchronized (lock) {
-            Thread t = new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    span.addEvent("e", Collections.<KeyValue>emptyList(), Instant.now());
-                }
-            });
-            t.start();
-            setEnded(span, true);
-            t.join(1000L);
-        }
-        setEnded(span, false);
-
-        // addLink second isRecording() check
-        synchronized (lock) {
-            Thread t = new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    span.addLink(context, Collections.<KeyValue>emptyList());
-                }
-            });
-            t.start();
-            setEnded(span, true);
-            t.join(1000L);
-        }
-        setEnded(span, false);
-
-        // setStatus second isRecording() check
-        synchronized (lock) {
-            Thread t = new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    span.setStatus(StatusCode.ERROR, "boom");
-                }
-            });
-            t.start();
-            setEnded(span, true);
-            t.join(1000L);
-        }
-        setEnded(span, false);
-
-        // updateName second isRecording() check
-        synchronized (lock) {
-            Thread t = new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    span.updateName("new-name");
-                }
-            });
-            t.start();
-            setEnded(span, true);
-            t.join(1000L);
-        }
-        assertTrue(true);
+        assertTrue(span.getAttributesSnapshot().isEmpty());
+        assertTrue(span.getEventsSnapshot().isEmpty());
+        assertTrue(span.getLinksSnapshot().isEmpty());
+        assertEquals(StatusCode.UNSET, span.getStatusCode());
+        assertEquals("span-name", span.getName());
     }
 
     @Test
@@ -343,6 +308,32 @@ class SpanImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         Field f = SpanImpl.class.getDeclaredField("ended");
         f.setAccessible(true);
         f.set(span, value);
+    }
+
+    private static void runWhileSecondRecordingCheckShouldFail(final SpanImpl span,
+                                                               final Runnable call) throws Exception {
+        final Object lock = privateField(span, "lock");
+        final Thread[] holder = new Thread[1];
+        synchronized (lock) {
+            Thread thread = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    call.run();
+                }
+            });
+            holder[0] = thread;
+            thread.start();
+            long deadline = System.currentTimeMillis() + 2000L;
+            while (thread.getState() != Thread.State.BLOCKED
+                    && thread.isAlive()
+                    && System.currentTimeMillis() < deadline) {
+                Thread.yield();
+            }
+            setEnded(span, true);
+        }
+        holder[0].join(2000L);
+        assertFalse(holder[0].isAlive());
+        setEnded(span, false);
     }
 
     @Test
@@ -380,6 +371,8 @@ class SpanImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
                 dispatcher);
         span.setAttribute("k", AnyValueFactory.ofString("v"));
         span.addEvent("event-1");
+        span.addLink(context);
+        span.setStatus(StatusCode.ERROR, "boom");
 
         span.end();
 
@@ -389,6 +382,8 @@ class SpanImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         assertEquals("abcdabcdabcdabcd", snapshot.getParentSpanId());
         assertEquals(1, snapshot.getAttributes().size());
         assertEquals(1, snapshot.getEvents().size());
+        assertEquals("boom", snapshot.getStatusDescription());
+        assertEquals(1, snapshot.getLinks().size());
     }
 
     @Test
@@ -409,6 +404,97 @@ class SpanImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         assertTrue(span.getLinksSnapshot().isEmpty());
         assertEquals(StatusCode.UNSET, span.getStatusCode());
         assertEquals("span-name", span.getName());
+    }
+
+    @Test
+    @DisplayName("event and link object overloads should delegate to field-based overloads")
+    void eventAndLinkObjectOverloadsShouldDelegateToFieldBasedOverloads() {
+        SpanImpl span = new SpanImpl("span-name", context);
+        Event event = new EventImpl("object-event", Instant.now(), Collections.<KeyValue>emptyList());
+        Link link = new LinkImpl(context, Collections.<KeyValue>emptyList());
+
+        span.addEvent(event);
+        span.addLink(link);
+
+        assertEquals(1, span.getEventsSnapshot().size());
+        assertEquals("object-event", span.getEventsSnapshot().get(0).getName());
+        assertEquals(1, span.getLinksSnapshot().size());
+    }
+
+    @Test
+    @DisplayName("setStatus should normalize null descriptions for error status")
+    void setStatusShouldNormalizeNullDescriptionsForErrorStatus() {
+        SpanImpl span = new SpanImpl("span-name", context);
+        span.setStatus(StatusCode.ERROR, null);
+        assertEquals(StatusCode.ERROR, span.getStatusCode());
+        assertEquals("", span.getStatusDescription());
+
+        span.setStatus(StatusCode.OK, "");
+        span.setStatus(StatusCode.OK, "");
+        assertEquals(StatusCode.OK, span.getStatusCode());
+    }
+
+    @Test
+    @DisplayName("dispatcher failures should be swallowed for both IO and runtime exceptions")
+    void dispatcherFailuresShouldBeSwallowedForBothIoAndRuntimeExceptions() {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(true);
+
+        SpanImpl ioFailure = new SpanImpl(
+                "span-name",
+                context,
+                null,
+                Instant.now(),
+                true,
+                null,
+                null,
+                new SpanDispatcher() {
+                    @Override
+                    public void dispatchSpan(final SpanData spanData) throws java.io.IOException {
+                        throw new java.io.IOException("io failure");
+                    }
+                });
+        ioFailure.end();
+        assertFalse(ioFailure.isRecording());
+
+        SpanImpl runtimeFailure = new SpanImpl(
+                "span-name",
+                context,
+                null,
+                Instant.now(),
+                true,
+                null,
+                null,
+                new SpanDispatcher() {
+                    @Override
+                    public void dispatchSpan(final SpanData spanData) {
+                        throw new RuntimeException("runtime failure");
+                    }
+                });
+        runtimeFailure.end();
+        assertFalse(runtimeFailure.isRecording());
+    }
+
+    @Test
+    @DisplayName("dispatch helper should return when snapshot is null")
+    void dispatchHelperShouldReturnWhenSnapshotIsNull() throws Exception {
+        SpanImpl span = new SpanImpl(
+                "span-name",
+                context,
+                null,
+                Instant.now(),
+                true,
+                null,
+                null,
+                new SpanDispatcher() {
+                    @Override
+                    public void dispatchSpan(final SpanData spanData) {
+                        throw new AssertionError("dispatch should not be called");
+                    }
+                });
+
+        java.lang.reflect.Method dispatch = SpanImpl.class.getDeclaredMethod("dispatchSpanDataQuietly", SpanData.class);
+        dispatch.setAccessible(true);
+        dispatch.invoke(span, new Object[]{null});
     }
 
     @Test

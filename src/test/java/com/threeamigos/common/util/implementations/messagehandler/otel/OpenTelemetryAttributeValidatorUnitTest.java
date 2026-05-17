@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("OpenTelemetryAttributeValidator unit tests")
@@ -169,6 +170,26 @@ class OpenTelemetryAttributeValidatorUnitTest extends AbstractOtelValidatorLogTr
                 new KeyValueImpl("a", AnyValueFactory.ofString("1")),
                 new KeyValueImpl("b", AnyValueFactory.ofLong(2))
         ), "attrs"));
+    }
+
+    @Test
+    @DisplayName("copyAndValidateKeyValues() should throw in strict mode when invalid input is present")
+    void copyAndValidateKeyValuesShouldThrowInStrictModeWhenInvalidInputIsPresent() {
+        setLenient(false);
+        List<KeyValue> invalid = Collections.<KeyValue>singletonList(null);
+        assertThrows(IllegalArgumentException.class,
+                () -> OpenTelemetryAttributeValidator.copyAndValidateKeyValues(invalid, "attrs"));
+    }
+
+    @Test
+    @DisplayName("copyAndValidateKeyValuesLenient() should remain non-blocking even when strict mode is active")
+    void copyAndValidateKeyValuesLenientShouldRemainNonBlockingEvenWhenStrictModeIsActive() {
+        setLenient(false);
+        List<KeyValue> invalid = Collections.<KeyValue>singletonList(null);
+
+        List<KeyValue> copy = assertDoesNotThrow(() ->
+                OpenTelemetryAttributeValidator.copyAndValidateKeyValuesLenient(invalid, "attrs"));
+        assertTrue(copy.isEmpty());
     }
 
     private static void setLenient(final boolean value) {

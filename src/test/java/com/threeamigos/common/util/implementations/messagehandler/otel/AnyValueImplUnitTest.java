@@ -321,4 +321,45 @@ class AnyValueImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
                 Collections.<com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue>singletonList(null);
         assertEquals(null, toUniqueMap.invoke(null, withNullEntry));
     }
+
+    @Test
+    @DisplayName("KVLIST equality helper should handle identity null size mismatch and list fallback")
+    void kvListEqualityHelperShouldHandleIdentityNullSizeMismatchAndListFallback() throws Exception {
+        Method kvListEquals = AnyValueImpl.class.getDeclaredMethod("kvListEquals", List.class, List.class);
+        kvListEquals.setAccessible(true);
+
+        List<com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue> sameRef =
+                Collections.<com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue>singletonList(
+                        new KeyValueImpl("k", AnyValueFactory.ofString("v")));
+        assertTrue((Boolean) kvListEquals.invoke(null, sameRef, sameRef));
+        assertFalse((Boolean) kvListEquals.invoke(null, null, sameRef));
+        assertFalse((Boolean) kvListEquals.invoke(null, sameRef, null));
+        assertFalse((Boolean) kvListEquals.invoke(null, sameRef, Collections.<com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue>emptyList()));
+
+        List<com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue> rightMapNull =
+                Collections.<com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue>singletonList(
+                        new com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue() {
+                            @Override
+                            public String getKey() {
+                                return null;
+                            }
+
+                            @Override
+                            public AnyValue getValue() {
+                                return AnyValueFactory.ofString("v");
+                            }
+                        });
+        assertFalse((Boolean) kvListEquals.invoke(null, sameRef, rightMapNull));
+
+        com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue first =
+                new KeyValueImpl("dup", AnyValueFactory.ofString("1"));
+        com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue second =
+                new KeyValueImpl("dup", AnyValueFactory.ofString("2"));
+        List<com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue> left =
+                Arrays.<com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue>asList(first, second);
+        List<com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue> right =
+                Arrays.<com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue>asList(first, second);
+
+        assertTrue((Boolean) kvListEquals.invoke(null, left, right));
+    }
 }

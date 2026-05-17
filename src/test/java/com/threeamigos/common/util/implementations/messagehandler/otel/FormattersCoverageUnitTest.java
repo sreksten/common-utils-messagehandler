@@ -57,14 +57,14 @@ class FormattersCoverageUnitTest {
         spanOnly.setSeverityText("INFO");
         spanOnly.setSpanId("89abcdef01234567");
         spanOnly.setBody(AnyValueFactory.ofString("x"));
-        assertTrue(formatter.format(spanOnly).contains("[spanId=89abcdef01234567]"));
+        assertTrue(formatter.format(spanOnly).contains("[span_id=89abcdef01234567 trace_flags=00]"));
 
         LogRecordImpl traceOnly = new LogRecordImpl();
         traceOnly.setTimestamp(Instant.parse("2026-05-01T10:00:00Z"));
         traceOnly.setSeverityText("INFO");
         traceOnly.setTraceId("0123456789abcdef0123456789abcdef");
         traceOnly.setBody(AnyValueFactory.ofString("x"));
-        assertTrue(formatter.format(traceOnly).contains("[traceId=0123456789abcdef0123456789abcdef]"));
+        assertTrue(formatter.format(traceOnly).contains("[trace_id=0123456789abcdef0123456789abcdef trace_flags=00]"));
 
         Method anyValueToString = ConsoleLogRecordFormatter.class
                 .getDeclaredMethod("anyValueToString", AnyValue.class);
@@ -112,8 +112,8 @@ class FormattersCoverageUnitTest {
 
         assertTrue(out.contains("[INFO  ]"));
         assertTrue(out.endsWith(" x"));
-        assertTrue(!out.contains("[traceId="));
-        assertTrue(!out.contains("[spanId="));
+        assertTrue(!out.contains("[trace_id="));
+        assertTrue(!out.contains("[span_id="));
     }
 
     @Test
@@ -233,9 +233,9 @@ class FormattersCoverageUnitTest {
                 Instant.ofEpochSecond(18446744074L));
         String overflowOut = formatter.format(overUint64TimestampRecord);
         assertTrue(!overflowOut.contains("\"timeUnixNano\""));
-        assertTrue(overflowOut.contains("\"entities\":["));
+        assertTrue(overflowOut.contains("\"entityRefs\":["));
         assertTrue(overflowOut.contains("\"type\":\"service\""));
-        assertTrue(overflowOut.contains("\"description\":"));
+        assertTrue(overflowOut.contains("\"descriptionKeys\":"));
         assertTrue(overflowOut.contains("\"schemaUrl\":\"https://entity.schema\""));
     }
 
@@ -247,7 +247,7 @@ class FormattersCoverageUnitTest {
 
         String withEmptyAttrs = formatter.format(stubLogRecordWithTimestamp(resourceWithEmptyAttributesAndNonEmptyEntities(), Instant.now()));
         assertTrue(withEmptyAttrs.contains("\"resource\":{"));
-        assertTrue(withEmptyAttrs.contains("\"entities\":["));
+        assertTrue(withEmptyAttrs.contains("\"entityRefs\":["));
 
         String withEmptyEntities = formatter.format(stubLogRecordWithTimestamp(resourceWithNullAttributesAndEmptyEntities(), Instant.now()));
         assertTrue(withEmptyEntities.contains("\"resource\":{"));
@@ -255,20 +255,20 @@ class FormattersCoverageUnitTest {
         String withNullEntities = formatter.format(stubLogRecordWithTimestamp(resourceWithNullEntities(), Instant.now()));
         assertTrue(withNullEntities.contains("\"resource\":{}"));
 
-        Method appendEntity = RawJsonRecordFormatter.class
-                .getDeclaredMethod("appendEntity", StringBuilder.class, Entity.class);
-        appendEntity.setAccessible(true);
+        Method appendEntityRef = RawJsonRecordFormatter.class
+                .getDeclaredMethod("appendEntityRef", StringBuilder.class, Entity.class);
+        appendEntityRef.setAccessible(true);
 
         StringBuilder idOnly = new StringBuilder();
-        appendEntity.invoke(null, idOnly, entityWith(null, "https://id.only", singletonKeyValue("idOnly", "v"), null));
-        assertTrue(idOnly.toString().contains("\"id\":"));
+        appendEntityRef.invoke(null, idOnly, entityWith(null, "https://id.only", singletonKeyValue("idOnly", "v"), null));
+        assertTrue(idOnly.toString().contains("\"idKeys\":"));
 
         StringBuilder descOnly = new StringBuilder();
-        appendEntity.invoke(null, descOnly, entityWith(null, null, null, singletonKeyValue("descOnly", "v")));
-        assertTrue(descOnly.toString().contains("\"description\":"));
+        appendEntityRef.invoke(null, descOnly, entityWith(null, null, null, singletonKeyValue("descOnly", "v")));
+        assertTrue(descOnly.toString().contains("\"descriptionKeys\":"));
 
         StringBuilder schemaOnly = new StringBuilder();
-        appendEntity.invoke(null, schemaOnly, entityWith(null, "https://schema.only", null, null));
+        appendEntityRef.invoke(null, schemaOnly, entityWith(null, "https://schema.only", null, null));
         assertTrue(schemaOnly.toString().contains("\"schemaUrl\":\"https://schema.only\""));
     }
 
@@ -326,7 +326,7 @@ class FormattersCoverageUnitTest {
 
         String out = formatter.format(new StubLogRecord(customResource, customScope));
         assertTrue(out.contains("\"resource\":{"));
-        assertTrue(out.contains("\"entities\":[{}]"));
+        assertTrue(out.contains("\"entityRefs\":[{}]"));
         assertTrue(out.contains("\"scope\":{}"));
         assertTrue(out.contains("\"schemaUrl\":\"https://scope.schema\""));
     }
@@ -339,10 +339,10 @@ class FormattersCoverageUnitTest {
 
         String out = formatter.format(new StubLogRecord(resourceWithEntitiesAndAttributes(), null));
         assertTrue(out.contains("\"resource\":{\"attributes\":"));
-        assertTrue(out.contains("\"entities\":["));
+        assertTrue(out.contains("\"entityRefs\":["));
         assertTrue(out.contains("},{"));
-        assertTrue(out.contains("\"id\":"));
-        assertTrue(out.contains("\"description\":"));
+        assertTrue(out.contains("\"idKeys\":"));
+        assertTrue(out.contains("\"descriptionKeys\":"));
         assertTrue(out.contains("\"schemaUrl\":\"https://entity.schema\""));
     }
 
@@ -356,8 +356,8 @@ class FormattersCoverageUnitTest {
         assertTrue(nullEntitiesOut.contains("\"resource\":{}"));
 
         String firstFieldFalseOut = formatter.format(new StubLogRecord(resourceForExportFirstFieldFalse(), null));
-        assertTrue(firstFieldFalseOut.contains("\"id\":"));
-        assertTrue(firstFieldFalseOut.contains("\"description\":"));
+        assertTrue(firstFieldFalseOut.contains("\"idKeys\":"));
+        assertTrue(firstFieldFalseOut.contains("\"descriptionKeys\":"));
         assertTrue(firstFieldFalseOut.contains("\"schemaUrl\":\"https://schema.export\""));
     }
 

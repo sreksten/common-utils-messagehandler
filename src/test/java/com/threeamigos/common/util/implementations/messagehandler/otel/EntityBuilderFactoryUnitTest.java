@@ -284,6 +284,20 @@ class EntityBuilderFactoryUnitTest extends AbstractOtelValidatorLogTrapUnitTest 
         assertEquals("unknown", entity.getId().get(0).getValue().asString());
     }
 
+    @Test
+    @DisplayName("id OTel tag overload should fallback to unknown id key when tag is null in lenient mode")
+    void idOtelTagOverloadShouldFallbackWhenTagIsNullInLenientMode() {
+        setLenient(true);
+        Entity entity = new EntityBuilderImpl()
+                .withType("custom")
+                .withNoSchemaUrl()
+                .withIdString((OTelTags) null, "value")
+                .build();
+
+        assertEquals("unknown_id", entity.getId().get(0).getKey());
+        assertEquals("value", entity.getId().get(0).getValue().asString());
+    }
+
     private static void assertEntity(final String expectedType,
                                      final String expectedSchemaUrl,
                                      final Entity entity,

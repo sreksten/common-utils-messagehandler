@@ -7,6 +7,8 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.Instrumentatio
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -29,6 +31,18 @@ class ConsoleLogRecordFormatterUnitTest {
     private static final String SPAN_ID = "89abcdef01234567";
 
     private final ConsoleLogRecordFormatter formatter = new ConsoleLogRecordFormatter();
+
+    @BeforeEach
+    void forceStrictValidatorMode() {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(false);
+        OpenTelemetryAttributeValidator.setLogTrapForTests(null);
+    }
+
+    @AfterEach
+    void resetValidatorMode() {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(false);
+        OpenTelemetryAttributeValidator.setLogTrapForTests(null);
+    }
 
     @Test
     @DisplayName("format() should reject null log records")
@@ -93,7 +107,7 @@ class ConsoleLogRecordFormatterUnitTest {
     }
 
     @Test
-    @DisplayName("format() should emit traceId and spanId immediately after severity")
+    @DisplayName("format() should emit trace_id, span_id and trace_flags immediately after severity")
     void formatShouldEmitTraceIdAndSpanIdImmediatelyAfterSeverity() {
         LogRecordImpl record = new LogRecordImpl();
         record.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
@@ -105,7 +119,25 @@ class ConsoleLogRecordFormatterUnitTest {
         String result = formatter.format(record);
 
         assertEquals(
-                "2026-04-21T08:30:00Z [INFO  ] [traceId=" + TRACE_ID + " spanId=" + SPAN_ID + "] hello",
+                "2026-04-21T08:30:00Z [INFO  ] [trace_id=" + TRACE_ID + " span_id=" + SPAN_ID + " trace_flags=00] hello",
+                result);
+    }
+
+    @Test
+    @DisplayName("format() should render trace_flags as two lowercase hex digits")
+    void formatShouldRenderTraceFlagsAsTwoLowercaseHexDigits() {
+        LogRecordImpl record = new LogRecordImpl();
+        record.setTimestamp(Instant.parse("2026-04-21T08:30:00Z"));
+        record.setSeverityText("INFO");
+        record.setTraceId(TRACE_ID);
+        record.setSpanId(SPAN_ID);
+        record.setTraceFlags(255);
+        record.setBody(AnyValueFactory.ofString("hello"));
+
+        String result = formatter.format(record);
+
+        assertEquals(
+                "2026-04-21T08:30:00Z [INFO  ] [trace_id=" + TRACE_ID + " span_id=" + SPAN_ID + " trace_flags=ff] hello",
                 result);
     }
 
@@ -125,7 +157,7 @@ class ConsoleLogRecordFormatterUnitTest {
         String result = formatter.format(record);
 
         assertEquals(
-                "2026-04-21T08:30:00Z [INFO  ] [traceId=" + TRACE_ID + " spanId=" + SPAN_ID + "] [com.example.Foo] hello",
+                "2026-04-21T08:30:00Z [INFO  ] [trace_id=" + TRACE_ID + " span_id=" + SPAN_ID + " trace_flags=00] [com.example.Foo] hello",
                 result);
     }
 

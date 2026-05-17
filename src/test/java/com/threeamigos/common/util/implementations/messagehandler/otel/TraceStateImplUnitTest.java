@@ -145,6 +145,8 @@ class TraceStateImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
                 () -> state.set("vendor", AnyValueFactory.ofString("bad=value")));
         assertThrows(IllegalArgumentException.class,
                 () -> state.set("vendor", AnyValueFactory.ofString("")));
+        assertThrows(IllegalArgumentException.class,
+                () -> state.set("vendor", null));
     }
 
     @Test

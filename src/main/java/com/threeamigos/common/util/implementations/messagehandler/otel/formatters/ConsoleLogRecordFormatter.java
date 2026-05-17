@@ -22,9 +22,9 @@ import java.util.Base64;
  * Output format:
  * <ul>
  *   <li>Without instrumentation scope name:
- *   {@code <iso-instant> [<severity-6>] [traceId=<traceId> spanId=<spanId>] <message>}</li>
+ *   {@code <iso-instant> [<severity-6>] [trace_id=<traceId> span_id=<spanId> trace_flags=<traceFlags>] <message>}</li>
  *   <li>With instrumentation scope name:
- *   {@code <iso-instant> [<severity-6>] [traceId=<traceId> spanId=<spanId>] [<scope-name>] <message>}</li>
+ *   {@code <iso-instant> [<severity-6>] [trace_id=<traceId> span_id=<spanId> trace_flags=<traceFlags>] [<scope-name>] <message>}</li>
  * </ul>
  * <p>
  * The trace/span token is emitted only when at least one of traceId/spanId is present and non-blank,
@@ -75,12 +75,12 @@ public class ConsoleLogRecordFormatter implements LogRecordFormatter {
             }
             String isoTimestamp = DateTimeFormatter.ISO_INSTANT.format(timestamp);
             String severity = normalizeSeverity(logRecord.getSeverityText(), logRecord.getSeverityNumber());
-            String traceAndSpan = resolveTraceAndSpan(logRecord);
+            String traceContext = resolveTraceContext(logRecord);
             String scopeName = resolveScopeName(logRecord);
             String message = resolveMessage(logRecord);
             StringBuilder out = new StringBuilder(isoTimestamp).append(" [").append(severity).append("]");
-            if (!traceAndSpan.isEmpty()) {
-                out.append(" [").append(traceAndSpan).append("]");
+            if (!traceContext.isEmpty()) {
+                out.append(" [").append(traceContext).append("]");
             }
             if (!scopeName.isEmpty()) {
                 out.append(" [").append(scopeName).append("]");
@@ -110,19 +110,30 @@ public class ConsoleLogRecordFormatter implements LogRecordFormatter {
         return scopeName;
     }
 
-    private static String resolveTraceAndSpan(final LogRecord logRecord) {
+    private static String resolveTraceContext(final LogRecord logRecord) {
         String traceId = normalizeOptionalToken(logRecord.getTraceId());
         String spanId = normalizeOptionalToken(logRecord.getSpanId());
-        if (traceId == null && spanId == null) {
+        boolean includeTraceFlags = traceId != null || spanId != null || logRecord.getTraceFlags() != 0;
+        if (traceId == null && spanId == null && !includeTraceFlags) {
             return "";
         }
-        if (traceId == null) {
-            return "spanId=" + spanId;
+        StringBuilder token = new StringBuilder();
+        if (traceId != null) {
+            token.append("trace_id=").append(traceId);
         }
-        if (spanId == null) {
-            return "traceId=" + traceId;
+        if (spanId != null) {
+            if (token.length() > 0) {
+                token.append(' ');
+            }
+            token.append("span_id=").append(spanId);
         }
-        return "traceId=" + traceId + " spanId=" + spanId;
+        if (includeTraceFlags) {
+            if (token.length() > 0) {
+                token.append(' ');
+            }
+            token.append("trace_flags=").append(formatTraceFlags(logRecord.getTraceFlags()));
+        }
+        return token.toString();
     }
 
     private static String normalizeOptionalToken(final String value) {
@@ -215,5 +226,9 @@ public class ConsoleLogRecordFormatter implements LogRecordFormatter {
             return String.valueOf(value.asArray());
         }
         return String.valueOf(value.asKvList());
+    }
+
+    private static String formatTraceFlags(final int traceFlags) {
+        return String.format("%02x", traceFlags & 0xFF);
     }
 }

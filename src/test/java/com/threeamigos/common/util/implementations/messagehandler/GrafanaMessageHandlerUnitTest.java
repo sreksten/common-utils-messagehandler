@@ -84,6 +84,27 @@ class GrafanaMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("dispatch failure with null message should use exception class and close in sync mode")
+    void dispatchFailureWithNullMessageShouldUseExceptionClassAndCloseSync() {
+        CapturingDispatcher dispatcher = new CapturingDispatcher();
+        dispatcher.throwable = new IOException();
+        List<String> errors = new ArrayList<String>();
+        GrafanaMessageHandler sut = new GrafanaMessageHandler(
+                new LogRecordFactoryImpl(),
+                logRecord -> "{}",
+                dispatcher,
+                false, 0, false);
+        sut.setErrorConsumer(errors::add);
+        sut.setCloseOnDispatchError(true);
+
+        sut.info("x");
+
+        assertEquals(1, errors.size());
+        assertTrue(errors.get(0).contains(IOException.class.getName()));
+        assertThrows(IllegalStateException.class, () -> sut.info("after-close"));
+    }
+
+    @Test
     @DisplayName("closeOnDispatchError should close handler in async mode")
     void closeOnDispatchErrorShouldCloseAsyncHandler() throws Exception {
         CapturingDispatcher dispatcher = new CapturingDispatcher();

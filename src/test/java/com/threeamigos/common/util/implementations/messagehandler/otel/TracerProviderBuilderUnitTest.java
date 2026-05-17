@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("TracerProviderBuilder unit tests")
 @Tag("unit")
@@ -42,5 +43,34 @@ class TracerProviderBuilderUnitTest extends AbstractOtelValidatorLogTrapUnitTest
                 .build();
 
         assertNotNull(provider.getDefaultResource());
+    }
+
+    @Test
+    @DisplayName("null keys should be ignored and null values normalized for common attributes")
+    void nullKeysShouldBeIgnoredAndNullValuesNormalizedForCommonAttributes() {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(true);
+        TracerProvider provider = TracerProvider.builder()
+                .resourceAttribute((String) null, "x")
+                .commonAttribute(null, "x")
+                .commonAttribute("common.k", null)
+                .build();
+
+        assertEquals(1, provider.getDefaultCommonAttributes().size());
+        assertEquals("common.k", provider.getDefaultCommonAttributes().get(0).getKey());
+        assertEquals("", provider.getDefaultCommonAttributes().get(0).getValue().asString());
+    }
+
+    @Test
+    @DisplayName("blank semantic convention values should not be added as resource attributes")
+    void blankSemanticConventionValuesShouldNotBeAddedAsResourceAttributes() {
+        TracerProvider provider = TracerProvider.builder()
+                .serviceName(" ")
+                .serviceVersion(" ")
+                .serviceInstanceId(" ")
+                .deploymentEnvironment(" ")
+                .build();
+
+        assertNotNull(provider.getDefaultResource());
+        assertTrue(provider.getDefaultResource().getAttributes().isEmpty());
     }
 }

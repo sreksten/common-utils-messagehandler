@@ -50,13 +50,13 @@ public class LogRecordImpl implements LogRecord {
     public void setTimestamp(final Instant timestamp) {
         try {
             if (timestamp == null) {
-                handleBundledNonBlocking("timestampMustNotBeNull");
+                reportBundled("timestampMustNotBeNull");
                 this.timestamp = Instant.now();
                 return;
             }
             this.timestamp = normalizeTimestamp(timestamp, Instant.now());
         } catch (RuntimeException ex) {
-            handleBundledNonBlocking("failedToSetTimestamp", ex.getMessage());
+            reportBundled("failedToSetTimestamp", ex.getMessage());
             this.timestamp = Instant.now();
         }
     }
@@ -74,7 +74,7 @@ public class LogRecordImpl implements LogRecord {
             }
             this.observedTimestamp = normalizeTimestamp(observedTimestamp, null);
         } catch (RuntimeException ex) {
-            handleBundledNonBlocking("failedToSetObservedTimestamp", ex.getMessage());
+            reportBundled("failedToSetObservedTimestamp", ex.getMessage());
             this.observedTimestamp = null;
         }
     }
@@ -90,9 +90,9 @@ public class LogRecordImpl implements LogRecord {
                 this.traceId = null;
                 return;
             }
-            String normalizedTraceId = traceId.trim().toLowerCase(Locale.ROOT);
-            if (!TRACE_ID_PATTERN.matcher(normalizedTraceId).matches()) {
-                handleNonBlocking(safeBundleFormat(
+            String normalizedTraceId = normalizeText(traceId).toLowerCase(Locale.ROOT);
+            if (!traceIdPattern().matcher(normalizedTraceId).matches()) {
+                report(safeBundleFormat(
                         "traceIdInvalid",
                         traceId));
                 this.traceId = null;
@@ -100,7 +100,7 @@ public class LogRecordImpl implements LogRecord {
             }
             this.traceId = normalizedTraceId;
         } catch (RuntimeException ex) {
-            handleBundledNonBlocking("failedToSetTraceId", ex.getMessage());
+            reportBundled("failedToSetTraceId", ex.getMessage());
             this.traceId = null;
         }
     }
@@ -116,9 +116,9 @@ public class LogRecordImpl implements LogRecord {
                 this.spanId = null;
                 return;
             }
-            String normalizedSpanId = spanId.trim().toLowerCase(Locale.ROOT);
-            if (!SPAN_ID_PATTERN.matcher(normalizedSpanId).matches()) {
-                handleNonBlocking(safeBundleFormat(
+            String normalizedSpanId = normalizeText(spanId).toLowerCase(Locale.ROOT);
+            if (!spanIdPattern().matcher(normalizedSpanId).matches()) {
+                report(safeBundleFormat(
                         "spanIdInvalid",
                         spanId));
                 this.spanId = null;
@@ -126,7 +126,7 @@ public class LogRecordImpl implements LogRecord {
             }
             this.spanId = normalizedSpanId;
         } catch (RuntimeException ex) {
-            handleBundledNonBlocking("failedToSetSpanId", ex.getMessage());
+            reportBundled("failedToSetSpanId", ex.getMessage());
             this.spanId = null;
         }
     }
@@ -139,7 +139,7 @@ public class LogRecordImpl implements LogRecord {
     public void setTraceFlags(final int traceFlags) {
         try {
             if (traceFlags < 0 || traceFlags > 0xFF) {
-                handleNonBlocking(safeBundleFormat(
+                report(safeBundleFormat(
                         "traceFlagsOutOfRange",
                         traceFlags));
                 this.traceFlags = traceFlags & 0xFF;
@@ -147,7 +147,7 @@ public class LogRecordImpl implements LogRecord {
             }
             this.traceFlags = traceFlags;
         } catch (RuntimeException ex) {
-            handleBundledNonBlocking("failedToSetTraceFlags", ex.getMessage());
+            reportBundled("failedToSetTraceFlags", ex.getMessage());
             this.traceFlags = 0;
         }
     }
@@ -168,19 +168,19 @@ public class LogRecordImpl implements LogRecord {
                 this.severityText = null;
                 return;
             }
-            String normalizedSeverityText = severityText.trim();
+            String normalizedSeverityText = normalizeText(severityText);
             this.severityText = normalizedSeverityText.isEmpty() ? null : normalizedSeverityText;
         } catch (RuntimeException ex) {
-            handleBundledNonBlocking("failedToSetSeverityText", ex.getMessage());
+            reportBundled("failedToSetSeverityText", ex.getMessage());
             this.severityText = null;
         }
     }
 
     public void setSeverityNumber(final SeverityNumber severityNumber) {
         try {
-            this.severityNumber = severityNumber != null ? severityNumber : SeverityNumber.UNSPECIFIED;
+            this.severityNumber = normalizeSeverityNumber(severityNumber);
         } catch (RuntimeException ex) {
-            handleBundledNonBlocking("failedToSetSeverityNumber", ex.getMessage());
+            reportBundled("failedToSetSeverityNumber", ex.getMessage());
             this.severityNumber = SeverityNumber.UNSPECIFIED;
         }
     }
@@ -220,14 +220,14 @@ public class LogRecordImpl implements LogRecord {
     public void setAttributes(final List<KeyValue> attributes) {
         try {
             OpenTelemetryAttributeValidator.ValidationResult validationResult =
-                    OpenTelemetryAttributeValidator.copyValidateAndLimitKeyValuesLenient(
+                    validateAttributes(
                     attributes,
                     safeBundleGet("logRecordAttributesFieldName", "logRecordAttributesFieldName")
                     );
             this.attributes = validationResult.getAttributes();
             this.droppedAttributesCount = validationResult.getDroppedAttributesCount();
         } catch (RuntimeException ex) {
-            handleBundledNonBlocking("failedToSetLogRecordAttributes", ex.getMessage());
+            reportBundled("failedToSetLogRecordAttributes", ex.getMessage());
             this.attributes = new ArrayList<>();
             this.droppedAttributesCount = 0;
         }
@@ -248,39 +248,60 @@ public class LogRecordImpl implements LogRecord {
                 this.eventName = null;
                 return;
             }
-            String normalizedEventName = eventName.trim();
+            String normalizedEventName = normalizeText(eventName);
             this.eventName = normalizedEventName.isEmpty() ? null : normalizedEventName;
         } catch (RuntimeException ex) {
-            handleBundledNonBlocking("failedToSetEventName", ex.getMessage());
+            reportBundled("failedToSetEventName", ex.getMessage());
             this.eventName = null;
         }
     }
 
-    private static Instant normalizeTimestamp(final Instant input, final Instant fallback) {
+    Instant normalizeTimestamp(final Instant input, final Instant fallback) {
         if (!isUint64NanoTimestamp(input)) {
-            handleBundledNonBlocking("timestampOutsideOtlpRange", input);
+            reportBundled("timestampOutsideOtlpRange", input);
             return fallback;
         }
         return input;
     }
 
-    private static boolean isUint64NanoTimestamp(final Instant value) {
+    boolean isUint64NanoTimestamp(final Instant value) {
         BigInteger nanos = BigInteger.valueOf(value.getEpochSecond())
                 .multiply(NANOS_PER_SECOND)
                 .add(BigInteger.valueOf(value.getNano()));
         return nanos.signum() >= 0 && nanos.compareTo(UINT64_MAX) <= 0;
     }
 
-    private static void handleBundledNonBlocking(final String messageKey) {
+    void reportBundled(final String messageKey) {
         OpenTelemetryAttributeValidator.reportBundled(messageKey);
     }
 
-    private static void handleBundledNonBlocking(final String messageKey, final Object... args) {
+    void reportBundled(final String messageKey, final Object... args) {
         OpenTelemetryAttributeValidator.reportBundled(messageKey, args);
     }
 
-    private static void handleNonBlocking(final String message) {
+    void report(final String message) {
         OpenTelemetryAttributeValidator.report(message);
+    }
+
+    String normalizeText(final String value) {
+        return value.trim();
+    }
+
+    SeverityNumber normalizeSeverityNumber(final SeverityNumber value) {
+        return value != null ? value : SeverityNumber.UNSPECIFIED;
+    }
+
+    OpenTelemetryAttributeValidator.ValidationResult validateAttributes(final List<KeyValue> attributes,
+                                                                        final String fieldName) {
+        return OpenTelemetryAttributeValidator.copyValidateAndLimitKeyValuesLenient(attributes, fieldName);
+    }
+
+    Pattern traceIdPattern() {
+        return TRACE_ID_PATTERN;
+    }
+
+    Pattern spanIdPattern() {
+        return SPAN_ID_PATTERN;
     }
 
     private static String safeBundleFormat(final String key, final Object... args) {

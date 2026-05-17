@@ -77,6 +77,18 @@ class LogRecordImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
     }
 
     @Test
+    @DisplayName("timestamp should fallback when value exceeds uint64 nanoseconds range")
+    void timestampShouldFallbackWhenValueExceedsUint64NanosecondsRange() {
+        LogRecordImpl record = new LogRecordImpl();
+        Instant aboveUint64Range = Instant.ofEpochSecond(18_446_744_074L, 0);
+
+        record.setTimestamp(aboveUint64Range);
+
+        assertNotNull(record.getTimestamp());
+        assertTrue(!aboveUint64Range.equals(record.getTimestamp()));
+    }
+
+    @Test
     @DisplayName("traceId should accept valid values and sanitize invalid values without throwing")
     void traceIdValidationShouldFollowW3cShape() {
         LogRecordImpl record = new LogRecordImpl();
@@ -259,5 +271,112 @@ class LogRecordImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
 
         assertEquals("missing.bundle.key", formatted);
         assertEquals("fallback", fetched);
+    }
+
+    @Test
+    @DisplayName("defensive catch paths should keep record usable when internal validation throws")
+    void defensiveCatchPathsShouldKeepRecordUsableWhenInternalValidationThrows() {
+        ThrowingLogRecordImpl record = new ThrowingLogRecordImpl();
+
+        record.throwOnReportBundled = true;
+        assertDoesNotThrow(() -> record.setTimestamp(null));
+        assertNotNull(record.getTimestamp());
+
+        record.throwOnReportBundled = true;
+        assertDoesNotThrow(() -> record.setObservedTimestamp(Instant.parse("1969-12-31T23:59:59.999999999Z")));
+        assertNull(record.getObservedTimestamp());
+
+        record.throwOnNormalizeText = true;
+        assertDoesNotThrow(() -> record.setTraceId("abc"));
+        assertNull(record.getTraceId());
+
+        record.throwOnNormalizeText = true;
+        assertDoesNotThrow(() -> record.setSpanId("abc"));
+        assertNull(record.getSpanId());
+
+        record.throwOnReport = true;
+        assertDoesNotThrow(() -> record.setTraceFlags(-1));
+        assertEquals(0, record.getTraceFlags());
+
+        record.throwOnNormalizeText = true;
+        assertDoesNotThrow(() -> record.setSeverityText("INFO"));
+        assertNull(record.getSeverityText());
+
+        record.throwOnNormalizeSeverity = true;
+        assertDoesNotThrow(() -> record.setSeverityNumber(SeverityNumber.INFO));
+        assertSame(SeverityNumber.UNSPECIFIED, record.getSeverityNumber());
+
+        record.throwOnValidateAttributes = true;
+        assertDoesNotThrow(() -> record.setAttributes(Collections.singletonList(
+                new KeyValueImpl("k", AnyValueFactory.ofString("v")))));
+        assertTrue(record.getAttributes().isEmpty());
+        assertEquals(0, record.getDroppedAttributesCount());
+
+        record.throwOnNormalizeText = true;
+        assertDoesNotThrow(() -> record.setEventName("event"));
+        assertNull(record.getEventName());
+    }
+
+    private static final class ThrowingLogRecordImpl extends LogRecordImpl {
+        private boolean throwOnReport;
+        private boolean throwOnReportBundled;
+        private boolean throwOnNormalizeText;
+        private boolean throwOnNormalizeSeverity;
+        private boolean throwOnValidateAttributes;
+
+        @Override
+        void report(final String message) {
+            if (throwOnReport) {
+                throwOnReport = false;
+                throw new RuntimeException("forced report failure");
+            }
+            super.report(message);
+        }
+
+        @Override
+        void reportBundled(final String messageKey) {
+            if (throwOnReportBundled) {
+                throwOnReportBundled = false;
+                throw new RuntimeException("forced bundled report failure");
+            }
+            super.reportBundled(messageKey);
+        }
+
+        @Override
+        void reportBundled(final String messageKey, final Object... args) {
+            if (throwOnReportBundled) {
+                throwOnReportBundled = false;
+                throw new RuntimeException("forced bundled report failure");
+            }
+            super.reportBundled(messageKey, args);
+        }
+
+        @Override
+        String normalizeText(final String value) {
+            if (throwOnNormalizeText) {
+                throwOnNormalizeText = false;
+                throw new RuntimeException("forced text normalization failure");
+            }
+            return super.normalizeText(value);
+        }
+
+        @Override
+        SeverityNumber normalizeSeverityNumber(final SeverityNumber value) {
+            if (throwOnNormalizeSeverity) {
+                throwOnNormalizeSeverity = false;
+                throw new RuntimeException("forced severity normalization failure");
+            }
+            return super.normalizeSeverityNumber(value);
+        }
+
+        @Override
+        OpenTelemetryAttributeValidator.ValidationResult validateAttributes(final List<KeyValue> attributes,
+                                                                            final String fieldName) {
+            if (throwOnValidateAttributes) {
+                throwOnValidateAttributes = false;
+                throw new RuntimeException("forced attributes validation failure");
+            }
+            return super.validateAttributes(attributes, fieldName);
+        }
     }
 }

@@ -114,6 +114,34 @@ class ConsoleMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("Default constructor should log to out and err")
+    void defaultConstructorShouldLogToOutAndErr() {
+        ConsoleMessageHandler sut = new ConsoleMessageHandler();
+
+        sut.info("default-info");
+        sut.error("default-error");
+
+        ArgumentCaptor<String> outCaptor = forClass(String.class);
+        verify(out, atLeastOnce()).println(outCaptor.capture());
+        assertTrue(outCaptor.getAllValues().stream().anyMatch(v -> v.contains("default-info")));
+
+        ArgumentCaptor<String> errCaptor = forClass(String.class);
+        verify(err, atLeastOnce()).println(errCaptor.capture());
+        assertTrue(errCaptor.getAllValues().stream().anyMatch(v -> v.contains("default-error")));
+    }
+
+    @Test
+    @DisplayName("Formatter-only constructor should use provided formatter")
+    void formatterOnlyConstructorShouldUseProvidedFormatter() {
+        LogRecordFormatter formatter = logRecord -> "FMT:" + stringifyBody(logRecord.getBody());
+        ConsoleMessageHandler sut = new ConsoleMessageHandler(formatter);
+
+        sut.info("formatted-info");
+
+        verify(out, times(1)).println("FMT:formatted-info");
+    }
+
+    @Test
     @DisplayName("Should handle info message")
     void shouldHandleInfoMessage() {
         // Given

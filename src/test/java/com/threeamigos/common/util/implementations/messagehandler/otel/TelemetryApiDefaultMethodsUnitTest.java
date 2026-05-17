@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.messagehandler.otel;
 
 import com.threeamigos.common.util.implementations.messagehandler.filters.FilterByClassName;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanContext;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
@@ -55,6 +56,7 @@ class TelemetryApiDefaultMethodsUnitTest {
         MessageHandler swing = tracer.getSwingMessageHandler();
         MessageHandler swingWithFilter = tracer.getSwingMessageHandler(new FilterByClassName());
         MessageHandler voidHandler = tracer.getVoidMessageHandler();
+        LogRecordFactory logRecordFactory = tracer.getLogRecordFactory();
         tracer.getInstrumentationScope();
 
         assertVoid(console);
@@ -74,6 +76,7 @@ class TelemetryApiDefaultMethodsUnitTest {
         assertVoid(swing);
         assertVoid(swingWithFilter);
         assertVoid(voidHandler);
+        assertTrue(logRecordFactory instanceof LogRecordFactoryImpl);
     }
 
     private static void assertVoid(final MessageHandler handler) {

@@ -6,6 +6,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -115,6 +117,29 @@ class OpenTelemetryAttributeValidatorErrorHandlingUnitTest {
     void strictModeMissingBundledKeyWithArgsShouldNotThrow() {
         setLenient(false);
         assertDoesNotThrow(() -> OpenTelemetryAttributeValidator.reportBundled("missing.bundle.with.args.strict", "x"));
+    }
+
+    @Test
+    @DisplayName("bundled resolver should cover fallback and strict throw branches")
+    void bundledResolverShouldCoverFallbackAndStrictThrowBranches() throws Exception {
+        Method resolve = OpenTelemetryAttributeValidator.class.getDeclaredMethod(
+                "resolveBundledMessage",
+                String.class,
+                Object[].class);
+        resolve.setAccessible(true);
+
+        setLenient(true);
+        String fallback = (String) resolve.invoke(null, "missing.bundle.without.args.lenient", null);
+        assertEquals("missing.bundle.without.args.lenient", fallback);
+        String formatted = (String) resolve.invoke(
+                null,
+                "builderFieldMustNotBeNull",
+                new Object[]{"fieldName"});
+        assertNotNull(formatted);
+
+        setLenient(false);
+        assertThrows(InvocationTargetException.class,
+                () -> resolve.invoke(null, "missing.bundle.without.args.strict", null));
     }
 
     private static void setLenient(final boolean value) {

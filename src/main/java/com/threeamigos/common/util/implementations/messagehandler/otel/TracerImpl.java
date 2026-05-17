@@ -272,7 +272,7 @@ class TracerImpl implements Tracer {
             if (severityNumber == SeverityNumber.UNSPECIFIED) {
                 continue;
             }
-            LogRecord probe = new LogRecordFactoryImpl().create(severityNumber, "");
+            LogRecord probe = createFilterProbe(severityNumber);
             if (sourceClass != null && probe instanceof LogRecordImpl) {
                 List<KeyValue> attrs = Collections.singletonList(
                         KeyValueFactory.of("code.namespace", AnyValueFactory.ofString(sourceClass.getName())));
@@ -281,6 +281,10 @@ class TracerImpl implements Tracer {
             boolean enabledForClass = effectiveFilter.filter(probe) != null;
             abstractHandler.setEnabled(severityNumber, enabledForClass);
         }
+    }
+
+    LogRecord createFilterProbe(final SeverityNumber severityNumber) {
+        return new LogRecordFactoryImpl().create(severityNumber, "");
     }
 
     private Filter resolveEffectiveFilter(final Filter methodFilter) {

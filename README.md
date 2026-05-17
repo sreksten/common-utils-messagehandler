@@ -340,6 +340,57 @@ public class CompositeExample2 {
 }
 ```
 
+## `InMemoryMessageHandler` for testing
+
+`InMemoryMessageHandler` is particularly useful in unit tests: it captures all messages in
+memory and exposes them for inspection, without writing to any output.
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
+
+public class InMemoryHandlerExample {
+    public static void main(String[] args) {
+        InMemoryMessageHandler handler = new InMemoryMessageHandler();
+        handler.info("Configuration loaded");
+        handler.warn("Cache near capacity");
+        handler.error("Payment failed");
+
+        System.out.println("Last message: " + handler.getLastMessage());
+        System.out.println("All messages: " + handler.getAllMessages());
+        System.out.println("Error count: " + handler.getErrorMessageCount());
+
+        // Retrieve by level
+        handler.getInfoMessages().forEach(System.out::println);
+        handler.getWarnMessages().forEach(System.out::println);
+
+        // Atomic snapshot (thread-safe)
+        InMemoryMessageHandler.Snapshot snapshot = handler.snapshot();
+    }
+}
+```
+
+Key properties:
+- Thread-safe via `ReentrantLock`.
+- Optionally bounded: construct with `maxEntries` to limit stored messages (FIFO eviction).
+- `snapshot()` returns an immutable, atomic view of all stored messages at that instant.
+- Captures exceptions too (`getAllExceptions()`).
+
+## `VoidMessageHandler`
+
+When you need a no-op handler (for example, in production code where a handler is optional):
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+
+public class VoidHandlerExample {
+    public static void main(String[] args) {
+        MessageHandler handler = new VoidMessageHandler();
+        handler.info("This is silently discarded");
+    }
+}
+```
+
 ## Adapters (JUL, SLF4J, Log4J)
 
 If you already have in place some other forms of logging based on JUL, SLF4J, or Log4J, you can use the
@@ -580,6 +631,97 @@ public class TracerQuickStart {
 }
 ```
 
+## `OTelTags` and the Known Values subpackage
+
+`OTelTags` is the central catalog of semantic-convention attribute keys. Use it when setting
+resource or common attributes on `TracerProvider.builder()` to avoid typos and keep keys
+aligned with OTel semantic conventions.
+
+### Dynamic prefix tags
+
+Some `OTelTags` constants are key prefixes that must be completed with a concrete segment:
+
+```java
+// container.label.<key>
+String containerLabelKey = OTelTags.CONTAINER_LABELS.getValue() + "app"; // → "container.label.app"
+
+// process.environment_variable.<key>
+String envKey = OTelTags.PROCESS_ENV_VARIABLE.getValue() + "JAVA_HOME";
+```
+
+Kubernetes label, annotation, and selector prefixes follow the same pattern.
+
+### Known values enums
+
+Package `com.threeamigos.common.util.implementations.messagehandler.otel.knownvalues` provides
+strongly typed enums for tags that have an OTel-defined set of known values. All enums implement
+the `OTelTagKnownValue` interface (`getTag()`, `getValue()`).
+
+Available enums and their associated OTel tags:
+
+| Enum | OTel tag |
+|---|---|
+| `TelemetrySdkLanguageKnownValuesEnum` | `telemetry.sdk.language` |
+| `HostArchKnownValuesEnum` | `host.arch` |
+| `CloudProviderKnownValuesEnum` | `cloud.provider` |
+| `CloudPlatformKnownValuesEnum` | `cloud.platform` |
+| `ProcessContextSwitchTypeKnownValuesEnum` | `process.context_switch.type` |
+| `ProcessStateKnownValuesEnum` | `process.state` |
+| `ServiceCriticalityKnownValuesEnum` | `service.criticality` |
+| `K8sContainerStatusStateKnownValuesEnum` | `k8s.container.status.state` |
+| `K8sNamespacePhaseKnownValuesEnum` | `k8s.namespace.phase` |
+| `K8sNodeConditionStatusKnownValuesEnum` | `k8s.node.condition.status` |
+| `K8sNodeConditionTypeKnownValuesEnum` | `k8s.node.condition.type` |
+| `K8sPodStatusPhaseKnownValuesEnum` | `k8s.pod.status.phase` |
+| `K8sServiceEndpointAddressTypeKnownValuesEnum` | `k8s.service.endpoint.address_type` |
+| `K8sServiceEndpointConditionKnownValuesEnum` | `k8s.service.endpoint.condition` |
+| `K8sServiceTrafficDistributionKnownValuesEnum` | `k8s.service.traffic_distribution` |
+| `K8sServiceTypeKnownValuesEnum` | `k8s.service.type` |
+| `K8sVolumeTypeKnownValuesEnum` | `k8s.volume.type` |
+
+Usage examples:
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.otel.OTelTags;
+import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
+import com.threeamigos.common.util.implementations.messagehandler.otel.knownvalues.CloudPlatformKnownValuesEnum;
+import com.threeamigos.common.util.implementations.messagehandler.otel.knownvalues.CloudProviderKnownValuesEnum;
+import com.threeamigos.common.util.implementations.messagehandler.otel.knownvalues.ServiceCriticalityKnownValuesEnum;
+
+public class OTelTagsExample {
+    public static void main(String[] args) {
+        TracerProvider provider = TracerProvider.builder()
+                .serviceName("checkout-api")
+                .serviceVersion("1.4.2")
+                .deploymentEnvironment("prod")
+                // service criticality using a strongly typed enum
+                .resourceAttribute(OTelTags.SERVICE_CRITICALITY,
+                        ServiceCriticalityKnownValuesEnum.HIGH.getValue())
+                // cloud provider + platform pairing
+                .resourceAttribute(OTelTags.CLOUD_PROVIDER,
+                        CloudProviderKnownValuesEnum.AWS.getValue())
+                .resourceAttribute(OTelTags.CLOUD_PLATFORM,
+                        CloudPlatformKnownValuesEnum.AWS_EKS.getValue())
+                .build();
+    }
+}
+```
+
+## Log enrichment precedence
+
+When a `LogRecord` is emitted through a tracer-aware handler, enrichment fields are applied
+with the following precedence (higher number = lower priority):
+
+1. Caller-provided values on the `LogRecord` are never overwritten.
+2. Tracer-provided instrumentation scope and explicit span context are applied next.
+3. Provider defaults (resource, common attributes, resolver) fill only missing values.
+
+Specifically:
+- `resource` is set only when the record does not already carry one.
+- `instrumentationScope` is set only when absent.
+- `traceId`, `spanId`, `traceFlags` are set only when the record's correlation fields are missing.
+- Common attributes are appended only for keys not already present on the record.
+
 ## Jaeger/Grafana logs and traces (traces/spans intro)
 
 A **trace** represents one end-to-end request flow.  
@@ -634,6 +776,41 @@ For Grafana Tempo, use `GrafanaSpanDispatcher` similarly.
 
 Correlation is thread-local by design. For multi-thread execution, propagate correlation explicitly.
 
+### Who needs this
+
+Most users do not need to touch correlation APIs directly. If your usage is:
+1. `TracerProvider.builder(...)` → `getTracer(...)` → `get*MessageHandler(...)` → `info/warn/error/...`
+
+then correlation is handled automatically for same-thread execution. Use the APIs below only for:
+- HTTP ingress context attachment (for example `traceparent`/`tracestate` from servlet filters)
+- Async/thread-pool propagation
+- Explicit request/task boundary correlation control
+
+### Why manual propagation is needed
+
+`TracerProvider` stores correlation (`SpanContext` and `InstrumentationScope`) in thread-local
+state. This means correlation is available only on the current thread unless you propagate it
+explicitly when work moves to another thread.
+
+Typical failure pattern:
+1. Main thread creates a span.
+2. Main thread submits async work to a pool.
+3. Worker thread logs, but no trace/span is attached — thread-local state was never propagated.
+
+### Available correlation APIs
+
+`TracerProvider` exposes:
+
+| Method | Purpose |
+|---|---|
+| `attachCorrelation(SpanContext, InstrumentationScope)` | Attach context at a request/task boundary |
+| `attachCorrelation(SpanContext)` | Shorthand when scope is unchanged/unneeded |
+| `clearCorrelation()` | Remove current thread's correlation |
+| `wrap(Runnable)` | Wrap a task so it inherits submitter correlation |
+| `wrap(Callable<T>)` | Same for Callable |
+| `contextAwareExecutor(Executor)` | Wrap an Executor so all tasks inherit submitter correlation |
+| `contextAwareExecutorService(ExecutorService)` | Same for ExecutorService |
+
 ### Attach correlation at a request boundary
 
 ```java
@@ -677,6 +854,205 @@ public class CorrelationExecutorExample {
 }
 ```
 
+### Additional wrapping pattern (wrap individual tasks)
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
+
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+
+public class WrapTaskExample {
+    public static void main(String[] args) throws Exception {
+        TracerProvider provider = TracerProvider.builder().serviceName("checkout-api").build();
+        ExecutorService pool = Executors.newFixedThreadPool(4);
+
+        pool.submit(provider.wrap(new Runnable() {
+            @Override
+            public void run() {
+                // Correlation from submitter thread is active here
+            }
+        }));
+
+        Future<String> result = pool.submit(provider.wrap(new Callable<String>() {
+            @Override
+            public String call() {
+                // Correlation from submitter thread is active here
+                return "ok";
+            }
+        }));
+
+        pool.shutdownNow();
+    }
+}
+```
+
+Use `wrap(...)` for isolated tasks; use `contextAwareExecutorService(...)` when you want
+all submissions on a shared pool to inherit submitter correlation automatically.
+
+### Operational rules
+
+1. Do not rely on raw `ThreadLocal` state in worker threads.
+2. Do not use `InheritableThreadLocal` for thread pools: reused workers make it unsafe for request correlation.
+3. Always restore previous context after execution (`CorrelationScope.close()` or wrappers handle this).
+4. Prefer `contextAwareExecutorService(...)` for shared infrastructure and `wrap(...)` for one-off tasks.
+5. Prefer provider-level APIs; avoid exposing correlation internals in normal application code.
+
+### Troubleshooting
+
+If logs in parallel tasks still miss trace/span IDs:
+1. Verify tasks are submitted through provider wrappers or context-aware executors.
+2. Verify the span is still active when tasks are submitted.
+3. Verify worker code is not clearing correlation state prematurely.
+
+## HTTP ingress: attaching incoming trace context (Servlet filter)
+
+When a service receives an HTTP request, the upstream caller may send W3C trace context
+headers (`traceparent`, `tracestate`). `TraceContextValidator` parses and normalizes these
+headers; if they are missing or invalid it generates a fresh valid context automatically.
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
+import com.threeamigos.common.util.implementations.messagehandler.tracecontext.TraceContextValidator;
+import com.threeamigos.common.util.implementations.messagehandler.otel.SpanContextImpl;
+import com.threeamigos.common.util.implementations.messagehandler.otel.TraceStateImpl;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanContext;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
+
+public final class TraceContextServletFilter implements javax.servlet.Filter {
+
+    private final TracerProvider tracerProvider;
+
+    public TraceContextServletFilter(TracerProvider tracerProvider) {
+        this.tracerProvider = tracerProvider;
+    }
+
+    @Override
+    public void doFilter(javax.servlet.ServletRequest req,
+                         javax.servlet.ServletResponse res,
+                         javax.servlet.FilterChain chain)
+            throws java.io.IOException, javax.servlet.ServletException {
+
+        javax.servlet.http.HttpServletRequest http =
+                (javax.servlet.http.HttpServletRequest) req;
+
+        String traceparent = http.getHeader(TraceContextValidator.TRACEPARENT_HEADER);
+        String tracestate  = http.getHeader(TraceContextValidator.TRACESTATE_HEADER);
+
+        // Parses valid headers or generates a fresh context when headers are missing/invalid
+        TraceContextValidator incoming =
+                TraceContextValidator.fromIncomingHeaders(traceparent, tracestate);
+
+        SpanContext remoteSpanContext = new SpanContextImpl(
+                incoming.getTraceId(),
+                incoming.getParentId(),
+                incoming.getTraceFlagsByte(),
+                true,           // remote = true
+                new TraceStateImpl()
+        );
+
+        Tracer tracer = tracerProvider.getTracer("checkout-api", "1.0.0");
+        req.setAttribute("mh.tracer", tracer);
+
+        try (TracerProvider.CorrelationScope ignored =
+                     tracerProvider.attachCorrelation(
+                             remoteSpanContext, tracer.getInstrumentationScope())) {
+            chain.doFilter(req, res);
+        }
+    }
+}
+```
+
+Rules:
+- Header extraction happens once per request (not per log call).
+- Invalid or missing headers fall back to a generated valid context — no exception is thrown.
+- If a log record already carries explicit trace fields, the enricher does not overwrite them.
+- Correlation is thread-local: async thread hops still require explicit propagation (see previous section).
+
+The downstream servlet can then use the tracer placed in the request attribute and log normally:
+
+```java
+public final class CheckoutServlet extends javax.servlet.http.HttpServlet {
+
+    @Override
+    protected void doPost(javax.servlet.http.HttpServletRequest req,
+                          javax.servlet.http.HttpServletResponse resp)
+            throws java.io.IOException {
+
+        Tracer tracer = (Tracer) req.getAttribute("mh.tracer");
+        com.threeamigos.common.util.interfaces.messagehandler.MessageHandler handler =
+                tracer.getFileMessageHandler("message-handler.log");
+
+        handler.info("checkout request received");
+        try {
+            handler.info("checkout completed");
+            resp.setStatus(javax.servlet.http.HttpServletResponse.SC_OK);
+        } catch (RuntimeException ex) {
+            handler.exception("checkout failed", ex);
+            resp.setStatus(javax.servlet.http.HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+        }
+    }
+}
+```
+
+## Jakarta EE / WildFly CDI wiring
+
+In a Jakarta EE container (WildFly, Payara, Open Liberty, etc.) with CDI enabled, wire
+`TracerProvider` and `Tracer` as CDI producer beans:
+
+```java
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Produces;
+import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
+
+@ApplicationScoped
+public class TelemetryProducers {
+
+    private final TracerProvider tracerProvider = TracerProvider.builder()
+            .serviceName("checkout-api")
+            .serviceVersion("1.4.2")
+            .deploymentEnvironment("prod")
+            .build();
+
+    @Produces @ApplicationScoped
+    public TracerProvider tracerProvider() { return tracerProvider; }
+
+    @Produces @ApplicationScoped
+    public Tracer tracer() { return tracerProvider.getTracer("checkout-api", "1.0.0"); }
+}
+```
+
+Then inject and use normally in filters and servlets:
+
+```java
+import jakarta.inject.Inject;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
+
+@WebServlet("/checkout")
+public class CheckoutServlet extends HttpServlet {
+
+    @Inject Tracer tracer;
+
+    @Override
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp)
+            throws IOException {
+        MessageHandler handler = tracer.getFileMessageHandler("message-handler.log");
+        handler.info("checkout request received");
+    }
+}
+```
+
+Note: CDI must be enabled for the deployment (add `beans.xml` to `WEB-INF` or `META-INF`).
+
 ## Important behavior notes
 
 1. Null message strings are ignored (no-op).
@@ -693,3 +1069,24 @@ public class CorrelationExecutorExample {
 ## Java compatibility
 
 All examples above are Java 1.8 compatible.
+
+## Building and verification
+
+#### Build commands
+
+```bash
+# Compile main sources only (skip tests)
+mvn -q -DskipTests compile
+
+# Run unit tests
+mvn -q clean test
+
+# Run full quality gate (tests + JaCoCo 100% coverage check)
+mvn -q verify
+
+# Install to local Maven repository, skipping tests and JaCoCo
+mvn -DskipTests -Djacoco.skip=true install
+```
+
+The project enforces 100% JaCoCo code coverage (`INSTRUCTION`, `BRANCH`, `LINE`) as part of
+`mvn verify`. All tests use JUnit 5, Mockito, and Hamcrest.

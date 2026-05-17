@@ -77,6 +77,16 @@ class AbstractMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("supplier log should ignore null message produced by supplier")
+    void supplierLogShouldIgnoreNullProducedMessage() {
+        ProbeMessageHandler sut = new ProbeMessageHandler();
+
+        sut.info(() -> null);
+
+        assertEquals(0, sut.callCount);
+    }
+
+    @Test
     @DisplayName("warn/error/fatal/debug/trace should forward to matching impl methods")
     void levelsShouldForwardToMatchingImplMethods() {
         ProbeMessageHandler sut = new ProbeMessageHandler();

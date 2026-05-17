@@ -366,4 +366,139 @@ class EntityFactoryUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         }
         assertEquals("dev", baseDescription.get("deployment.environment"));
     }
+
+    @Test
+    @DisplayName("merge() should keep base entity when incoming entity accessors fail")
+    void mergeShouldKeepBaseEntityWhenIncomingEntityAccessorsFail() {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(true);
+        Entity base = EntityFactory.create(
+                "service",
+                null,
+                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1"))),
+                Collections.singletonList(new KeyValueImpl("service.name", AnyValueFactory.ofString("billing"))));
+
+        Entity malformed = new Entity() {
+            @Override
+            public String getType() {
+                throw new RuntimeException("broken-type-accessor");
+            }
+
+            @Override
+            public String getSchemaUrl() {
+                return null;
+            }
+
+            @Override
+            public List<KeyValue> getId() {
+                return Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1")));
+            }
+
+            @Override
+            public List<KeyValue> getDescription() {
+                return Collections.singletonList(new KeyValueImpl("service.name", AnyValueFactory.ofString("incoming")));
+            }
+
+            @Override
+            public Entity merge(final Entity other) {
+                return this;
+            }
+        };
+
+        assertSame(base, base.merge(malformed));
+    }
+
+    @Test
+    @DisplayName("merge() should treat blank or invalid incoming type as incompatible")
+    void mergeShouldTreatBlankOrInvalidIncomingTypeAsIncompatible() {
+        Entity base = EntityFactory.create(
+                "service",
+                null,
+                Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1"))),
+                Collections.singletonList(new KeyValueImpl("service.name", AnyValueFactory.ofString("billing"))));
+
+        Entity blankTypeIncoming = new Entity() {
+            @Override
+            public String getType() {
+                return "   ";
+            }
+
+            @Override
+            public String getSchemaUrl() {
+                return null;
+            }
+
+            @Override
+            public List<KeyValue> getId() {
+                return Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1")));
+            }
+
+            @Override
+            public List<KeyValue> getDescription() {
+                return Collections.singletonList(new KeyValueImpl("service.name", AnyValueFactory.ofString("incoming")));
+            }
+
+            @Override
+            public Entity merge(final Entity other) {
+                return this;
+            }
+        };
+
+        Entity invalidTypeIncoming = new Entity() {
+            @Override
+            public String getType() {
+                return "@invalid";
+            }
+
+            @Override
+            public String getSchemaUrl() {
+                return null;
+            }
+
+            @Override
+            public List<KeyValue> getId() {
+                return Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1")));
+            }
+
+            @Override
+            public List<KeyValue> getDescription() {
+                return Collections.singletonList(new KeyValueImpl("service.name", AnyValueFactory.ofString("incoming")));
+            }
+
+            @Override
+            public Entity merge(final Entity other) {
+                return this;
+            }
+        };
+
+        Entity nullTypeIncoming = new Entity() {
+            @Override
+            public String getType() {
+                return null;
+            }
+
+            @Override
+            public String getSchemaUrl() {
+                return null;
+            }
+
+            @Override
+            public List<KeyValue> getId() {
+                return Collections.singletonList(new KeyValueImpl("service.instance.id", AnyValueFactory.ofString("instance-1")));
+            }
+
+            @Override
+            public List<KeyValue> getDescription() {
+                return Collections.singletonList(new KeyValueImpl("service.name", AnyValueFactory.ofString("incoming")));
+            }
+
+            @Override
+            public Entity merge(final Entity other) {
+                return this;
+            }
+        };
+
+        assertSame(base, base.merge(blankTypeIncoming));
+        assertSame(base, base.merge(invalidTypeIncoming));
+        assertSame(base, base.merge(nullTypeIncoming));
+    }
 }

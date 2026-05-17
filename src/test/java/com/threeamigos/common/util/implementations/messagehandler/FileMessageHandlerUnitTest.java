@@ -267,6 +267,37 @@ class FileMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("Convenience constructors should create writable handlers")
+    void convenienceConstructorsShouldCreateWritableHandlers() throws Exception {
+        Path fileDefault = Files.createTempFile("fmh-ctor-default", ".log");
+        Path fileWithFormatter = Files.createTempFile("fmh-ctor-formatter", ".log");
+        Path fileWithPolicy = Files.createTempFile("fmh-ctor-policy", ".log");
+        Path fileWithFormatterAndPolicy = Files.createTempFile("fmh-ctor-formatter-policy", ".log");
+
+        Files.deleteIfExists(fileDefault);
+        Files.deleteIfExists(fileWithFormatter);
+        Files.deleteIfExists(fileWithPolicy);
+        Files.deleteIfExists(fileWithFormatterAndPolicy);
+
+        try (FileMessageHandler defaultCtor = new FileMessageHandler(fileDefault.toString());
+             FileMessageHandler formatterCtor = new FileMessageHandler(fileWithFormatter.toString(), DEFAULT_FORMATTER);
+             FileMessageHandler policyCtor = new FileMessageHandler(fileWithPolicy.toString(), new SizeRotationPolicy(Long.MAX_VALUE));
+             FileMessageHandler formatterPolicyCtor = new FileMessageHandler(
+                     fileWithFormatterAndPolicy.toString(), DEFAULT_FORMATTER, new SizeRotationPolicy(Long.MAX_VALUE))) {
+
+            defaultCtor.info("from-default");
+            formatterCtor.info("from-formatter");
+            policyCtor.info("from-policy");
+            formatterPolicyCtor.info("from-formatter-policy");
+        }
+
+        assertTrue(Files.readAllLines(fileDefault).stream().anyMatch(l -> l.contains("from-default")));
+        assertTrue(Files.readAllLines(fileWithFormatter).stream().anyMatch(l -> l.contains("from-formatter")));
+        assertTrue(Files.readAllLines(fileWithPolicy).stream().anyMatch(l -> l.contains("from-policy")));
+        assertTrue(Files.readAllLines(fileWithFormatterAndPolicy).stream().anyMatch(l -> l.contains("from-formatter-policy")));
+    }
+
+    @Test
     @DisplayName("Async with shutdown hook should register hook and close cleanly")
     void asyncWithShutdownHookRegistersHook() throws Exception {
         Path file = Files.createTempFile("fmh", ".log");

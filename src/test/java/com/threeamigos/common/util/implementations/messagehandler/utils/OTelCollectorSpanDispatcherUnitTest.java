@@ -10,10 +10,12 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("OTelCollectorSpanDispatcher unit tests")
 @Tag("unit")
@@ -50,6 +52,40 @@ class OTelCollectorSpanDispatcherUnitTest {
 
         IOException ex = assertThrows(IOException.class, () -> collector.dispatchSpan(fakeSpanData()));
         assertEquals(2, ex.getSuppressed().length);
+    }
+
+    @Test
+    @DisplayName("delegate management APIs should handle nulls, duplicates and snapshots")
+    void delegateManagementApisShouldHandleNullsDuplicatesAndSnapshots() throws Exception {
+        SpanDispatcher first = spanData -> {
+        };
+        SpanDispatcher second = spanData -> {
+        };
+        OTelCollectorSpanDispatcher collector = new OTelCollectorSpanDispatcher();
+
+        collector.addDispatcher(null);
+        assertEquals(0, collector.snapshotDelegates().size());
+
+        collector.addDispatcher(first);
+        collector.addDispatcher(first);
+        assertEquals(1, collector.snapshotDelegates().size());
+
+        collector.setDelegates(null);
+        assertEquals(0, collector.snapshotDelegates().size());
+        collector.setDelegates(Collections.<SpanDispatcher>emptyList());
+        assertEquals(0, collector.snapshotDelegates().size());
+
+        collector.setDelegates(Arrays.asList(first, null, first, second));
+        List<SpanDispatcher> snapshot = collector.snapshotDelegates();
+        assertEquals(2, snapshot.size());
+        assertTrue(snapshot.contains(first));
+        assertTrue(snapshot.contains(second));
+
+        snapshot.clear();
+        assertEquals(2, collector.snapshotDelegates().size(), "snapshot must be a detached copy");
+
+        collector.setDelegates(Collections.<SpanDispatcher>emptyList());
+        collector.dispatchSpan(fakeSpanData());
     }
 
     private static SpanData fakeSpanData() {

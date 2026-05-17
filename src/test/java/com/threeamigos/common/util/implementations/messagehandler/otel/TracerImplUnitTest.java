@@ -6,6 +6,8 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.StatusCode;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -30,6 +32,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("unit")
 @Tag("messageHandler")
 class TracerImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
+
+    private static final boolean ORIGINAL_LENIENT = OpenTelemetryAttributeValidator.isLenientMode();
+
+    @BeforeEach
+    void enforceStrictModeByDefault() {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(false);
+    }
+
+    @AfterEach
+    void restoreLenientMode() {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(ORIGINAL_LENIENT);
+    }
 
     @Test
     @DisplayName("constructor should preserve provided instrumentation name in scope")
@@ -294,6 +308,99 @@ class TracerImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
     }
 
     @Test
+    @DisplayName("applyFilterLevels should skip source attribute injection when probe is not LogRecordImpl")
+    void applyFilterLevelsShouldSkipSourceAttributeInjectionWhenProbeIsNotLogRecordImpl() throws Exception {
+        TracerProvider provider = TracerProvider.builder().serviceName("orders").build();
+        TracerImpl tracer = new TracerImpl(
+                provider,
+                "orders-api",
+                "1.0.0",
+                "https://schema",
+                Collections.emptyList()) {
+            @Override
+            LogRecord createFilterProbe(final com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber severityNumber) {
+                return new LogRecord() {
+                    @Override
+                    public java.time.Instant getTimestamp() {
+                        return java.time.Instant.now();
+                    }
+
+                    @Override
+                    public java.time.Instant getObservedTimestamp() {
+                        return null;
+                    }
+
+                    @Override
+                    public String getTraceId() {
+                        return null;
+                    }
+
+                    @Override
+                    public String getSpanId() {
+                        return null;
+                    }
+
+                    @Override
+                    public int getTraceFlags() {
+                        return 0;
+                    }
+
+                    @Override
+                    public String getSeverityText() {
+                        return null;
+                    }
+
+                    @Override
+                    public com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber getSeverityNumber() {
+                        return severityNumber;
+                    }
+
+                    @Override
+                    public com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue getBody() {
+                        return null;
+                    }
+
+                    @Override
+                    public com.threeamigos.common.util.interfaces.messagehandler.otel.Resource getResource() {
+                        return null;
+                    }
+
+                    @Override
+                    public com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope getInstrumentationScope() {
+                        return null;
+                    }
+
+                    @Override
+                    public java.util.List<com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue> getAttributes() {
+                        return Collections.emptyList();
+                    }
+
+                    @Override
+                    public String getEventName() {
+                        return null;
+                    }
+                };
+            }
+        };
+        MessageHandler handler = tracer.getInMemoryMessageHandler();
+        com.threeamigos.common.util.interfaces.messagehandler.otel.Filter passThrough =
+                new com.threeamigos.common.util.interfaces.messagehandler.otel.Filter() {
+                    @Override
+                    public LogRecord filter(final LogRecord logRecord) {
+                        return logRecord;
+                    }
+                };
+
+        Method method = TracerImpl.class.getDeclaredMethod(
+                "applyFilterLevels",
+                MessageHandler.class,
+                Class.class,
+                com.threeamigos.common.util.interfaces.messagehandler.otel.Filter.class);
+        method.setAccessible(true);
+        assertDoesNotThrow(() -> method.invoke(tracer, handler, TracerImplUnitTest.class, passThrough));
+    }
+
+    @Test
     @DisplayName("createFactory owner-null branch should return default factory")
     void createFactoryOwnerNullBranchShouldReturnDefaultFactory() throws Exception {
         TracerImpl detached = new TracerImpl("orders", "1.0.0", "schema", Collections.emptyList());
@@ -302,5 +409,30 @@ class TracerImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         Object factory = method.invoke(detached, (String) null);
         assertNotNull(factory);
         assertTrue(factory instanceof TracerMessageHandlerFactory);
+    }
+
+    @Test
+    @DisplayName("detached tracer should return default log record factory when owner is absent")
+    void detachedTracerShouldReturnDefaultLogRecordFactoryWhenOwnerIsAbsent() {
+        TracerImpl detached = new TracerImpl("orders", "1.0.0", "schema", Collections.emptyList());
+        LogRecordFactory factory = detached.getLogRecordFactory();
+
+        assertNotNull(factory);
+        LogRecord record = factory.create();
+        assertNotNull(record);
+    }
+
+    @Test
+    @DisplayName("detached file handler overloads should normalize null paths to a void handler")
+    void detachedFileHandlerOverloadsShouldNormalizeNullPathsToVoidHandler() {
+        TracerImpl detached = new TracerImpl("orders", "1.0.0", "schema", Collections.emptyList());
+
+        MessageHandler fromNullPath = detached.getFileMessageHandler((String) null);
+        MessageHandler fromBlankPath = detached.getFileMessageHandler("   ");
+        MessageHandler fromNullFile = detached.getFileMessageHandler((java.io.File) null, null);
+
+        assertTrue(fromNullPath instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
+        assertTrue(fromBlankPath instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
+        assertTrue(fromNullFile instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
     }
 }

@@ -1,7 +1,11 @@
 package com.threeamigos.common.util.implementations.messagehandler.utils;
 
 import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordFactoryImpl;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Resource;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -19,8 +23,12 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.net.URLStreamHandler;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -123,6 +131,32 @@ class GrafanaLogRecordDispatcherUnitTest {
     }
 
     @Test
+    @DisplayName("dispatchOrThrow should return result for successful status")
+    void dispatchOrThrowShouldReturnResultForSuccessfulStatus() throws Exception {
+        StubConnection connection = new StubConnection(204, "ok", null);
+        GrafanaLogRecordDispatcher dispatcher = dispatcherWithConnection(connection);
+        LogRecord record = new LogRecordFactoryImpl().create(SeverityNumber.INFO, "ok");
+
+        GrafanaLogRecordDispatcher.DispatchResult result = dispatcher.dispatchOrThrow(record);
+
+        assertEquals(204, result.getStatusCode());
+        assertTrue(result.isSuccessful());
+    }
+
+    @Test
+    @DisplayName("dispatchFormatted should treat status below 200 as failure")
+    void dispatchFormattedShouldTreatStatusBelow200AsFailure() throws Exception {
+        StubConnection connection = new StubConnection(199, null, "too-early");
+        GrafanaLogRecordDispatcher dispatcher = dispatcherWithConnection(connection);
+
+        GrafanaLogRecordDispatcher.DispatchResult result = dispatcher.dispatchFormatted("{\"x\":1}");
+
+        assertEquals(199, result.getStatusCode());
+        assertFalse(result.isSuccessful());
+        assertEquals("too-early", result.getResponseBody());
+    }
+
+    @Test
     @DisplayName("dispatch methods should reject null arguments")
     void dispatchMethodsShouldRejectNulls() {
         GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher("http://localhost:4318/v1/logs");
@@ -177,6 +211,120 @@ class GrafanaLogRecordDispatcherUnitTest {
         assertFalse(redirect.isSuccessful());
     }
 
+    @Test
+    @DisplayName("private helper methods should cover remaining branches")
+    void privateHelpersShouldCoverRemainingBranches() throws Exception {
+        GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher("http://localhost:4318/v1/logs");
+
+        Method shouldUseLokiPushFormat = GrafanaLogRecordDispatcher.class.getDeclaredMethod("shouldUseLokiPushFormat");
+        shouldUseLokiPushFormat.setAccessible(true);
+        setField(dispatcher, "endpoint", allocateUninitializedUrl());
+        assertFalse((Boolean) shouldUseLokiPushFormat.invoke(dispatcher));
+
+        Method toLokiPushPayload = GrafanaLogRecordDispatcher.class.getDeclaredMethod("toLokiPushPayload", LogRecord.class);
+        toLokiPushPayload.setAccessible(true);
+        String lokiPayload = (String) toLokiPushPayload.invoke(dispatcher,
+                logRecord(null, null, null, null, null, null, Instant.ofEpochSecond(-1)));
+        assertTrue(lokiPayload.contains("\"service_name\":\"common-utils-messagehandler\""));
+        assertFalse(lokiPayload.contains("\"severity\":\""));
+        assertFalse(lokiPayload.contains("\"trace_id\":\""));
+        assertFalse(lokiPayload.contains("\"span_id\":\""));
+        assertTrue(lokiPayload.contains("\"0\""));
+
+        Method resolveServiceName = GrafanaLogRecordDispatcher.class
+                .getDeclaredMethod("resolveServiceName", Resource.class, InstrumentationScope.class);
+        resolveServiceName.setAccessible(true);
+        Resource noisyResource = resource(Arrays.asList(
+                null,
+                keyValue(null, anyString("x")),
+                keyValue("other.key", anyString("v")),
+                keyValue("service.name", null),
+                keyValue("service.name", anyString("  "))));
+        assertEquals("scope-service", resolveServiceName.invoke(null, noisyResource, scope("scope-service")));
+        assertEquals("common-utils-messagehandler", resolveServiceName.invoke(
+                null, resource(null), scope("   ")));
+        assertEquals("orders", resolveServiceName.invoke(
+                null, resource(Collections.singletonList(keyValue("service.name", anyString("orders")))),
+                scope("fallback")));
+
+        Method extractBodyAsString = GrafanaLogRecordDispatcher.class.getDeclaredMethod("extractBodyAsString", LogRecord.class);
+        extractBodyAsString.setAccessible(true);
+        assertEquals("", extractBodyAsString.invoke(null, logRecord(null, null, null, null, null, null, Instant.now())));
+        assertEquals("", extractBodyAsString.invoke(null,
+                logRecord(anyString(null), null, null, null, null, null, Instant.now())));
+        assertEquals("msg", extractBodyAsString.invoke(null,
+                logRecord(anyString("msg"), null, null, null, null, null, Instant.now())));
+
+        Method toUnsignedNanosString = GrafanaLogRecordDispatcher.class
+                .getDeclaredMethod("toUnsignedNanosString", Instant.class);
+        toUnsignedNanosString.setAccessible(true);
+        String nowNanos = (String) toUnsignedNanosString.invoke(null, new Object[]{null});
+        assertTrue(nowNanos.matches("\\d+"));
+        assertEquals("0", toUnsignedNanosString.invoke(null, Instant.ofEpochSecond(-1)));
+
+        Method applyAuthentication = GrafanaLogRecordDispatcher.class
+                .getDeclaredMethod("applyAuthentication", HttpURLConnection.class);
+        applyAuthentication.setAccessible(true);
+        GrafanaLogRecordDispatcher basicDispatcher = new GrafanaLogRecordDispatcher(
+                "http://localhost:4318/v1/logs", "alice", "secret");
+        setField(basicDispatcher, "password", null);
+        StubConnection authConnection = new StubConnection(200, "ok", null);
+        applyAuthentication.invoke(basicDispatcher, authConnection);
+        assertFalse(authConnection.requestProperties.containsKey("Authorization"));
+
+        Method toImmutableHeaders = GrafanaLogRecordDispatcher.class
+                .getDeclaredMethod("toImmutableHeaders", Map.class);
+        toImmutableHeaders.setAccessible(true);
+        Map<?, ?> immutable = (Map<?, ?>) toImmutableHeaders.invoke(null, Collections.emptyMap());
+        assertTrue(immutable.isEmpty());
+
+        Method escapeJson = GrafanaLogRecordDispatcher.class.getDeclaredMethod("escapeJson", String.class);
+        escapeJson.setAccessible(true);
+        assertEquals("", escapeJson.invoke(null, new Object[]{null}));
+        String escaped = (String) escapeJson.invoke(null, "\"\\\b\f\n\r\t" + ((char) 1) + "a");
+        assertTrue(escaped.contains("\\\""));
+        assertTrue(escaped.contains("\\\\"));
+        assertTrue(escaped.contains("\\b"));
+        assertTrue(escaped.contains("\\f"));
+        assertTrue(escaped.contains("\\n"));
+        assertTrue(escaped.contains("\\r"));
+        assertTrue(escaped.contains("\\t"));
+        assertTrue(escaped.contains("\\u0001"));
+
+        Method readStream = GrafanaLogRecordDispatcher.class.getDeclaredMethod("readStream", InputStream.class);
+        readStream.setAccessible(true);
+        assertEquals("a\nb", readStream.invoke(null,
+                new ByteArrayInputStream("a\nb".getBytes(StandardCharsets.UTF_8))));
+
+        Method closeInput = GrafanaLogRecordDispatcher.class.getDeclaredMethod("closeQuietly", InputStream.class);
+        closeInput.setAccessible(true);
+        closeInput.invoke(null, new InputStream() {
+            @Override
+            public int read() {
+                return -1;
+            }
+
+            @Override
+            public void close() throws IOException {
+                throw new IOException("forced");
+            }
+        });
+
+        Method closeOutput = GrafanaLogRecordDispatcher.class.getDeclaredMethod("closeQuietly", java.io.OutputStream.class);
+        closeOutput.setAccessible(true);
+        closeOutput.invoke(null, new java.io.OutputStream() {
+            @Override
+            public void write(final int b) {
+                // no-op
+            }
+
+            @Override
+            public void close() throws IOException {
+                throw new IOException("forced");
+            }
+        });
+    }
+
     private static GrafanaLogRecordDispatcher dispatcherWithConnection(final StubConnection connection) throws Exception {
         GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher("http://localhost:4318/v1/logs");
         replaceEndpoint(dispatcher, urlFor(connection));
@@ -200,6 +348,202 @@ class GrafanaLogRecordDispatcherUnitTest {
         Field endpointField = GrafanaLogRecordDispatcher.class.getDeclaredField("endpoint");
         endpointField.setAccessible(true);
         endpointField.set(dispatcher, url);
+    }
+
+    private static void setField(final Object target, final String fieldName, final Object value) throws Exception {
+        Field field = GrafanaLogRecordDispatcher.class.getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(target, value);
+    }
+
+    private static LogRecord logRecord(final AnyValue body,
+                                       final String severityText,
+                                       final String traceId,
+                                       final String spanId,
+                                       final Resource resource,
+                                       final InstrumentationScope scope,
+                                       final Instant timestamp) {
+        return new LogRecord() {
+            @Override
+            public Instant getTimestamp() {
+                return timestamp;
+            }
+
+            @Override
+            public Instant getObservedTimestamp() {
+                return null;
+            }
+
+            @Override
+            public String getTraceId() {
+                return traceId;
+            }
+
+            @Override
+            public String getSpanId() {
+                return spanId;
+            }
+
+            @Override
+            public int getTraceFlags() {
+                return 0;
+            }
+
+            @Override
+            public String getSeverityText() {
+                return severityText;
+            }
+
+            @Override
+            public SeverityNumber getSeverityNumber() {
+                return SeverityNumber.UNSPECIFIED;
+            }
+
+            @Override
+            public AnyValue getBody() {
+                return body;
+            }
+
+            @Override
+            public Resource getResource() {
+                return resource;
+            }
+
+            @Override
+            public InstrumentationScope getInstrumentationScope() {
+                return scope;
+            }
+
+            @Override
+            public List<KeyValue> getAttributes() {
+                return Collections.emptyList();
+            }
+
+            @Override
+            public String getEventName() {
+                return null;
+            }
+        };
+    }
+
+    private static Resource resource(final List<KeyValue> attributes) {
+        return new Resource() {
+            @Override
+            public List<com.threeamigos.common.util.interfaces.messagehandler.otel.Entity> getEntities() {
+                return Collections.emptyList();
+            }
+
+            @Override
+            public String getSchemaUrl() {
+                return null;
+            }
+
+            @Override
+            public List<KeyValue> getAttributes() {
+                return attributes;
+            }
+
+            @Override
+            public Resource merge(final Resource other) {
+                return this;
+            }
+        };
+    }
+
+    private static InstrumentationScope scope(final String name) {
+        return new InstrumentationScope() {
+            @Override
+            public String getName() {
+                return name;
+            }
+
+            @Override
+            public String getVersion() {
+                return null;
+            }
+
+            @Override
+            public String getSchemaUrl() {
+                return null;
+            }
+
+            @Override
+            public List<KeyValue> getAttributes() {
+                return Collections.emptyList();
+            }
+
+            @Override
+            public int getDroppedAttributesCount() {
+                return 0;
+            }
+        };
+    }
+
+    private static KeyValue keyValue(final String key, final AnyValue value) {
+        return new KeyValue() {
+            @Override
+            public String getKey() {
+                return key;
+            }
+
+            @Override
+            public AnyValue getValue() {
+                return value;
+            }
+        };
+    }
+
+    private static AnyValue anyString(final String value) {
+        return new AnyValue() {
+            @Override
+            public Type getType() {
+                return Type.STRING;
+            }
+
+            @Override
+            public String asString() {
+                return value;
+            }
+
+            @Override
+            public boolean asBoolean() {
+                return false;
+            }
+
+            @Override
+            public long asLong() {
+                return 0L;
+            }
+
+            @Override
+            public double asDouble() {
+                return 0.0d;
+            }
+
+            @Override
+            public List<AnyValue> asArray() {
+                return Collections.emptyList();
+            }
+
+            @Override
+            public List<KeyValue> asKvList() {
+                return Collections.emptyList();
+            }
+
+            @Override
+            public byte[] asBytes() {
+                return new byte[0];
+            }
+        };
+    }
+
+    private static URL allocateUninitializedUrl() throws Exception {
+        Class<?> unsafeClass = Class.forName("sun.misc.Unsafe");
+        Field unsafeField = unsafeClass.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        Object unsafe = unsafeField.get(null);
+        Method allocateInstance = unsafeClass.getMethod("allocateInstance", Class.class);
+        return (URL) allocateInstance.invoke(unsafe, URL.class);
     }
 
     private static final class StubConnection extends HttpURLConnection {

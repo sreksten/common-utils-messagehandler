@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.messagehandler.otel;
 
 import com.threeamigos.common.util.implementations.messagehandler.AbstractMessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Filter;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
@@ -21,6 +22,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.logging.Logger;
 import java.util.Collections;
 import java.util.List;
@@ -309,6 +312,36 @@ class TracerProviderUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
     }
 
     @Test
+    @DisplayName("three-argument getTracer overload should route through filter-aware construction")
+    void threeArgumentGetTracerOverloadShouldRouteThroughFilterAwareConstruction() {
+        TracerProvider provider = TracerProvider.createProvider();
+        Filter allowAll = new Filter() {
+            @Override
+            public LogRecord filter(final LogRecord logRecord) {
+                return logRecord;
+            }
+        };
+
+        Tracer first = provider.getTracer("orders", "1.0.0", allowAll);
+        Tracer second = provider.getTracer("orders", "1.0.0", allowAll);
+
+        assertNotNull(first);
+        assertNotNull(second);
+        assertNotSame(first, second);
+    }
+
+    @Test
+    @DisplayName("getTracer with null InstrumentationScope should route to default field-based overload")
+    void getTracerWithNullInstrumentationScopeShouldRouteToDefaultFieldBasedOverload() {
+        TracerProvider provider = TracerProvider.createProvider();
+        Tracer fromNullScope = provider.getTracer((InstrumentationScope) null);
+        Tracer fromFields = provider.getTracer(null, null, null, null);
+
+        assertNotNull(fromNullScope);
+        assertSame(fromFields, fromNullScope);
+    }
+
+    @Test
     @DisplayName("default schema URL should be applied when schema argument is absent")
     void defaultSchemaUrlShouldBeAppliedWhenSchemaAbsent() {
         TracerProvider provider = TracerProvider.createProvider();
@@ -371,6 +404,19 @@ class TracerProviderUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         assertEquals(resolverContext.getSpanId(), record.getSpanId());
         assertEquals(0x01, record.getTraceFlags());
         assertTrue(record.getAttributes().stream().map(kv -> kv.getKey()).collect(Collectors.toList()).contains("env"));
+    }
+
+    @Test
+    @DisplayName("no-argument log record factory should delegate to scope-aware factory with null scope")
+    void noArgumentLogRecordFactoryShouldDelegateToScopeAwareFactoryWithNullScope() {
+        TracerProvider provider = TracerProvider.createProvider();
+        LogRecordFactory noArg = provider.getLogRecordFactory();
+        LogRecordFactory explicitNull = provider.getLogRecordFactory(null);
+
+        LogRecord a = noArg.create();
+        LogRecord b = explicitNull.create();
+        assertNotNull(a);
+        assertNotNull(b);
     }
 
     @Test
@@ -527,6 +573,31 @@ class TracerProviderUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
     }
 
     @Test
+    @DisplayName("provider wrap(Runnable) should propagate active span context")
+    void providerWrapRunnableShouldPropagateActiveSpanContext() {
+        TracerProvider provider = TracerProvider.createProvider();
+        CorrelationResolver resolver = provider.getCorrelationResolver();
+        SpanContext mainSpan = new SpanContextImpl(
+                "5b8efff798038103d269b633813fc60c",
+                "eee19b7ec3c1b174",
+                (byte) 0x01,
+                false,
+                new TraceStateImpl());
+        resolver.setActiveSpanContext(mainSpan);
+
+        AtomicReference<SpanContext> seen = new AtomicReference<SpanContext>();
+        Runnable wrapped = provider.wrap(new Runnable() {
+            @Override
+            public void run() {
+                seen.set(resolver.resolveSpanContext());
+            }
+        });
+        wrapped.run();
+
+        assertSame(mainSpan, seen.get());
+    }
+
+    @Test
     @DisplayName("getTracer should support null attributes collection and normalize blank values")
     void getTracerShouldSupportNullAttributesCollectionAndNormalizeBlankValues() {
         TracerProvider provider = TracerProvider.createProvider();
@@ -678,5 +749,76 @@ class TracerProviderUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         assertTrue(key.equals(key));
         assertFalse(key.equals(null));
         assertNotNull(key.hashCode());
+    }
+
+    @Test
+    @DisplayName("anyValueSignature should fallback to default branch when switch map entry is missing")
+    void anyValueSignatureShouldFallbackToDefaultBranchWhenSwitchMapEntryIsMissing() throws Exception {
+        Method anyValueSignature = TracerProvider.class.getDeclaredMethod("anyValueSignature", AnyValue.class);
+        anyValueSignature.setAccessible(true);
+        assertEquals("EMPTY", anyValueSignature.invoke(null, new Object[]{null}));
+
+        Class<?> switchClass = Class.forName("com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider$1");
+        Field switchField = null;
+        for (Field field : switchClass.getDeclaredFields()) {
+            if (field.getName().startsWith("$SwitchMap$")) {
+                switchField = field;
+                break;
+            }
+        }
+        assertNotNull(switchField);
+        switchField.setAccessible(true);
+        int[] switchMap = (int[]) switchField.get(null);
+        int ordinal = AnyValue.Type.STRING.ordinal();
+        int original = switchMap[ordinal];
+        switchMap[ordinal] = 0;
+        try {
+            Object signature = anyValueSignature.invoke(null, AnyValueFactory.ofString("value"));
+            assertEquals("STRING", signature);
+        } finally {
+            switchMap[ordinal] = original;
+        }
+    }
+
+    @Test
+    @DisplayName("TracerKey equals should evaluate deeper fields when instrumentation name matches")
+    void tracerKeyEqualsShouldEvaluateDeeperFieldsWhenInstrumentationNameMatches() throws Exception {
+        Class<?> keyClass = Class.forName("com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider$TracerKey");
+        Constructor<?> constructor = keyClass.getDeclaredConstructors()[0];
+        constructor.setAccessible(true);
+        Class<?>[] parameterTypes = constructor.getParameterTypes();
+        Object[] argsA = new Object[parameterTypes.length];
+        Object[] argsB = new Object[parameterTypes.length];
+        int stringIndex = 0;
+        for (int i = 0; i < parameterTypes.length; i++) {
+            Class<?> type = parameterTypes[i];
+            if (type == TracerProvider.class) {
+                TracerProvider provider = TracerProvider.createProvider();
+                argsA[i] = provider;
+                argsB[i] = provider;
+            } else if (type == String.class) {
+                if (stringIndex == 0) {
+                    argsA[i] = "orders";
+                    argsB[i] = "orders";
+                } else if (stringIndex == 1) {
+                    argsA[i] = "1.0.0";
+                    argsB[i] = "2.0.0";
+                } else {
+                    argsA[i] = "https://schema";
+                    argsB[i] = "https://schema";
+                }
+                stringIndex++;
+            } else if (List.class.isAssignableFrom(type)) {
+                argsA[i] = Collections.singletonList("k=v");
+                argsB[i] = Collections.singletonList("k=v");
+            } else {
+                argsA[i] = null;
+                argsB[i] = null;
+            }
+        }
+
+        Object keyA = constructor.newInstance(argsA);
+        Object keyB = constructor.newInstance(argsB);
+        assertFalse(keyA.equals(keyB));
     }
 }

@@ -12,12 +12,15 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -521,6 +524,144 @@ class ResourceFactoryUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         assertEquals("https://opentelemetry.io/schemas/1.26.0", resource.getSchemaUrl());
         assertTrue(resource.getEntities().isEmpty());
         assertEquals(1, resource.getAttributes().size());
+    }
+
+    @Test
+    @DisplayName("internal resource entity helpers should tolerate null entities and null key-value lists")
+    void internalResourceEntityHelpersShouldTolerateNullEntitiesAndNullKeyValueLists() throws Exception {
+        setLenient(true);
+        Method safeEntityValues = ResourceImpl.class.getDeclaredMethod("safeEntityValues", Entity.class, boolean.class);
+        safeEntityValues.setAccessible(true);
+
+        @SuppressWarnings("unchecked")
+        List<KeyValue> fromNullEntity = (List<KeyValue>) safeEntityValues.invoke(null, null, true);
+        assertTrue(fromNullEntity.isEmpty());
+
+        Entity nullLists = new Entity() {
+            @Override
+            public String getType() {
+                return "custom";
+            }
+
+            @Override
+            public String getSchemaUrl() {
+                return "https://schema";
+            }
+
+            @Override
+            public List<KeyValue> getId() {
+                return null;
+            }
+
+            @Override
+            public List<KeyValue> getDescription() {
+                return null;
+            }
+
+            @Override
+            public Entity merge(final Entity other) {
+                return this;
+            }
+        };
+        @SuppressWarnings("unchecked")
+        List<KeyValue> fromNullIdList = (List<KeyValue>) safeEntityValues.invoke(null, nullLists, true);
+        assertTrue(fromNullIdList.isEmpty());
+        @SuppressWarnings("unchecked")
+        List<KeyValue> fromNullDescriptionList = (List<KeyValue>) safeEntityValues.invoke(null, nullLists, false);
+        assertTrue(fromNullDescriptionList.isEmpty());
+
+        Entity malformedEntries = new Entity() {
+            @Override
+            public String getType() {
+                return "custom";
+            }
+
+            @Override
+            public String getSchemaUrl() {
+                return "";
+            }
+
+            @Override
+            public List<KeyValue> getId() {
+                return Collections.singletonList(null);
+            }
+
+            @Override
+            public List<KeyValue> getDescription() {
+                return Collections.singletonList(new KeyValue() {
+                    @Override
+                    public String getKey() {
+                        return null;
+                    }
+
+                    @Override
+                    public AnyValue getValue() {
+                        return AnyValueFactory.ofString("v");
+                    }
+                });
+            }
+
+            @Override
+            public Entity merge(final Entity other) {
+                return this;
+            }
+        };
+
+        Entity malformedEntriesInverse = new Entity() {
+            @Override
+            public String getType() {
+                return "custom";
+            }
+
+            @Override
+            public String getSchemaUrl() {
+                return "";
+            }
+
+            @Override
+            public List<KeyValue> getId() {
+                return Collections.singletonList(new KeyValue() {
+                    @Override
+                    public String getKey() {
+                        return null;
+                    }
+
+                    @Override
+                    public AnyValue getValue() {
+                        return AnyValueFactory.ofString("v");
+                    }
+                });
+            }
+
+            @Override
+            public List<KeyValue> getDescription() {
+                return Collections.singletonList(null);
+            }
+
+            @Override
+            public Entity merge(final Entity other) {
+                return this;
+            }
+        };
+
+        Method hasAnyEntityKeyConflict = ResourceImpl.class.getDeclaredMethod("hasAnyEntityKeyConflict", Entity.class, Set.class);
+        hasAnyEntityKeyConflict.setAccessible(true);
+        boolean conflict = (Boolean) hasAnyEntityKeyConflict.invoke(null, malformedEntries, new HashSet<String>());
+        assertFalse(conflict);
+        boolean inverseConflict = (Boolean) hasAnyEntityKeyConflict.invoke(null, malformedEntriesInverse, new HashSet<String>());
+        assertFalse(inverseConflict);
+
+        Method collectEntityKeys = ResourceImpl.class.getDeclaredMethod("collectEntityKeys", Entity.class, Set.class);
+        collectEntityKeys.setAccessible(true);
+        Set<String> collectedKeys = new HashSet<String>();
+        collectEntityKeys.invoke(null, malformedEntries, collectedKeys);
+        collectEntityKeys.invoke(null, malformedEntriesInverse, collectedKeys);
+        assertTrue(collectedKeys.isEmpty());
+
+        Method resolveSchemaUrl = ResourceImpl.class.getDeclaredMethod("resolveSchemaUrl", String.class, List.class);
+        resolveSchemaUrl.setAccessible(true);
+        String resolved = (String) resolveSchemaUrl.invoke(null, "https://fallback", Collections.singletonList(malformedEntries));
+        assertNull(resolved);
     }
 
     private static Map<String, String> keyValuesToStringMap(final List<KeyValue> keyValues) {
