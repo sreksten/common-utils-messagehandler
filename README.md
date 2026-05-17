@@ -1,36 +1,36 @@
-# Common-utils
+# common-utils-messagehandler
 
-A collection of utility classes that can help when writing standalone Java applications.
+Part of the common-utils classes, that can help when writing standalone Java applications.
 
-These classes address the following needs:
+This subpackage addresses the following needs:
 
 ### Logging and message handling
 
-In the com.threeamigos.common.util.interfaces.messagehandler package there are some functional interfaces
-that can be used to handle info, warn, error, debug or trace messages, and exceptions.
-Implementations for these classes include a console logger, an in-memory store (useful to run tests),
-a popup dialog, and a forwarder used to route messages to one or more other handlers.
-For each of these handlers, you can enable or disable a given level of messages. Thus, you can disable debug
-or trace messages if you want to run your application in production mode. Or, using a CompositeMessageHandler,
+The `com.threeamigos.common.util.interfaces.messagehandler` package contains some functional interfaces (`Handler`s)
+that can be used to deal with info, warn, error, fatal, debug, or trace messages, and `Throwable`s.
+For convenience, all those interfaces are grouped in a more general `MessageHandler` interface.
+Implementations include a console logger, a rotable file, an in-memory store (useful to run tests),
+a popup dialog, and a composite used to route messages to one or more other handlers.
+For each of those, you can enable or disable any given level of messages. Thus, you can disable debug
+or trace messages if you want to run your application in production mode. Or, using the composite,
 you can forward a certain level of messages to a log file while sending other messages to the user via a popup window.
 
-The common class for those handlers is the AbstractMessageHandler, from which you can enable or disable certain
-message levels and derive your own handlers.
+The common class for those handlers is the `AbstractMessageHandler`, from which you can derive your own handlers.
 
-You can replace the handler with a custom one while keeping the rest of your code unchanged. Should not be too
-difficult to e.g., implement a handler that sends messages to a Slack channel.
+Being an interface, you can replace the MessageHandler passed to your application while keeping the rest of your code
+unchanged. Should not be too difficult to e.g., implement a handler that sends messages to a Slack channel.
 
-Handlers accept messages or Suppliers of messages, which can be useful for lazy evaluation of messages.
+These handlers can accept a simple `String` or a `Supplier<String>`, which can be useful for lazy evaluation of messages.
 
-Bridges for Log4J, SLF4J, JUL, Jaeger and Grafana are provided.
+Bridges for Log4J, SLF4J, JUL, Jaeger, and Grafana are also provided.
 
-# common-utils-messagehandler
+# Primer
 
 Logging is an important aspect of any computer program, from simple standalone applications to complex distributed
 systems. It can help to understand what is happening under the hood, run forensics analysis, and find errors, bugs,
 and bottlenecks in your code.
 
-This document contains a practical logging primer for this package, from basic console logging to OTel-style correlation
+This section is a practical logging primer for this package, from basic console logging to OTel-style correlation
 and backend dispatch.
 
 ## Baseline: `System.out` and `System.err`
@@ -79,28 +79,28 @@ This works, but formatting, routing, filtering, and backend integration are stil
 
 Logging systems have a standardized approach to message formatting and routing, and expose methods like
 `info`, `warning`, `error`, etc. that somehow decorate the message itself. The produced output
-can be filtered by looking for log entries where an ERROR was present.
+can be filtered by looking, for example, for log entries where an ERROR was present.
 
 Following this approach, this package provides a series of interfaces designed to handle messages and their severity.
 Moreover, instead of passing a `String` directly, the message itself may be lazily produced by a `Supplier<String>`, 
-thus effectively producing it only when needed. In this way, useless calculation time for a complex String that formats 
+thus effectively producing it only when needed. In this way, useless calculation time for a complex `String` that formats 
 various parameters can be avoided.
 
 The severities this package supports are as follows, along with Java's `Throwable`s. For each severity, a couple of
 interfaces are provided that accept a `String` or a `Supplier<String>`, depending on the flavor you're using:
 
-| Severity  |Handler           | Handler with Supplier  | Method         |
-|-----------|------------------|------------------------|----------------|
-| INFO      |`InfoHandler`     | `InfoSupplierHandler`  | info(...)      |
-| WARN      |`WarnHandler`     | `WarnSupplierHandler`  | warning(...)   |
-| ERROR     |`ErrorHandler`    | `ErrorSupplierHandler` | error(...)     |
-| FATAL     |`FatalHandler`    | `FatalSupplierHandler` | fatal(...)     |
-| DEBUG     |`DebugHandler`    | `DebugSupplierHandler` | debug(...)     |
-| TRACE     |`TraceHandler`    | `TraceSupplierHandler` | trace(...)     |
-| THROWABLE |`ThrowableHandler`|                        | exception(...) |
+| Severity  |Handler           | Handler using a Supplier | Method         |
+|-----------|------------------|--------------------------|----------------|
+| INFO      |`InfoHandler`     | `InfoSupplierHandler`    | info(...)      |
+| WARN      |`WarnHandler`     | `WarnSupplierHandler`    | warning(...)   |
+| ERROR     |`ErrorHandler`    | `ErrorSupplierHandler`   | error(...)     |
+| FATAL     |`FatalHandler`    | `FatalSupplierHandler`   | fatal(...)     |
+| DEBUG     |`DebugHandler`    | `DebugSupplierHandler`   | debug(...)     |
+| TRACE     |`TraceHandler`    | `TraceSupplierHandler`   | trace(...)     |
+| THROWABLE |`ThrowableHandler`|                          | exception(...) |
 
-The Throwable part does not have a "with Supplier" equivalent (if you are handling a Throwable, it's already there!),
-but it has a `ThrowableWithMessageHandler` with an `exception(Throwable, String)` method.
+The Throwable part does not have the Supplier equivalent (if you are handling a Throwable, it's already there!),
+but it has a `ThrowableWithMessageHandler` with an `exception(Throwable, String)` method, to pass a custom message.
 
 As these interfaces are quite a lot, a composite interface called `MessageHandler` is defined,
 which collects all of them.
@@ -115,7 +115,7 @@ This package provides a series of classes that implement the `MessageHandler` in
 
 ```
 AbstractMessageHandler (implements MessageHandler)
-├── AbstractOutputMessageHandler
+├── AbstractOutputMessageHandler (may handle the message asynchronously)
 │   ├── ConsoleMessageHandler
 │   └── FileMessageHandler
 ├── SwingMessageHandler (JOptionPane dialogs)
@@ -124,14 +124,16 @@ AbstractMessageHandler (implements MessageHandler)
 ├── JULMessageHandler (java.util.logging bridge)
 ├── Log4JMessageHandler (Apache Log4j 2 bridge)
 ├── SLF4JMessageHandler (SLF4J bridge)
-├── JaegerMessageHandler (Jaeger bridge)
-├── GrafanaMessageHandler (Grafana bridge)
+├── JaegerMessageHandler (Jaeger bridge, for sending OpenTelemetry traces and logs)
+├── GrafanaMessageHandler (Grafana bridge, for sending OpenTelemetry traces and logs)
 └── VoidMessageHandler (does nothing)
 ```
 
 ## Equivalent with `ConsoleMessageHandler`
 
-`ConsoleMessageHandler` gives level-aware logging and exception handling through one interface.
+Instead of using `System.out` and `System.err` directly, `ConsoleMessageHandler` gives level-aware logging and 
+exception handling through one interface. It outputs messages to the console, along with the current timestamp and log 
+level. The output can be customized with a custom formatter (more on that later).
 
 ```java
 import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
@@ -158,11 +160,16 @@ public class ConsoleHandlerExample {
 
 ## Severities and filtering (`SeverityNumber`)
 
-Severity uses `SeverityNumber` (`INFO`, `WARN`, `ERROR`, `DEBUG`, `TRACE`, with numbered variants).
+To identify the severity level of a message, a `SeverityNumber` (`INFO`, `WARN`, `ERROR`, `DEBUG`, `TRACE`, with 
+numbered variants) is used. This is used to categorize messages by their importance and urgency, allowing for 
+fine-grained control over what information is logged and when. The `SeverityNumber` enum is equivalent to that used by
+[OpenTelemetry](https://opentelemetry.io/docs/specs/otel/logs/data-model/#field-severitynumber). For a practical 
+approach, have a look at the [OpenTelemetry SeverityNumber example 
+mappings](https://opentelemetry.io/docs/specs/otel/logs/data-model-appendix/#appendix-b-severitynumber-example-mappings).
 
-Default enabled levels are `INFO*`, `WARN*`, `ERROR*`, `FATAL*`, while `DEBUG*` and `TRACE*` are disabled by default.
+Default enabled levels are `INFO*`, `WARN*`, `ERROR*`, `FATAL*`, while `DEBUG*` and `TRACE*` are disabled.
 
-`MessageHandler` implementations extend `AbstractMessageHandler` which offers methods to enable or disable severity 
+All `MessageHandler` implementations extend `AbstractMessageHandler` which offers methods to enable or disable severity 
 levels: `enable` and `disable` both accept a collection or a varargs list of `SeverityNumber`s; as shortcuts,
 `setXXXEnabled` or `setXXXDisabled` will enable or disable a whole range of SeverityNumbers (e.g., `setInfoEnabled(true)`
 will enable from `INFO` to `INFO4`).
@@ -256,7 +263,7 @@ When the day changes, the log file gets rotated: the old file gets a `.yyyy-MM-d
 
 ## `SwingMessageHandler` for standalone desktop apps
 
-For Swing/AWT apps, this handler shows dialogs instead of writing to console/file.
+For Swing/AWT apps, this handler shows popup dialogs instead of writing to console/file.
 
 ```java
 import com.threeamigos.common.util.implementations.messagehandler.SwingMessageHandler;
@@ -274,34 +281,8 @@ public class SwingHandlerExample {
     }
 }
 ```
-
-## Backward-compatibility adapters (JUL, SLF4J, Log4J)
-
-If for some reason you already have in place some other forms of logging based on JUL, SLF4J, or Log4J, you can use the
-provided adapters to integrate with this package.
-
-```java
-import com.threeamigos.common.util.implementations.messagehandler.JULMessageHandler;
-import com.threeamigos.common.util.implementations.messagehandler.Log4JMessageHandler;
-import com.threeamigos.common.util.implementations.messagehandler.SLF4JMessageHandler;
-
-public class AdaptersExample {
-    public static void main(String[] args) {
-        java.util.logging.Logger julLogger = getJulLogger();
-        org.slf4j.Logger slf4jLogger = getSlf4jLogger();
-        org.apache.logging.log4j.Logger log4jLogger = getLog4jLogger();
-
-        JULMessageHandler jul = new JULMessageHandler(julLogger);
-        jul.info("JUL message");
-
-        SLF4JMessageHandler slf4j = new SLF4JMessageHandler(slf4jLogger);
-        slf4j.warn("SLF4J message");
-
-        Log4JMessageHandler log4j = new Log4JMessageHandler(log4jLogger);
-        log4j.error("Log4J message");
-    }
-}
-```
+Very probably, when dealing with a standalone application, you might want to show info messages to the user, while
+writing debug and error information to a file. You can do this using the next `MessageHandler`.
 
 ## `CompositeMessageHandler`: fan-out to multiple outputs
 
@@ -345,11 +326,12 @@ public class CompositeExample2 {
         console.enableTrace();
         console.disableError();
         console.disableException();
+        
         MessageHandler file = new FileMessageHandler("logs/composite.log");
 
         CompositeMessageHandler composite = new CompositeMessageHandler(console, file);
         composite.info("This goes to console and file");
-        composite.error("Same fan-out for errors");
+        composite.error("This will go to a file but not to the console");
 
         composite.close();
         console.close();
@@ -358,10 +340,46 @@ public class CompositeExample2 {
 }
 ```
 
+## Adapters (JUL, SLF4J, Log4J)
+
+If you already have in place some other forms of logging based on JUL, SLF4J, or Log4J, you can use the
+provided adapters to integrate this package with them.
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.JULMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.Log4JMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.SLF4JMessageHandler;
+
+public class AdaptersExample {
+    public static void main(String[] args) {
+       java.util.logging.Logger julLogger = getJulLogger();
+       JULMessageHandler jul = new JULMessageHandler(julLogger);
+       jul.info("JUL message");
+
+       org.slf4j.Logger slf4jLogger = getSlf4jLogger();
+       SLF4JMessageHandler slf4j = new SLF4JMessageHandler(slf4jLogger);
+       slf4j.warn("SLF4J message");
+
+       org.apache.logging.log4j.Logger log4jLogger = getLog4jLogger();
+       Log4JMessageHandler log4j = new Log4JMessageHandler(log4jLogger);
+       log4j.error("Log4J message");
+    }
+}
+```
 
 ## Custom output format with `LogRecordFormatter`
 
-You can customize output by injecting your own formatter:
+You can customize the output by passing to a class that extends the `AbstractOutputMessageHandler` (Console or File)
+an implementation of the `LogRecordFormatter` interface. By default, both of those classes use the
+`ConsoleLogRecordFormatter`, although you could use the `RawJsonRecordFormatter`. This because even if you pass a
+simple `String` to a `MessageHandler`, internally this package uses a representation of the
+[OpenTelemetry LogRecord format](https://opentelemetry.io/docs/concepts/signals/logs/#log-record).
+Thus, having a grasp of how it works, you can choose what to show. Of course, this
+has greater effectiveness if you have instrumented your application properly with a `Tracer` (more on that later).
+
+A utility class is bundled that offers a static method to reduce a long class name by replacing the package name with
+an abbreviation (initial letters only): the `ClassNameReducer.reduce`. E.g., it could replace
+`com.threeamigos.common.utils.TestClass` with `c.t.c.u.TestClass`, a-la SpringBoot.
 
 ```java
 import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
@@ -377,9 +395,126 @@ public class CustomFormatterExample {
             return logRecord.getTimestamp() + " | " + severity + " | " + body;
         };
 
-        try (MessageHandler handler = new ConsoleMessageHandler(new LogRecordFactoryImpl(), formatter)) {
+        try (MessageHandler handler = new ConsoleMessageHandler(formatter)) {
             handler.info("Hello with custom format");
         }
+    }
+}
+```
+
+## Tracer
+
+This part of the package is inspired by [OpenTelemetry](https://opentelemetry.io/) and helps deal with systems
+composed by one or more parts (for example, a web application that deals with many microservices). 
+
+In such an environment, one server could start a user request, but it could have to delegate something to
+another server or microservice. In this case, logs could be produced in more than one server. Usually, all those logs
+are ingested by a log aggregator, like ELK, Splunk, or Grafana Loki; and all those logs are bound via a `traceId`, 
+created by the server that first handles the user request, and sent to all other components interacting with it.
+
+When dealing with that request, each component is responsible for creating a `Span` for each operation it performs.
+The `Span` is the basic unit of work in the tracing system. It represents a single operation or task that is being
+performed by that component. Spans can be nested, forming a tree-like structure that represents the flow of operations
+within a system.
+
+### Example
+
+```text
+traceId=9f4a6a52c2d54f6a8d7b67e2a9c3f1b4
+└── spanId=1c9b0f4d7a2e5b8c      service=checkout-web      (local system) operation=POST /checkout
+    ├── spanId=6a2e9d1f4b7c3a50  service=payment-service   (remote)       operation=authorizePayment
+    └── spanId=b7d3e14a9c2f6850  service=inventory-service (remote)       operation=reserveItems
+```
+
+You can then query a system like Grafana or Jaeger to visualize the trace and understand the flow of operations.
+
+---
+
+### Workflow
+
+`TracerProvider` is the application-level factory/configuration point. You have to build one `TracerProvider` for your
+service (`serviceName`, `serviceVersion`, environment, shared attributes), where the service might be a standalone 
+application (in this case the `serviceName` is your application name), or a microservice. 
+
+`Tracer` is scoped to an instrumentation name/version. Basically, it could be a library, or module, or a component of
+your service. So for each module you want to instrument, you have to obtain a `Tracer` from that provider for the module
+or component (`provider.getTracer(instrumentationName, version, ...)`). 
+
+`Span` represents one timed operation. Start a `Span` with `tracer.createSpan(...)` when an operation begins.
+
+Use a `MessageHandler` created from that `Tracer` (`tracer.getConsoleMessageHandler()`, `getFileMessageHandler(...)`, 
+etc.) to log your messages.
+
+End the span with `span.end()`.
+
+This produces a series of logs that are correlated by a `traceId` (root operation) and one or more `spanId`s.
+
+
+### How `MessageHandler`, `Tracer`, and `Span` are related
+
+- A `MessageHandler` created by a `Tracer` is enriched with the tracer scope and provider metadata.
+- When a span is active on the current thread, emitted logs are automatically correlated with that span context
+  (trace id + span id).
+- The same log can also be appended as a span event (`"log"`) on the active span.
+- If there is no active span, logging still works; it just has no trace/span correlation fields.
+
+### Example 1: basic span and correlated logs
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.StatusCode;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
+
+public class TracerWorkflowExample {
+    public static void main(String[] args) {
+        TracerProvider provider = TracerProvider.builder()
+                .serviceName("checkout-api")
+                .serviceVersion("1.0.0")
+                .deploymentEnvironment("prod")
+                .build();
+
+        Tracer tracer = provider.getTracer("checkout-api", "1.0.0");
+        MessageHandler handler = tracer.getConsoleMessageHandler();
+
+        Span span = tracer.createSpan("checkout.request");
+        try {
+            handler.info("Checkout request started");
+            handler.warn("Inventory service latency is increasing");
+            span.setStatus(StatusCode.OK);
+        } catch (RuntimeException ex) {
+            span.recordException(ex);
+            span.setStatus(StatusCode.ERROR, "checkout failed");
+            throw ex;
+        } finally {
+            span.end();
+            handler.close();
+        }
+    }
+}
+```
+
+### Example 2: parent/child spans in the same flow
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
+
+public class ParentChildSpanExample {
+    public static void main(String[] args) {
+        Tracer tracer = TracerProvider.builder()
+                .serviceName("checkout-api")
+                .build()
+                .getTracer("checkout-api", "1.0.0");
+
+        Span parent = tracer.createSpan("checkout");
+        Span child = tracer.createSpan("checkout.payment-authorize", parent.getSpanContext());
+
+        child.addEvent("payment-provider-call");
+        child.end();
+        parent.end();
     }
 }
 ```
