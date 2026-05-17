@@ -32,6 +32,13 @@ public class ConsoleMessageHandler extends AbstractOutputMessageHandler {
     /**
      * Creates a synchronous {@code ConsoleMessageHandler} that writes directly on the calling thread.
      */
+    public ConsoleMessageHandler(final @Nonnull LogRecordFormatter logRecordFormatter) {
+        this(new LogRecordFactoryImpl(), logRecordFormatter, false, 0, false);
+    }
+
+    /**
+     * Creates a synchronous {@code ConsoleMessageHandler} that writes directly on the calling thread.
+     */
     public ConsoleMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
                                  final @Nonnull LogRecordFormatter logRecordFormatter) {
         this(logRecordFactory, logRecordFormatter, false, 0, false);
