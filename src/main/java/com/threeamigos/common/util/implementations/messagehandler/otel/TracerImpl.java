@@ -1,6 +1,16 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
 import com.threeamigos.common.util.implementations.messagehandler.AbstractMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.GrafanaMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.JaegerMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.JULMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.Log4JMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.SLF4JMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.SwingMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Filter;
@@ -19,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Supplier;
 
 /**
@@ -145,22 +156,22 @@ class TracerImpl implements Tracer {
     }
 
     @Override
-    public MessageHandler getConsoleMessageHandler() {
+    public ConsoleMessageHandler getConsoleMessageHandler() {
         return getConsoleMessageHandler(null);
     }
 
     @Override
-    public MessageHandler getConsoleMessageHandler(final Filter filter) {
+    public ConsoleMessageHandler getConsoleMessageHandler(final Filter filter) {
         return createAndFilterSimpleHandler(() -> createFactory(null).createConsole(), filter, null);
     }
 
     @Override
-    public MessageHandler getFileMessageHandler(final String filePath) {
+    public FileMessageHandler getFileMessageHandler(final String filePath) {
         return getFileMessageHandler(filePath, null);
     }
 
     @Override
-    public MessageHandler getFileMessageHandler(final String filePath, final Filter filter) {
+    public FileMessageHandler getFileMessageHandler(final String filePath, final Filter filter) {
         String resolvedPath = filePath;
         if (resolvedPath == null || resolvedPath.trim().isEmpty()) {
             resolvedPath = owner == null ? "message-handler.log" : owner.getDefaultFilePath();
@@ -173,86 +184,201 @@ class TracerImpl implements Tracer {
     }
 
     @Override
-    public MessageHandler getFileMessageHandler(final File file) {
+    public FileMessageHandler getFileMessageHandler(final File file) {
         return getFileMessageHandler(file, null);
     }
 
     @Override
-    public MessageHandler getFileMessageHandler(final File file, final Filter filter) {
+    public FileMessageHandler getFileMessageHandler(final File file, final Filter filter) {
         String path = file == null ? null : file.getPath();
         return getFileMessageHandler(path, filter);
     }
 
     @Override
-    public MessageHandler getInMemoryMessageHandler() {
+    public InMemoryMessageHandler getInMemoryMessageHandler() {
         return getInMemoryMessageHandler(null);
     }
 
     @Override
-    public MessageHandler getInMemoryMessageHandler(final Filter filter) {
+    public InMemoryMessageHandler getInMemoryMessageHandler(final Filter filter) {
         return createAndFilterSimpleHandler(() -> createFactory(null).createInMemory(), filter, null);
     }
 
     @Override
-    public MessageHandler getJULMessageHandler(final java.util.logging.Logger logger) {
+    public JULMessageHandler getJULMessageHandler(final java.util.logging.Logger logger) {
         return getJULMessageHandler(logger, null);
     }
 
     @Override
-    public MessageHandler getJULMessageHandler(final java.util.logging.Logger logger, final Filter filter) {
-        if (owner == null) {
-            return new com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler();
-        }
-        TracerMessageHandlerFactory factory = owner.buildMessageHandlerFactory(instrumentationScope);
-        MessageHandler handler = factory.createJUL(logger);
+    public JULMessageHandler getJULMessageHandler(final java.util.logging.Logger logger, final Filter filter) {
+        TracerMessageHandlerFactory factory = createFactory(null);
+        JULMessageHandler handler = factory.createJUL(logger);
         applyFilterLevels(handler, null, resolveEffectiveFilter(filter));
         return handler;
     }
 
     @Override
-    public MessageHandler getLog4JMessageHandler(final org.apache.logging.log4j.Logger logger) {
+    public Log4JMessageHandler getLog4JMessageHandler(final org.apache.logging.log4j.Logger logger) {
         return getLog4JMessageHandler(logger, null);
     }
 
     @Override
-    public MessageHandler getLog4JMessageHandler(final org.apache.logging.log4j.Logger logger, final Filter filter) {
-        if (owner == null) {
-            return new com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler();
-        }
-        TracerMessageHandlerFactory factory = owner.buildMessageHandlerFactory(instrumentationScope);
-        MessageHandler handler = factory.createLog4J(logger);
+    public Log4JMessageHandler getLog4JMessageHandler(final org.apache.logging.log4j.Logger logger, final Filter filter) {
+        TracerMessageHandlerFactory factory = createFactory(null);
+        Log4JMessageHandler handler = factory.createLog4J(logger);
         applyFilterLevels(handler, null, resolveEffectiveFilter(filter));
         return handler;
     }
 
     @Override
-    public MessageHandler getSLF4JMessageHandler(final org.slf4j.Logger logger) {
+    public SLF4JMessageHandler getSLF4JMessageHandler(final org.slf4j.Logger logger) {
         return getSLF4JMessageHandler(logger, null);
     }
 
     @Override
-    public MessageHandler getSLF4JMessageHandler(final org.slf4j.Logger logger, final Filter filter) {
-        if (owner == null) {
-            return new com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler();
-        }
-        TracerMessageHandlerFactory factory = owner.buildMessageHandlerFactory(instrumentationScope);
-        MessageHandler handler = factory.createSLF4J(logger);
+    public SLF4JMessageHandler getSLF4JMessageHandler(final org.slf4j.Logger logger, final Filter filter) {
+        TracerMessageHandlerFactory factory = createFactory(null);
+        SLF4JMessageHandler handler = factory.createSLF4J(logger);
         applyFilterLevels(handler, null, resolveEffectiveFilter(filter));
         return handler;
     }
 
     @Override
-    public MessageHandler getSwingMessageHandler() {
+    public SwingMessageHandler getSwingMessageHandler() {
         return getSwingMessageHandler(null);
     }
 
     @Override
-    public MessageHandler getSwingMessageHandler(final Filter filter) {
+    public SwingMessageHandler getSwingMessageHandler(final Filter filter) {
         return createAndFilterSimpleHandler(() -> createFactory(null).createSwing(), filter, null);
     }
 
     @Override
-    public MessageHandler getVoidMessageHandler() {
+    public JaegerMessageHandler getJaegerMessageHandler(final String endpointUrl) {
+        return getJaegerMessageHandler(endpointUrl, (Filter) null);
+    }
+
+    @Override
+    public JaegerMessageHandler getJaegerMessageHandler(final String endpointUrl, final Filter filter) {
+        return createAndFilterSimpleHandler(() -> createFactory(null).createJaeger(endpointUrl), filter, null);
+    }
+
+    @Override
+    public JaegerMessageHandler getJaegerMessageHandler(final String endpointUrl,
+                                                        final String username,
+                                                        final String password) {
+        return getJaegerMessageHandler(endpointUrl, username, password, null, 10_000, 10_000, null,
+                false, 0, false, null);
+    }
+
+    @Override
+    public JaegerMessageHandler getJaegerMessageHandler(final String endpointUrl,
+                                                        final String username,
+                                                        final String password,
+                                                        final String bearerToken,
+                                                        final int connectTimeoutMillis,
+                                                        final int readTimeoutMillis,
+                                                        final Map<String, String> additionalHeaders,
+                                                        final boolean async,
+                                                        final int queueCapacity,
+                                                        final boolean registerShutdownHook) {
+        return getJaegerMessageHandler(endpointUrl, username, password, bearerToken,
+                connectTimeoutMillis, readTimeoutMillis, additionalHeaders, async, queueCapacity,
+                registerShutdownHook, null);
+    }
+
+    @Override
+    public JaegerMessageHandler getJaegerMessageHandler(final String endpointUrl,
+                                                        final String username,
+                                                        final String password,
+                                                        final String bearerToken,
+                                                        final int connectTimeoutMillis,
+                                                        final int readTimeoutMillis,
+                                                        final Map<String, String> additionalHeaders,
+                                                        final boolean async,
+                                                        final int queueCapacity,
+                                                        final boolean registerShutdownHook,
+                                                        final Filter filter) {
+        return createAndFilterSimpleHandler(
+                () -> createFactory(null).createJaeger(
+                        endpointUrl,
+                        username,
+                        password,
+                        bearerToken,
+                        connectTimeoutMillis,
+                        readTimeoutMillis,
+                        additionalHeaders,
+                        async,
+                        queueCapacity,
+                        registerShutdownHook),
+                filter,
+                null);
+    }
+
+    @Override
+    public GrafanaMessageHandler getGrafanaMessageHandler(final String endpointUrl) {
+        return getGrafanaMessageHandler(endpointUrl, (Filter) null);
+    }
+
+    @Override
+    public GrafanaMessageHandler getGrafanaMessageHandler(final String endpointUrl, final Filter filter) {
+        return createAndFilterSimpleHandler(() -> createFactory(null).createGrafana(endpointUrl), filter, null);
+    }
+
+    @Override
+    public GrafanaMessageHandler getGrafanaMessageHandler(final String endpointUrl,
+                                                          final String username,
+                                                          final String password) {
+        return getGrafanaMessageHandler(endpointUrl, username, password, null, 10_000, 10_000, null,
+                false, 0, false, null);
+    }
+
+    @Override
+    public GrafanaMessageHandler getGrafanaMessageHandler(final String endpointUrl,
+                                                          final String username,
+                                                          final String password,
+                                                          final String bearerToken,
+                                                          final int connectTimeoutMillis,
+                                                          final int readTimeoutMillis,
+                                                          final Map<String, String> additionalHeaders,
+                                                          final boolean async,
+                                                          final int queueCapacity,
+                                                          final boolean registerShutdownHook) {
+        return getGrafanaMessageHandler(endpointUrl, username, password, bearerToken,
+                connectTimeoutMillis, readTimeoutMillis, additionalHeaders, async, queueCapacity,
+                registerShutdownHook, null);
+    }
+
+    @Override
+    public GrafanaMessageHandler getGrafanaMessageHandler(final String endpointUrl,
+                                                          final String username,
+                                                          final String password,
+                                                          final String bearerToken,
+                                                          final int connectTimeoutMillis,
+                                                          final int readTimeoutMillis,
+                                                          final Map<String, String> additionalHeaders,
+                                                          final boolean async,
+                                                          final int queueCapacity,
+                                                          final boolean registerShutdownHook,
+                                                          final Filter filter) {
+        return createAndFilterSimpleHandler(
+                () -> createFactory(null).createGrafana(
+                        endpointUrl,
+                        username,
+                        password,
+                        bearerToken,
+                        connectTimeoutMillis,
+                        readTimeoutMillis,
+                        additionalHeaders,
+                        async,
+                        queueCapacity,
+                        registerShutdownHook),
+                filter,
+                null);
+    }
+
+    @Override
+    public VoidMessageHandler getVoidMessageHandler() {
         return createAndFilterSimpleHandler(() -> createFactory(null).createVoid(), null, null);
     }
 
@@ -291,13 +417,10 @@ class TracerImpl implements Tracer {
         return methodFilter == null ? filter : methodFilter;
     }
 
-    private MessageHandler createAndFilterSimpleHandler(final Supplier<MessageHandler> handlerSupplier,
-                                                        final Filter methodFilter,
-                                                        final Class<?> sourceClass) {
-        if (owner == null) {
-            return new com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler();
-        }
-        MessageHandler handler = handlerSupplier.get();
+    private <T extends MessageHandler> T createAndFilterSimpleHandler(final Supplier<T> handlerSupplier,
+                                                                      final Filter methodFilter,
+                                                                      final Class<?> sourceClass) {
+        T handler = handlerSupplier.get();
         applyFilterLevels(handler, sourceClass, resolveEffectiveFilter(methodFilter));
         return handler;
     }

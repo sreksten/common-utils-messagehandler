@@ -1,6 +1,9 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
@@ -20,6 +23,8 @@ import java.util.stream.Collectors;
 public class InMemoryMessageHandler extends AbstractMessageHandler {
 
     private final int maxEntries;
+    private final LogRecordFactory logRecordFactory;
+    private final LogRecordFormatter logRecordFormatter;
 
     private final ArrayDeque<Holder> allMessages = new ArrayDeque<>();
     private final ReentrantLock lock = new ReentrantLock();
@@ -29,7 +34,7 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
      * Creates an {@code InMemoryMessageHandler} with a default maximum of 10&thinsp;000 entries per list.
      */
     public InMemoryMessageHandler() {
-        this(10_000);
+        this(10_000, null, null);
     }
 
     /**
@@ -42,18 +47,47 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
      * @throws IllegalArgumentException if {@code maxEntries} is {@code 0} or negative
      */
     public InMemoryMessageHandler(int maxEntries) {
+        this(maxEntries, null, null);
+    }
+
+    /**
+     * Creates an {@code InMemoryMessageHandler} that formats incoming messages from OTEL-like records
+     * before storing them.
+     *
+     * @param logRecordFactory factory used to create records; nullable
+     * @param logRecordFormatter formatter used to render records; nullable
+     */
+    public InMemoryMessageHandler(final @Nullable LogRecordFactory logRecordFactory,
+                                  final @Nullable LogRecordFormatter logRecordFormatter) {
+        this(10_000, logRecordFactory, logRecordFormatter);
+    }
+
+    /**
+     * Creates an {@code InMemoryMessageHandler} with bounded retention and optional OTEL-like formatting.
+     *
+     * @param maxEntries the maximum number of entries to retain in each per-level list; must be positive
+     * @param logRecordFactory factory used to create records; nullable
+     * @param logRecordFormatter formatter used to render records; nullable
+     * @throws IllegalArgumentException if {@code maxEntries} is {@code 0} or negative
+     */
+    public InMemoryMessageHandler(final int maxEntries,
+                                  final @Nullable LogRecordFactory logRecordFactory,
+                                  final @Nullable LogRecordFormatter logRecordFormatter) {
         if (maxEntries <= 0) {
             throw new IllegalArgumentException("maxEntries must be positive");
         }
         this.maxEntries = maxEntries;
+        this.logRecordFactory = logRecordFactory;
+        this.logRecordFormatter = logRecordFormatter;
     }
 
     @Override
     public void handleMessage(@Nonnull SeverityNumber level, @Nonnull String message) {
         lock.lock();
         try {
-            addWithLimit(allMessages, new Holder(level, message, null));
-            lastMessage = message;
+            String rendered = formatMessage(level, message);
+            addWithLimit(allMessages, new Holder(level, rendered, null));
+            lastMessage = rendered;
         } finally {
             lock.unlock();
         }
@@ -63,12 +97,29 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     protected void handleExceptionInternal(@Nonnull String message, @Nonnull Throwable throwable) {
         lock.lock();
         try {
-            String rendered = renderThrowableMessage(message, throwable);
+            String renderedMessage = formatExceptionMessage(message, throwable);
+            String rendered = renderThrowableMessage(renderedMessage, throwable);
             addWithLimit(allMessages, new Holder(SeverityNumber.UNSPECIFIED, rendered, throwable));
             lastMessage = rendered;
         } finally {
             lock.unlock();
         }
+    }
+
+    private String formatMessage(final SeverityNumber level, final String message) {
+        if (logRecordFactory == null || logRecordFormatter == null) {
+            return message;
+        }
+        LogRecord logRecord = logRecordFactory.create(level, message);
+        return logRecordFormatter.format(logRecord);
+    }
+
+    private String formatExceptionMessage(final String message, final Throwable throwable) {
+        if (logRecordFactory == null || logRecordFormatter == null) {
+            return message;
+        }
+        LogRecord logRecord = logRecordFactory.create(message, throwable);
+        return logRecordFormatter.format(logRecord);
     }
 
     private static String renderThrowableMessage(final String message, final Throwable throwable) {

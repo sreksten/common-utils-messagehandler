@@ -502,6 +502,62 @@ End the span with `span.end()`.
 
 This produces a series of logs that are correlated by a `traceId` (root operation) and one or more `spanId`s.
 
+### Using multiple Tracers to track different parts of a system
+
+This is supported.
+
+If your goal is one output file and multiple tracers (for different modules/components), use:
+1. one shared `TracerProvider`
+2. multiple `Tracer` instances from that provider (`provider.getTracer(...)`)
+3. one shared `FileMessageHandler` created from `provider.getLogRecordFactory()`
+
+For this setup, an OpenTelemetry Collector is not required.
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
+import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.RawJsonRecordFormatter;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
+
+public class MultipleTracersSingleFileExample {
+    public static void main(String[] args) {
+        TracerProvider provider = TracerProvider.builder()
+                .serviceName("checkout-service")
+                .defaultFilePath("logs/system.log")
+                .build();
+
+        FileMessageHandler sharedFileHandler = new FileMessageHandler(
+                provider.getLogRecordFactory(),
+                new RawJsonRecordFormatter(),
+                provider.getDefaultFilePath());
+
+        Tracer apiTracer = provider.getTracer("api-module", "1.0.0");
+        Tracer dbTracer = provider.getTracer("db-module", "1.0.0");
+
+        Span apiSpan = apiTracer.createSpan("api.request");
+        try {
+            sharedFileHandler.info("API request started");
+        } finally {
+            apiSpan.end();
+        }
+
+        Span dbSpan = dbTracer.createSpan("db.query");
+        try {
+            sharedFileHandler.info("DB query started");
+        } finally {
+            dbSpan.end();
+        }
+
+        sharedFileHandler.close();
+    }
+}
+```
+
+Notes:
+- Prefer one shared `FileMessageHandler` per file path. Creating many file handlers for the same file can cause interleaved writes.
+- Use a Collector when you need central aggregation/export across multiple services/processes/backends, not for a single JVM writing to one file.
+
 ### How `MessageHandler`, `Tracer`, and `Span` are related
 
 - A `MessageHandler` created by a `Tracer` is enriched with the tracer scope and provider metadata.

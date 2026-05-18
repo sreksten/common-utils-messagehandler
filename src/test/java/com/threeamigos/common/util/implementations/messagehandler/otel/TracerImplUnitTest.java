@@ -218,8 +218,8 @@ class TracerImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
     }
 
     @Test
-    @DisplayName("detached tracer convenience handlers should return void handlers")
-    void detachedTracerConvenienceHandlersShouldReturnVoidHandlers() {
+    @DisplayName("detached tracer convenience handlers should return concrete handlers")
+    void detachedTracerConvenienceHandlersShouldReturnConcreteHandlers() {
         TracerImpl detached = new TracerImpl("orders", "1.0.0", "schema", Collections.emptyList());
         FilterByClassName filter = new FilterByClassName();
 
@@ -233,25 +233,35 @@ class TracerImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         MessageHandler slf4j = detached.getSLF4JMessageHandler(
                 org.slf4j.LoggerFactory.getLogger("detached"), filter);
         MessageHandler swing = detached.getSwingMessageHandler(filter);
+        MessageHandler jaeger = detached.getJaegerMessageHandler("http://localhost:4318/v1/logs", filter);
+        MessageHandler grafana = detached.getGrafanaMessageHandler("http://localhost:3100/loki/api/v1/push", filter);
         MessageHandler voidHandler = detached.getVoidMessageHandler();
 
-        assertTrue(console instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
-        assertTrue(fileFromString instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
-        assertTrue(fileFromFile instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
-        assertTrue(inMemory instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
-        assertTrue(jul instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
-        assertTrue(log4j instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
-        assertTrue(slf4j instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
-        assertTrue(swing instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
+        assertTrue(console instanceof com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler);
+        assertTrue(fileFromString instanceof com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler);
+        assertTrue(fileFromFile instanceof com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler);
+        assertTrue(inMemory instanceof com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler);
+        assertTrue(jul instanceof com.threeamigos.common.util.implementations.messagehandler.JULMessageHandler);
+        assertTrue(log4j instanceof com.threeamigos.common.util.implementations.messagehandler.Log4JMessageHandler);
+        assertTrue(slf4j instanceof com.threeamigos.common.util.implementations.messagehandler.SLF4JMessageHandler);
+        assertTrue(swing instanceof com.threeamigos.common.util.implementations.messagehandler.SwingMessageHandler);
+        assertTrue(jaeger instanceof com.threeamigos.common.util.implementations.messagehandler.JaegerMessageHandler);
+        assertTrue(grafana instanceof com.threeamigos.common.util.implementations.messagehandler.GrafanaMessageHandler);
         assertTrue(voidHandler instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
 
         MessageHandler fileFromFileNoFilter = detached.getFileMessageHandler(new java.io.File("x.log"));
-        assertTrue(fileFromFileNoFilter instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
+        assertTrue(fileFromFileNoFilter instanceof com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler);
+
+        jaeger.close();
+        grafana.close();
+        fileFromString.close();
+        fileFromFile.close();
+        fileFromFileNoFilter.close();
     }
 
     @Test
-    @DisplayName("detached tracer logger overloads without filter should be non-blocking and return void handlers")
-    void detachedTracerLoggerOverloadsWithoutFilterShouldBeNonBlockingAndReturnVoidHandlers() {
+    @DisplayName("detached tracer logger overloads without filter should be non-blocking and return concrete handlers")
+    void detachedTracerLoggerOverloadsWithoutFilterShouldBeNonBlockingAndReturnConcreteHandlers() {
         TracerImpl detached = new TracerImpl("orders", "1.0.0", "schema", Collections.emptyList());
 
         MessageHandler jul = detached.getJULMessageHandler(java.util.logging.Logger.getLogger("detached-jul"));
@@ -265,9 +275,9 @@ class TracerImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
             slf4j.info("x");
         });
 
-        assertTrue(jul instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
-        assertTrue(log4j instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
-        assertTrue(slf4j instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
+        assertTrue(jul instanceof com.threeamigos.common.util.implementations.messagehandler.JULMessageHandler);
+        assertTrue(log4j instanceof com.threeamigos.common.util.implementations.messagehandler.Log4JMessageHandler);
+        assertTrue(slf4j instanceof com.threeamigos.common.util.implementations.messagehandler.SLF4JMessageHandler);
     }
 
     @Test
@@ -282,14 +292,62 @@ class TracerImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         MessageHandler file = attached.getFileMessageHandler("target/tracer-impl-test.log");
         MessageHandler inMemory = attached.getInMemoryMessageHandler();
         MessageHandler swing = attached.getSwingMessageHandler();
+        MessageHandler jaeger = attached.getJaegerMessageHandler("http://localhost:4318/v1/logs");
+        MessageHandler grafana = attached.getGrafanaMessageHandler("http://localhost:3100/loki/api/v1/push");
         MessageHandler voidHandler = attached.getVoidMessageHandler();
 
         assertTrue(console instanceof com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler);
         assertTrue(file instanceof com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler);
-        assertTrue(inMemory instanceof StructuredBackendMessageHandler);
-        assertTrue(swing instanceof StructuredBackendMessageHandler);
+        assertTrue(inMemory instanceof com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler);
+        assertTrue(swing instanceof com.threeamigos.common.util.implementations.messagehandler.SwingMessageHandler);
+        assertTrue(jaeger instanceof com.threeamigos.common.util.implementations.messagehandler.JaegerMessageHandler);
+        assertTrue(grafana instanceof com.threeamigos.common.util.implementations.messagehandler.GrafanaMessageHandler);
         assertTrue(voidHandler instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
+        jaeger.close();
+        grafana.close();
         file.close();
+    }
+
+    @Test
+    @DisplayName("tracer should expose full connection configuration for jaeger and grafana handlers")
+    void tracerShouldExposeFullConnectionConfigurationForJaegerAndGrafanaHandlers() {
+        TracerProvider provider = TracerProvider.builder()
+                .serviceName("orders")
+                .build();
+        TracerImpl tracer = (TracerImpl) provider.getTracer("orders-api", "1.0.0");
+        FilterByClassName filter = new FilterByClassName();
+
+        MessageHandler jaeger = tracer.getJaegerMessageHandler(
+                "http://localhost:4318/v1/logs",
+                "jaeger-user",
+                "jaeger-pass",
+                "jaeger-token",
+                5_000,
+                5_000,
+                Collections.singletonMap("X-Jaeger", "enabled"),
+                true,
+                16,
+                true,
+                filter);
+
+        MessageHandler grafana = tracer.getGrafanaMessageHandler(
+                "http://localhost:3100/loki/api/v1/push",
+                "grafana-user",
+                "grafana-pass",
+                "grafana-token",
+                5_000,
+                5_000,
+                Collections.singletonMap("X-Grafana", "enabled"),
+                true,
+                16,
+                true,
+                filter);
+
+        assertTrue(jaeger instanceof com.threeamigos.common.util.implementations.messagehandler.JaegerMessageHandler);
+        assertTrue(grafana instanceof com.threeamigos.common.util.implementations.messagehandler.GrafanaMessageHandler);
+
+        jaeger.close();
+        grafana.close();
     }
 
     @Test
@@ -444,16 +502,20 @@ class TracerImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
     }
 
     @Test
-    @DisplayName("detached file handler overloads should normalize null paths to a void handler")
-    void detachedFileHandlerOverloadsShouldNormalizeNullPathsToVoidHandler() {
+    @DisplayName("detached file handler overloads should normalize null paths to concrete file handlers")
+    void detachedFileHandlerOverloadsShouldNormalizeNullPathsToConcreteHandlers() {
         TracerImpl detached = new TracerImpl("orders", "1.0.0", "schema", Collections.emptyList());
 
         MessageHandler fromNullPath = detached.getFileMessageHandler((String) null);
         MessageHandler fromBlankPath = detached.getFileMessageHandler("   ");
         MessageHandler fromNullFile = detached.getFileMessageHandler((java.io.File) null, null);
 
-        assertTrue(fromNullPath instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
-        assertTrue(fromBlankPath instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
-        assertTrue(fromNullFile instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
+        assertTrue(fromNullPath instanceof com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler);
+        assertTrue(fromBlankPath instanceof com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler);
+        assertTrue(fromNullFile instanceof com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler);
+
+        fromNullPath.close();
+        fromBlankPath.close();
+        fromNullFile.close();
     }
 }

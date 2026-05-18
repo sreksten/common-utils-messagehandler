@@ -1,11 +1,18 @@
 package com.threeamigos.common.util.interfaces.messagehandler.otel;
 
-import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordFactoryImpl;
+import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.GrafanaMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.JaegerMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.JULMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.Log4JMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.SLF4JMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.SwingMessageHandler;
 import com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler;
-import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.Filter;
 
 import java.io.File;
+import java.util.Map;
 
 /**
  * OpenTelemetry-like tracer API.
@@ -54,9 +61,7 @@ public interface Tracer {
      *
      * @return effective instrumentation scope, or {@code null} when unavailable
      */
-    default InstrumentationScope getInstrumentationScope() {
-        return null;
-    }
+    InstrumentationScope getInstrumentationScope();
 
     /**
      * Returns a log-record factory already configured for this tracer scope.
@@ -66,82 +71,372 @@ public interface Tracer {
      *
      * @return tracer-aware log-record factory
      */
-    default LogRecordFactory getLogRecordFactory() {
-        return new LogRecordFactoryImpl();
-    }
+    LogRecordFactory getLogRecordFactory();
 
-    default MessageHandler getConsoleMessageHandler() {
-        return new VoidMessageHandler();
-    }
+    /**
+     * Creates a console-backed handler enriched with this tracer's scope/resource/correlation context.
+     *
+     * @return a tracer-aware console message handler
+     */
+    ConsoleMessageHandler getConsoleMessageHandler();
 
-    default MessageHandler getConsoleMessageHandler(final Filter filter) {
-        return getConsoleMessageHandler();
-    }
+    /**
+     * Creates a console-backed handler enriched with this tracer context and filtered by the provided rules.
+     * <p>
+     * If {@code filter} is {@code null}, implementations may fall back to tracer-level filter configuration.
+     *
+     * @param filter per-handler filter, nullable
+     * @return a tracer-aware console message handler
+     */
+    ConsoleMessageHandler getConsoleMessageHandler(Filter filter);
 
-    default MessageHandler getFileMessageHandler(final String filePath) {
-        return new VoidMessageHandler();
-    }
+    /**
+     * Creates a file-backed handler enriched with this tracer context.
+     * <p>
+     * If {@code filePath} is {@code null} or blank, implementations may use a provider default file path.
+     *
+     * @param filePath target file path, nullable
+     * @return a tracer-aware file message handler
+     */
+    FileMessageHandler getFileMessageHandler(String filePath);
 
-    default MessageHandler getFileMessageHandler(final String filePath,
-                                                 final Filter filter) {
-        return getFileMessageHandler(filePath);
-    }
+    /**
+     * Creates a file-backed handler enriched with this tracer context and filtered by the provided rules.
+     * <p>
+     * If {@code filePath} is {@code null} or blank, implementations may use a provider default file path.
+     * If {@code filter} is {@code null}, implementations may fall back to tracer-level filter configuration.
+     *
+     * @param filePath target file path, nullable
+     * @param filter per-handler filter, nullable
+     * @return a tracer-aware file message handler
+     */
+    FileMessageHandler getFileMessageHandler(String filePath, Filter filter);
 
-    default MessageHandler getFileMessageHandler(final File file) {
-        return new VoidMessageHandler();
-    }
+    /**
+     * Creates a file-backed handler enriched with this tracer context.
+     *
+     * @param file target file reference
+     * @return a tracer-aware file message handler
+     */
+    FileMessageHandler getFileMessageHandler(File file);
 
-    default MessageHandler getFileMessageHandler(final File file,
-                                                 final Filter filter) {
-        return getFileMessageHandler(file);
-    }
+    /**
+     * Creates a file-backed handler enriched with this tracer context and filtered by the provided rules.
+     * <p>
+     * If {@code filter} is {@code null}, implementations may fall back to tracer-level filter configuration.
+     *
+     * @param file target file reference
+     * @param filter per-handler filter, nullable
+     * @return a tracer-aware file message handler
+     */
+    FileMessageHandler getFileMessageHandler(File file, Filter filter);
 
-    default MessageHandler getInMemoryMessageHandler() {
-        return new VoidMessageHandler();
-    }
+    /**
+     * Creates an in-memory handler enriched with this tracer context.
+     *
+     * @return a tracer-aware in-memory message handler
+     */
+    InMemoryMessageHandler getInMemoryMessageHandler();
 
-    default MessageHandler getInMemoryMessageHandler(final Filter filter) {
-        return getInMemoryMessageHandler();
-    }
+    /**
+     * Creates an in-memory handler enriched with this tracer context and filtered by the provided rules.
+     * <p>
+     * If {@code filter} is {@code null}, implementations may fall back to tracer-level filter configuration.
+     *
+     * @param filter per-handler filter, nullable
+     * @return a tracer-aware in-memory message handler
+     */
+    InMemoryMessageHandler getInMemoryMessageHandler(Filter filter);
 
-    default MessageHandler getJULMessageHandler(final java.util.logging.Logger logger) {
-        return new VoidMessageHandler();
-    }
+    /**
+     * Creates a JUL-backed handler bound to the given logger and enriched with this tracer context.
+     *
+     * @param logger target JUL logger
+     * @return a tracer-aware JUL message handler
+     */
+    JULMessageHandler getJULMessageHandler(java.util.logging.Logger logger);
 
-    default MessageHandler getJULMessageHandler(final java.util.logging.Logger logger,
-                                                final Filter filter) {
-        return getJULMessageHandler(logger);
-    }
+    /**
+     * Creates a JUL-backed handler bound to the given logger, enriched with this tracer context,
+     * and filtered by the provided rules.
+     * <p>
+     * If {@code filter} is {@code null}, implementations may fall back to tracer-level filter configuration.
+     *
+     * @param logger target JUL logger
+     * @param filter per-handler filter, nullable
+     * @return a tracer-aware JUL message handler
+     */
+    JULMessageHandler getJULMessageHandler(java.util.logging.Logger logger, Filter filter);
 
-    default MessageHandler getLog4JMessageHandler(final org.apache.logging.log4j.Logger logger) {
-        return new VoidMessageHandler();
-    }
+    /**
+     * Creates a Log4J-backed handler bound to the given logger and enriched with this tracer context.
+     *
+     * @param logger target Log4J logger
+     * @return a tracer-aware Log4J message handler
+     */
+    Log4JMessageHandler getLog4JMessageHandler(org.apache.logging.log4j.Logger logger);
 
-    default MessageHandler getLog4JMessageHandler(final org.apache.logging.log4j.Logger logger,
-                                                  final Filter filter) {
-        return getLog4JMessageHandler(logger);
-    }
+    /**
+     * Creates a Log4J-backed handler bound to the given logger, enriched with this tracer context,
+     * and filtered by the provided rules.
+     * <p>
+     * If {@code filter} is {@code null}, implementations may fall back to tracer-level filter configuration.
+     *
+     * @param logger target Log4J logger
+     * @param filter per-handler filter, nullable
+     * @return a tracer-aware Log4J message handler
+     */
+    Log4JMessageHandler getLog4JMessageHandler(org.apache.logging.log4j.Logger logger, Filter filter);
 
-    default MessageHandler getSLF4JMessageHandler(final org.slf4j.Logger logger) {
-        return new VoidMessageHandler();
-    }
+    /**
+     * Creates an SLF4J-backed handler bound to the given logger and enriched with this tracer context.
+     *
+     * @param logger target SLF4J logger
+     * @return a tracer-aware SLF4J message handler
+     */
+    SLF4JMessageHandler getSLF4JMessageHandler(org.slf4j.Logger logger);
 
-    default MessageHandler getSLF4JMessageHandler(final org.slf4j.Logger logger,
-                                                  final Filter filter) {
-        return getSLF4JMessageHandler(logger);
-    }
+    /**
+     * Creates an SLF4J-backed handler bound to the given logger, enriched with this tracer context,
+     * and filtered by the provided rules.
+     * <p>
+     * If {@code filter} is {@code null}, implementations may fall back to tracer-level filter configuration.
+     *
+     * @param logger target SLF4J logger
+     * @param filter per-handler filter, nullable
+     * @return a tracer-aware SLF4J message handler
+     */
+    SLF4JMessageHandler getSLF4JMessageHandler(org.slf4j.Logger logger, Filter filter);
 
-    default MessageHandler getSwingMessageHandler() {
-        return new VoidMessageHandler();
-    }
+    /**
+     * Creates a Swing-backed handler enriched with this tracer context.
+     *
+     * @return a tracer-aware Swing message handler
+     */
+    SwingMessageHandler getSwingMessageHandler();
 
-    default MessageHandler getSwingMessageHandler(final Filter filter) {
-        return getSwingMessageHandler();
-    }
+    /**
+     * Creates a Swing-backed handler enriched with this tracer context and filtered by the provided rules.
+     * <p>
+     * If {@code filter} is {@code null}, implementations may fall back to tracer-level filter configuration.
+     *
+     * @param filter per-handler filter, nullable
+     * @return a tracer-aware Swing message handler
+     */
+    SwingMessageHandler getSwingMessageHandler(Filter filter);
 
-    default MessageHandler getVoidMessageHandler() {
-        return new VoidMessageHandler();
-    }
+    /**
+     * Creates a Jaeger-oriented handler that exports through HTTP to the given endpoint.
+     * <p>
+     * The endpoint must be an ingestion endpoint, not the Jaeger UI endpoint.
+     * Typical local OTLP ingestion endpoint is {@code http://localhost:4318/v1/logs}
+     * (usually via OpenTelemetry Collector/Alloy).
+     *
+     * @param endpointUrl target HTTP endpoint URL
+     * @return a tracer-aware Jaeger message handler
+     */
+    JaegerMessageHandler getJaegerMessageHandler(String endpointUrl);
+
+    /**
+     * Creates a Jaeger-oriented handler that exports through HTTP to the given endpoint and applies
+     * per-handler filtering.
+     * <p>
+     * If {@code filter} is {@code null}, implementations may fall back to tracer-level filter configuration.
+     *
+     * @param endpointUrl target HTTP endpoint URL
+     * @param filter per-handler filter, nullable
+     * @return a tracer-aware Jaeger message handler
+     */
+    JaegerMessageHandler getJaegerMessageHandler(String endpointUrl, Filter filter);
+
+    /**
+     * Creates a Jaeger-oriented handler configured with optional HTTP Basic authentication.
+     * <p>
+     * {@code username} and {@code password} must be provided together (or both null).
+     *
+     * @param endpointUrl target HTTP endpoint URL
+     * @param username basic-auth username, nullable
+     * @param password basic-auth password, nullable
+     * @return a tracer-aware Jaeger message handler
+     */
+    JaegerMessageHandler getJaegerMessageHandler(String endpointUrl, String username, String password);
+
+    /**
+     * Creates a Jaeger-oriented handler with full HTTP transport configuration.
+     * <p>
+     * Notes for endpoint selection:
+     * <ul>
+     *   <li>{@code http://localhost:4318/v1/logs}: OTLP logs ingestion path (common collector endpoint).</li>
+     *   <li>{@code http://localhost:4318/v1/traces}: trace ingestion path used by some Jaeger pipelines.</li>
+     * </ul>
+     * Authentication rules:
+     * <ul>
+     *   <li>If {@code bearerToken} is provided, it takes precedence over basic auth.</li>
+     *   <li>{@code username} and {@code password} must be provided together (or both null).</li>
+     * </ul>
+     *
+     * @param endpointUrl target HTTP endpoint URL
+     * @param username basic-auth username, nullable
+     * @param password basic-auth password, nullable
+     * @param bearerToken bearer token for {@code Authorization: Bearer ...}, nullable
+     * @param connectTimeoutMillis connection timeout in milliseconds; must be {@code > 0}
+     * @param readTimeoutMillis read timeout in milliseconds; must be {@code > 0}
+     * @param additionalHeaders optional custom HTTP headers, nullable
+     * @param async when {@code true}, dispatches on a background worker thread
+     * @param queueCapacity async queue capacity; {@code <= 0} means unbounded queue
+     * @param registerShutdownHook when {@code true}, registers a JVM shutdown hook to close the handler
+     * @return a tracer-aware Jaeger message handler
+     */
+    JaegerMessageHandler getJaegerMessageHandler(String endpointUrl,
+                                                 String username,
+                                                 String password,
+                                                 String bearerToken,
+                                                 int connectTimeoutMillis,
+                                                 int readTimeoutMillis,
+                                                 Map<String, String> additionalHeaders,
+                                                 boolean async,
+                                                 int queueCapacity,
+                                                 boolean registerShutdownHook);
+
+    /**
+     * Creates a Jaeger-oriented handler with full HTTP transport configuration and per-handler filtering.
+     * <p>
+     * If {@code filter} is {@code null}, implementations may fall back to tracer-level filter configuration.
+     *
+     * @param endpointUrl target HTTP endpoint URL
+     * @param username basic-auth username, nullable
+     * @param password basic-auth password, nullable
+     * @param bearerToken bearer token for {@code Authorization: Bearer ...}, nullable
+     * @param connectTimeoutMillis connection timeout in milliseconds; must be {@code > 0}
+     * @param readTimeoutMillis read timeout in milliseconds; must be {@code > 0}
+     * @param additionalHeaders optional custom HTTP headers, nullable
+     * @param async when {@code true}, dispatches on a background worker thread
+     * @param queueCapacity async queue capacity; {@code <= 0} means unbounded queue
+     * @param registerShutdownHook when {@code true}, registers a JVM shutdown hook to close the handler
+     * @param filter per-handler filter, nullable
+     * @return a tracer-aware Jaeger message handler
+     */
+    JaegerMessageHandler getJaegerMessageHandler(String endpointUrl,
+                                                 String username,
+                                                 String password,
+                                                 String bearerToken,
+                                                 int connectTimeoutMillis,
+                                                 int readTimeoutMillis,
+                                                 Map<String, String> additionalHeaders,
+                                                 boolean async,
+                                                 int queueCapacity,
+                                                 boolean registerShutdownHook,
+                                                 Filter filter);
+
+    /**
+     * Creates a Grafana-oriented handler that exports through HTTP to the given endpoint.
+     * <p>
+     * Supported ingestion endpoints depend on your topology, commonly:
+     * <ul>
+     *   <li>{@code http://localhost:4318/v1/logs} for OTLP/HTTP ingestion (Collector/Alloy).</li>
+     *   <li>{@code http://localhost:3100/loki/api/v1/push} for direct Loki push ingestion.</li>
+     * </ul>
+     *
+     * @param endpointUrl target HTTP endpoint URL
+     * @return a tracer-aware Grafana message handler
+     */
+    GrafanaMessageHandler getGrafanaMessageHandler(String endpointUrl);
+
+    /**
+     * Creates a Grafana-oriented handler that exports through HTTP to the given endpoint and applies
+     * per-handler filtering.
+     * <p>
+     * If {@code filter} is {@code null}, implementations may fall back to tracer-level filter configuration.
+     *
+     * @param endpointUrl target HTTP endpoint URL
+     * @param filter per-handler filter, nullable
+     * @return a tracer-aware Grafana message handler
+     */
+    GrafanaMessageHandler getGrafanaMessageHandler(String endpointUrl, Filter filter);
+
+    /**
+     * Creates a Grafana-oriented handler configured with optional HTTP Basic authentication.
+     * <p>
+     * {@code username} and {@code password} must be provided together (or both null).
+     *
+     * @param endpointUrl target HTTP endpoint URL
+     * @param username basic-auth username, nullable
+     * @param password basic-auth password, nullable
+     * @return a tracer-aware Grafana message handler
+     */
+    GrafanaMessageHandler getGrafanaMessageHandler(String endpointUrl, String username, String password);
+
+    /**
+     * Creates a Grafana-oriented handler with full HTTP transport configuration.
+     * <p>
+     * Authentication rules:
+     * <ul>
+     *   <li>If {@code bearerToken} is provided, it takes precedence over basic auth.</li>
+     *   <li>{@code username} and {@code password} must be provided together (or both null).</li>
+     * </ul>
+     *
+     * @param endpointUrl target HTTP endpoint URL
+     * @param username basic-auth username, nullable
+     * @param password basic-auth password, nullable
+     * @param bearerToken bearer token for {@code Authorization: Bearer ...}, nullable
+     * @param connectTimeoutMillis connection timeout in milliseconds; must be {@code > 0}
+     * @param readTimeoutMillis read timeout in milliseconds; must be {@code > 0}
+     * @param additionalHeaders optional custom HTTP headers, nullable
+     * @param async when {@code true}, dispatches on a background worker thread
+     * @param queueCapacity async queue capacity; {@code <= 0} means unbounded queue
+     * @param registerShutdownHook when {@code true}, registers a JVM shutdown hook to close the handler
+     * @return a tracer-aware Grafana message handler
+     */
+    GrafanaMessageHandler getGrafanaMessageHandler(String endpointUrl,
+                                                   String username,
+                                                   String password,
+                                                   String bearerToken,
+                                                   int connectTimeoutMillis,
+                                                   int readTimeoutMillis,
+                                                   Map<String, String> additionalHeaders,
+                                                   boolean async,
+                                                   int queueCapacity,
+                                                   boolean registerShutdownHook);
+
+    /**
+     * Creates a Grafana-oriented handler with full HTTP transport configuration and per-handler filtering.
+     * <p>
+     * If {@code filter} is {@code null}, implementations may fall back to tracer-level filter configuration.
+     *
+     * @param endpointUrl target HTTP endpoint URL
+     * @param username basic-auth username, nullable
+     * @param password basic-auth password, nullable
+     * @param bearerToken bearer token for {@code Authorization: Bearer ...}, nullable
+     * @param connectTimeoutMillis connection timeout in milliseconds; must be {@code > 0}
+     * @param readTimeoutMillis read timeout in milliseconds; must be {@code > 0}
+     * @param additionalHeaders optional custom HTTP headers, nullable
+     * @param async when {@code true}, dispatches on a background worker thread
+     * @param queueCapacity async queue capacity; {@code <= 0} means unbounded queue
+     * @param registerShutdownHook when {@code true}, registers a JVM shutdown hook to close the handler
+     * @param filter per-handler filter, nullable
+     * @return a tracer-aware Grafana message handler
+     */
+    GrafanaMessageHandler getGrafanaMessageHandler(String endpointUrl,
+                                                   String username,
+                                                   String password,
+                                                   String bearerToken,
+                                                   int connectTimeoutMillis,
+                                                   int readTimeoutMillis,
+                                                   Map<String, String> additionalHeaders,
+                                                   boolean async,
+                                                   int queueCapacity,
+                                                   boolean registerShutdownHook,
+                                                   Filter filter);
+
+    /**
+     * Creates a no-op handler that discards all messages.
+     * <p>
+     * Useful when a caller needs a {@link com.threeamigos.common.util.interfaces.messagehandler.MessageHandler}
+     * instance but wants to suppress output.
+     *
+     * @return a void/no-op message handler
+     */
+    VoidMessageHandler getVoidMessageHandler();
 
     /**
      * Returns whether this tracer is currently enabled for span creation.

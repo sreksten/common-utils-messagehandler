@@ -30,18 +30,22 @@ class TracerMessageHandlerFactoryUnitTest extends AbstractOtelValidatorLogTrapUn
         MessageHandler slf4jByName = factory.createSLF4J("factory-slf4j-name");
         MessageHandler slf4jByLogger = factory.createSLF4J(org.slf4j.LoggerFactory.getLogger("factory-slf4j"));
         MessageHandler swing = factory.createSwing();
+        MessageHandler jaeger = factory.createJaeger("http://localhost:4318/v1/logs");
+        MessageHandler grafana = factory.createGrafana("http://localhost:3100/loki/api/v1/push");
         MessageHandler noop = factory.createVoid();
 
         assertTrue(console instanceof com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler);
         assertTrue(file instanceof com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler);
-        assertTrue(inMemory instanceof StructuredBackendMessageHandler);
-        assertTrue(julByName instanceof StructuredBackendMessageHandler);
-        assertTrue(julByLogger instanceof StructuredBackendMessageHandler);
-        assertTrue(log4jByName instanceof StructuredBackendMessageHandler);
-        assertTrue(log4jByLogger instanceof StructuredBackendMessageHandler);
-        assertTrue(slf4jByName instanceof StructuredBackendMessageHandler);
-        assertTrue(slf4jByLogger instanceof StructuredBackendMessageHandler);
-        assertTrue(swing instanceof StructuredBackendMessageHandler);
+        assertTrue(inMemory instanceof com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler);
+        assertTrue(julByName instanceof com.threeamigos.common.util.implementations.messagehandler.JULMessageHandler);
+        assertTrue(julByLogger instanceof com.threeamigos.common.util.implementations.messagehandler.JULMessageHandler);
+        assertTrue(log4jByName instanceof com.threeamigos.common.util.implementations.messagehandler.Log4JMessageHandler);
+        assertTrue(log4jByLogger instanceof com.threeamigos.common.util.implementations.messagehandler.Log4JMessageHandler);
+        assertTrue(slf4jByName instanceof com.threeamigos.common.util.implementations.messagehandler.SLF4JMessageHandler);
+        assertTrue(slf4jByLogger instanceof com.threeamigos.common.util.implementations.messagehandler.SLF4JMessageHandler);
+        assertTrue(swing instanceof com.threeamigos.common.util.implementations.messagehandler.SwingMessageHandler);
+        assertTrue(jaeger instanceof com.threeamigos.common.util.implementations.messagehandler.JaegerMessageHandler);
+        assertTrue(grafana instanceof com.threeamigos.common.util.implementations.messagehandler.GrafanaMessageHandler);
         assertTrue(noop instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
 
         assertDoesNotThrow(() -> {
@@ -56,6 +60,8 @@ class TracerMessageHandlerFactoryUnitTest extends AbstractOtelValidatorLogTrapUn
             slf4jByLogger.info("i");
             // Avoid triggering UI calls in headless/CI environments.
             noop.info("k");
+            jaeger.close();
+            grafana.close();
             file.close();
             console.close();
         });

@@ -1,8 +1,12 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 import jakarta.annotation.Nonnull;
+import jakarta.annotation.Nullable;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -31,6 +35,8 @@ import java.util.Objects;
 public class Log4JMessageHandler extends AbstractMessageHandler {
 
     private final Logger logger;
+    private final LogRecordFactory logRecordFactory;
+    private final LogRecordFormatter logRecordFormatter;
 
     /**
      * Creates a {@code Log4JMessageHandler} that delegates to the given {@link Logger}.
@@ -39,7 +45,15 @@ public class Log4JMessageHandler extends AbstractMessageHandler {
      * @throws NullPointerException if {@code logger} is {@code null}
      */
     public Log4JMessageHandler(final Logger logger) {
+        this(logger, null, null);
+    }
+
+    public Log4JMessageHandler(final Logger logger,
+                               final @Nullable LogRecordFactory logRecordFactory,
+                               final @Nullable LogRecordFormatter logRecordFormatter) {
         this.logger = Objects.requireNonNull(logger, MessageHandlerResourceBundle.get("loggerCannotBeNull"));
+        this.logRecordFactory = logRecordFactory;
+        this.logRecordFormatter = logRecordFormatter;
     }
 
     /**
@@ -53,61 +67,86 @@ public class Log4JMessageHandler extends AbstractMessageHandler {
      * @throws IllegalArgumentException if {@code loggerName} is blank
      */
     public Log4JMessageHandler(final String loggerName) {
+        this(loggerName, null, null);
+    }
+
+    public Log4JMessageHandler(final String loggerName,
+                               final @Nullable LogRecordFactory logRecordFactory,
+                               final @Nullable LogRecordFormatter logRecordFormatter) {
         Objects.requireNonNull(loggerName, MessageHandlerResourceBundle.get("loggerNameCannotBeNull"));
         if (loggerName.trim().isEmpty()) {
             throw new IllegalArgumentException(MessageHandlerResourceBundle.get("loggerNameCannotBeEmpty"));
         }
         this.logger = LogManager.getLogger(loggerName);
+        this.logRecordFactory = logRecordFactory;
+        this.logRecordFormatter = logRecordFormatter;
     }
 
     @Override
     public void handleMessage(@Nonnull SeverityNumber level, @Nonnull String message) {
+        String rendered = formatMessage(level, message);
         switch (level) {
             case INFO:
             case INFO2:
             case INFO3:
             case INFO4:
-                logger.info(message);
+                logger.info(rendered);
                 break;
             case WARN:
             case WARN2:
             case WARN3:
             case WARN4:
-                logger.warn(message);
+                logger.warn(rendered);
                 break;
             case ERROR:
             case ERROR2:
             case ERROR3:
             case ERROR4:
-                logger.error(message);
+                logger.error(rendered);
                 break;
             case FATAL:
             case FATAL2:
             case FATAL3:
             case FATAL4:
-                logger.fatal(message);
+                logger.fatal(rendered);
                 break;
             case DEBUG:
             case DEBUG2:
             case DEBUG3:
             case DEBUG4:
-                logger.debug(message);
+                logger.debug(rendered);
                 break;
             case TRACE:
             case TRACE2:
             case TRACE3:
             case TRACE4:
-                logger.trace(message);
+                logger.trace(rendered);
                 break;
             default:
-                logger.info("Unknown severity level: {}. Logging as INFO. {}", level, message);
+                logger.info("Unknown severity level: {}. Logging as INFO. {}", level, rendered);
                 break;
         }
     }
 
     @Override
     protected void handleExceptionInternal(@Nonnull String message, @Nonnull Throwable throwable) {
-        String rendered = message.isEmpty() ? ThrowableMessageFormatter.detail(throwable) : message;
+        String rendered = formatExceptionMessage(message, throwable);
         logger.error(rendered, throwable);
+    }
+
+    private String formatMessage(final SeverityNumber level, final String message) {
+        if (logRecordFactory == null || logRecordFormatter == null) {
+            return message;
+        }
+        LogRecord logRecord = logRecordFactory.create(level, message);
+        return logRecordFormatter.format(logRecord);
+    }
+
+    private String formatExceptionMessage(final String message, final Throwable throwable) {
+        if (logRecordFactory == null || logRecordFormatter == null) {
+            return message.isEmpty() ? ThrowableMessageFormatter.detail(throwable) : message;
+        }
+        LogRecord logRecord = logRecordFactory.create(message, throwable);
+        return logRecordFormatter.format(logRecord);
     }
 }
