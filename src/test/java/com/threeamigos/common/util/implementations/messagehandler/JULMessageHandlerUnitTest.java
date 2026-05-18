@@ -1,5 +1,8 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -10,6 +13,9 @@ import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @DisplayName("JULMessageHandler unit tests")
 @Tag("unit")
@@ -146,5 +152,60 @@ class JULMessageHandlerUnitTest {
         assertEquals(Level.INFO, capturingHandler.last.getLevel());
         assertTrue(capturingHandler.last.getMessage().contains("Unknown severity level"));
         assertTrue(capturingHandler.last.getMessage().contains("payload"));
+    }
+
+    @Test
+    @DisplayName("Should use provided factory and formatter when both are configured")
+    void shouldUseProvidedFactoryAndFormatterWhenBothAreConfigured() {
+        Logger logger = Logger.getLogger("test-jul-handler-formatted");
+        logger.setUseParentHandlers(false);
+        CapturingHandler capturingHandler = new CapturingHandler();
+        logger.addHandler(capturingHandler);
+        logger.setLevel(Level.ALL);
+
+        LogRecordFactory factory = mock(LogRecordFactory.class);
+        LogRecordFormatter formatter = mock(LogRecordFormatter.class);
+        com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord infoRecord =
+                mock(com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord.class);
+        com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord exceptionRecord =
+                mock(com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord.class);
+        RuntimeException boom = new RuntimeException("boom");
+
+        when(factory.create(SeverityNumber.INFO, "plain-info")).thenReturn(infoRecord);
+        when(formatter.format(infoRecord)).thenReturn("formatted-info");
+        when(factory.create("prefix", boom)).thenReturn(exceptionRecord);
+        when(formatter.format(exceptionRecord)).thenReturn("formatted-prefix");
+
+        JULMessageHandler handler = new JULMessageHandler(logger, factory, formatter);
+
+        handler.info("plain-info");
+        verify(factory).create(SeverityNumber.INFO, "plain-info");
+        verify(formatter).format(infoRecord);
+        assertEquals("formatted-info", capturingHandler.last.getMessage());
+
+        handler.exception("prefix", boom);
+        verify(factory).create("prefix", boom);
+        verify(formatter).format(exceptionRecord);
+        assertEquals("formatted-prefix: boom", capturingHandler.last.getMessage());
+    }
+
+    @Test
+    @DisplayName("Factory-only configuration should fall back to raw messages")
+    void factoryOnlyConfigurationShouldFallBackToRawMessages() {
+        Logger logger = Logger.getLogger("test-jul-handler-factory-only");
+        logger.setUseParentHandlers(false);
+        CapturingHandler capturingHandler = new CapturingHandler();
+        logger.addHandler(capturingHandler);
+        logger.setLevel(Level.ALL);
+
+        LogRecordFactory factory = mock(LogRecordFactory.class);
+        JULMessageHandler handler = new JULMessageHandler(logger, factory, null);
+
+        handler.info("raw-info");
+        assertEquals("raw-info", capturingHandler.last.getMessage());
+
+        RuntimeException boom = new RuntimeException("boom");
+        handler.exception("raw-prefix", boom);
+        assertEquals("raw-prefix: boom", capturingHandler.last.getMessage());
     }
 }

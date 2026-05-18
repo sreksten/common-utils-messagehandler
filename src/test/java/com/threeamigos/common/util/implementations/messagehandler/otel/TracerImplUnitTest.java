@@ -351,6 +351,57 @@ class TracerImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
     }
 
     @Test
+    @DisplayName("tracer should expose basic-auth and no-filter full-config overloads")
+    void tracerShouldExposeBasicAuthAndNoFilterFullConfigOverloads() {
+        TracerProvider provider = TracerProvider.builder()
+                .serviceName("orders")
+                .build();
+        TracerImpl tracer = (TracerImpl) provider.getTracer("orders-api", "1.0.0");
+
+        MessageHandler jaegerBasic = tracer.getJaegerMessageHandler(
+                "http://localhost:4318/v1/logs",
+                "jaeger-user",
+                "jaeger-pass");
+        MessageHandler jaegerFull = tracer.getJaegerMessageHandler(
+                "http://localhost:4318/v1/logs",
+                "jaeger-user",
+                "jaeger-pass",
+                "jaeger-token",
+                5_000,
+                5_000,
+                Collections.singletonMap("X-Jaeger", "enabled"),
+                false,
+                0,
+                false);
+
+        MessageHandler grafanaBasic = tracer.getGrafanaMessageHandler(
+                "http://localhost:3100/loki/api/v1/push",
+                "grafana-user",
+                "grafana-pass");
+        MessageHandler grafanaFull = tracer.getGrafanaMessageHandler(
+                "http://localhost:3100/loki/api/v1/push",
+                "grafana-user",
+                "grafana-pass",
+                "grafana-token",
+                5_000,
+                5_000,
+                Collections.singletonMap("X-Grafana", "enabled"),
+                false,
+                0,
+                false);
+
+        assertTrue(jaegerBasic instanceof com.threeamigos.common.util.implementations.messagehandler.JaegerMessageHandler);
+        assertTrue(jaegerFull instanceof com.threeamigos.common.util.implementations.messagehandler.JaegerMessageHandler);
+        assertTrue(grafanaBasic instanceof com.threeamigos.common.util.implementations.messagehandler.GrafanaMessageHandler);
+        assertTrue(grafanaFull instanceof com.threeamigos.common.util.implementations.messagehandler.GrafanaMessageHandler);
+
+        jaegerBasic.close();
+        jaegerFull.close();
+        grafanaBasic.close();
+        grafanaFull.close();
+    }
+
+    @Test
     @DisplayName("file handler should use provider default path when null or blank is passed")
     void fileHandlerShouldUseProviderDefaultPathWhenNullOrBlankIsPassed() {
         TracerProvider provider = TracerProvider.builder()

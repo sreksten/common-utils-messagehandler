@@ -1,5 +1,8 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -13,6 +16,10 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 @DisplayName("SwingMessageHandler unit test")
 @Tag("unit")
@@ -24,6 +31,15 @@ class SwingMessageHandlerUnitTest {
         private String lastMessage;
         private String lastTitle;
         private int lastIcon;
+
+        CapturingSwingMessageHandler() {
+            super();
+        }
+
+        CapturingSwingMessageHandler(final LogRecordFactory logRecordFactory,
+                                     final LogRecordFormatter logRecordFormatter) {
+            super(logRecordFactory, logRecordFormatter);
+        }
 
         @Override
         protected void showOptionPane(final String message, final String title, final int icon) {
@@ -254,5 +270,50 @@ class SwingMessageHandlerUnitTest {
                 System.setProperty("java.awt.headless", original);
             }
         }
+    }
+
+    @Test
+    @DisplayName("Should use provided formatter when factory and formatter are configured")
+    void shouldUseProvidedFormatterWhenFactoryAndFormatterAreConfigured() {
+        LogRecordFactory factory = mock(LogRecordFactory.class);
+        LogRecordFormatter formatter = mock(LogRecordFormatter.class);
+        com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord infoRecord =
+                mock(com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord.class);
+        com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord exceptionRecord =
+                mock(com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord.class);
+        RuntimeException boom = new RuntimeException("boom");
+
+        when(factory.create(SeverityNumber.INFO, "plain-info")).thenReturn(infoRecord);
+        when(formatter.format(infoRecord)).thenReturn("formatted-info");
+        when(factory.create("prefix", boom)).thenReturn(exceptionRecord);
+        when(formatter.format(exceptionRecord)).thenReturn("formatted-prefix");
+
+        CapturingSwingMessageHandler sut = new CapturingSwingMessageHandler(factory, formatter);
+        sut.info("plain-info");
+        assertEquals("formatted-info", sut.lastMessage);
+
+        sut.exception("prefix", boom);
+        assertEquals("formatted-prefix: boom", sut.lastMessage);
+
+        verify(factory).create(SeverityNumber.INFO, "plain-info");
+        verify(factory).create("prefix", boom);
+        verify(formatter).format(infoRecord);
+        verify(formatter).format(exceptionRecord);
+    }
+
+    @Test
+    @DisplayName("Factory-only configuration should keep fallback formatting behavior")
+    void factoryOnlyConfigurationShouldKeepFallbackFormattingBehavior() {
+        LogRecordFactory factory = mock(LogRecordFactory.class);
+        CapturingSwingMessageHandler sut = new CapturingSwingMessageHandler(factory, null);
+        RuntimeException boom = new RuntimeException("boom");
+
+        sut.info("plain-info");
+        assertEquals("plain-info", sut.lastMessage);
+
+        sut.exception("prefix", boom);
+        assertEquals("prefix: boom", sut.lastMessage);
+
+        verifyNoInteractions(factory);
     }
 }

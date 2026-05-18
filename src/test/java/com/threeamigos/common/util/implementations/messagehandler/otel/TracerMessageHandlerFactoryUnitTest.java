@@ -31,7 +31,15 @@ class TracerMessageHandlerFactoryUnitTest extends AbstractOtelValidatorLogTrapUn
         MessageHandler slf4jByLogger = factory.createSLF4J(org.slf4j.LoggerFactory.getLogger("factory-slf4j"));
         MessageHandler swing = factory.createSwing();
         MessageHandler jaeger = factory.createJaeger("http://localhost:4318/v1/logs");
+        MessageHandler jaegerWithBasicAuth = factory.createJaeger(
+                "http://localhost:4318/v1/logs",
+                "jaeger-user",
+                "jaeger-pass");
         MessageHandler grafana = factory.createGrafana("http://localhost:3100/loki/api/v1/push");
+        MessageHandler grafanaWithBasicAuth = factory.createGrafana(
+                "http://localhost:3100/loki/api/v1/push",
+                "grafana-user",
+                "grafana-pass");
         MessageHandler noop = factory.createVoid();
 
         assertTrue(console instanceof com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler);
@@ -45,7 +53,9 @@ class TracerMessageHandlerFactoryUnitTest extends AbstractOtelValidatorLogTrapUn
         assertTrue(slf4jByLogger instanceof com.threeamigos.common.util.implementations.messagehandler.SLF4JMessageHandler);
         assertTrue(swing instanceof com.threeamigos.common.util.implementations.messagehandler.SwingMessageHandler);
         assertTrue(jaeger instanceof com.threeamigos.common.util.implementations.messagehandler.JaegerMessageHandler);
+        assertTrue(jaegerWithBasicAuth instanceof com.threeamigos.common.util.implementations.messagehandler.JaegerMessageHandler);
         assertTrue(grafana instanceof com.threeamigos.common.util.implementations.messagehandler.GrafanaMessageHandler);
+        assertTrue(grafanaWithBasicAuth instanceof com.threeamigos.common.util.implementations.messagehandler.GrafanaMessageHandler);
         assertTrue(noop instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
 
         assertDoesNotThrow(() -> {
@@ -61,7 +71,9 @@ class TracerMessageHandlerFactoryUnitTest extends AbstractOtelValidatorLogTrapUn
             // Avoid triggering UI calls in headless/CI environments.
             noop.info("k");
             jaeger.close();
+            jaegerWithBasicAuth.close();
             grafana.close();
+            grafanaWithBasicAuth.close();
             file.close();
             console.close();
         });

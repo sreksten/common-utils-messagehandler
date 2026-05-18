@@ -1,5 +1,8 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 import org.apache.logging.log4j.Logger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -121,5 +124,50 @@ class Log4JMessageHandlerUnitTest {
         handler.exception("", exception);
 
         verify(logger).error("boom", (Throwable) exception);
+    }
+
+    @Test
+    @DisplayName("Should use provided formatter when factory and formatter are configured")
+    void shouldUseProvidedFormatterWhenFactoryAndFormatterAreConfigured() {
+        Logger logger = mock(Logger.class);
+        LogRecordFactory factory = mock(LogRecordFactory.class);
+        LogRecordFormatter formatter = mock(LogRecordFormatter.class);
+        com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord infoRecord =
+                mock(com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord.class);
+        com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord exceptionRecord =
+                mock(com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord.class);
+        RuntimeException boom = new RuntimeException("boom");
+
+        when(factory.create(SeverityNumber.INFO, "plain-info")).thenReturn(infoRecord);
+        when(formatter.format(infoRecord)).thenReturn("formatted-info");
+        when(factory.create("prefix", boom)).thenReturn(exceptionRecord);
+        when(formatter.format(exceptionRecord)).thenReturn("formatted-prefix");
+
+        Log4JMessageHandler handler = new Log4JMessageHandler(logger, factory, formatter);
+        handler.info("plain-info");
+        handler.exception("prefix", boom);
+
+        verify(factory).create(SeverityNumber.INFO, "plain-info");
+        verify(factory).create("prefix", boom);
+        verify(formatter).format(infoRecord);
+        verify(formatter).format(exceptionRecord);
+        verify(logger).info("formatted-info");
+        verify(logger).error("formatted-prefix", (Throwable) boom);
+    }
+
+    @Test
+    @DisplayName("Factory-only configuration should keep fallback formatting behavior")
+    void factoryOnlyConfigurationShouldKeepFallbackFormattingBehavior() {
+        Logger logger = mock(Logger.class);
+        LogRecordFactory factory = mock(LogRecordFactory.class);
+        Log4JMessageHandler handler = new Log4JMessageHandler(logger, factory, null);
+        RuntimeException boom = new RuntimeException("boom");
+
+        handler.info("plain-info");
+        handler.exception("", boom);
+
+        verify(logger).info("plain-info");
+        verify(logger).error("boom", (Throwable) boom);
+        verifyNoInteractions(factory);
     }
 }

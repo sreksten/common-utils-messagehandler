@@ -1,6 +1,9 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -12,6 +15,9 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @DisplayName("InMemoryMessageHandler unit test")
 @Tag("unit")
@@ -435,6 +441,49 @@ class InMemoryMessageHandlerUnitTest {
         assertEquals(1, sut.getAllExceptionMessages().size());
         assertEquals("boom", sut.getAllExceptionMessages().get(0));
         assertEquals("boom", sut.getLastMessage());
+    }
+
+    @Test
+    @DisplayName("Should render messages and exceptions through provided formatter")
+    void shouldRenderMessagesAndExceptionsThroughProvidedFormatter() {
+        LogRecordFactory factory = mock(LogRecordFactory.class);
+        LogRecordFormatter formatter = mock(LogRecordFormatter.class);
+        com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord infoRecord =
+                mock(com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord.class);
+        com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord exceptionRecord =
+                mock(com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord.class);
+        RuntimeException boom = new RuntimeException("boom");
+
+        when(factory.create(SeverityNumber.INFO, "plain-info")).thenReturn(infoRecord);
+        when(formatter.format(infoRecord)).thenReturn("formatted-info");
+        when(factory.create("prefix", boom)).thenReturn(exceptionRecord);
+        when(formatter.format(exceptionRecord)).thenReturn("formatted-prefix");
+
+        InMemoryMessageHandler sut = new InMemoryMessageHandler(factory, formatter);
+        sut.info("plain-info");
+        sut.exception("prefix", boom);
+
+        verify(factory).create(SeverityNumber.INFO, "plain-info");
+        verify(factory).create("prefix", boom);
+        verify(formatter).format(infoRecord);
+        verify(formatter).format(exceptionRecord);
+        assertEquals("formatted-info", sut.getAllInfoMessages().get(0));
+        assertEquals("formatted-prefix: boom", sut.getAllExceptionMessages().get(0));
+        assertEquals("formatted-prefix: boom", sut.getLastMessage());
+    }
+
+    @Test
+    @DisplayName("Factory-only configuration should keep raw messages")
+    void factoryOnlyConfigurationShouldKeepRawMessages() {
+        LogRecordFactory factory = mock(LogRecordFactory.class);
+        InMemoryMessageHandler sut = new InMemoryMessageHandler(factory, null);
+        RuntimeException boom = new RuntimeException("boom");
+
+        sut.info("plain-info");
+        sut.exception("prefix", boom);
+
+        assertEquals("plain-info", sut.getAllInfoMessages().get(0));
+        assertEquals("prefix: boom", sut.getAllExceptionMessages().get(0));
     }
 
     @Test
