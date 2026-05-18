@@ -398,7 +398,11 @@ class SpanImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         SpanData snapshot = captured.get();
         assertNotNull(snapshot);
         assertEquals("span-name", snapshot.getName());
+        assertEquals(context, snapshot.getSpanContext());
         assertEquals("abcdabcdabcdabcd", snapshot.getParentSpanId());
+        assertNotNull(snapshot.getStartTimestamp());
+        assertNotNull(snapshot.getEndTimestamp());
+        assertEquals(StatusCode.ERROR, snapshot.getStatusCode());
         assertEquals(1, snapshot.getAttributes().size());
         assertEquals(1, snapshot.getEvents().size());
         assertEquals("boom", snapshot.getStatusDescription());

@@ -135,6 +135,12 @@ class OtlpSpanDispatcherUnitTest {
         assertFalse(payloadWithVersionOnlyScope.contains("\"name\":\"null\""));
         assertTrue(payloadWithVersionOnlyScope.contains("STATUS_CODE_OK"));
 
+        String payloadWithUnsetStatus = (String) toExportTracesPayload.invoke(dispatcher,
+                spanData("unset-status", spanContext(), null,
+                        scope("orders", "1.0"), Instant.now(), Instant.now().plusMillis(1),
+                        StatusCode.UNSET, "ignored", Collections.<KeyValue>emptyList(), Collections.<Event>emptyList()));
+        assertFalse(payloadWithUnsetStatus.contains("\"status\":"));
+
         List<KeyValue> attributes = Arrays.asList(
                 null,
                 keyValue(null, anyString("x")),

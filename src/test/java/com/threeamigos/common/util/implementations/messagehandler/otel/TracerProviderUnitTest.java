@@ -876,4 +876,52 @@ class TracerProviderUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         assertFalse(a.equals("not-a-key"));
         assertNotEquals(a.hashCode(), c.hashCode());
     }
+
+    @Test
+    @DisplayName("TracerKey equals should return false when schema URL or attribute signature differs")
+    void tracerKeyEqualsShouldReturnFalseWhenSchemaUrlOrAttributeSignatureDiffers() throws Exception {
+        Class<?> keyClass = Class.forName("com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider$TracerKey");
+        Constructor<?> constructor = keyClass.getDeclaredConstructors()[0];
+        constructor.setAccessible(true);
+        Class<?>[] parameterTypes = constructor.getParameterTypes();
+
+        Object[] baseArgs = new Object[parameterTypes.length];
+        Object[] schemaDiffArgs = new Object[parameterTypes.length];
+        Object[] attributesDiffArgs = new Object[parameterTypes.length];
+        int stringIndex = 0;
+        for (int i = 0; i < parameterTypes.length; i++) {
+            Class<?> type = parameterTypes[i];
+            if (List.class.isAssignableFrom(type)) {
+                baseArgs[i] = Collections.singletonList("k=v");
+                schemaDiffArgs[i] = Collections.singletonList("k=v");
+                attributesDiffArgs[i] = Collections.singletonList("k2=v2");
+            } else if (type == String.class) {
+                if (stringIndex == 0) {
+                    baseArgs[i] = "orders";
+                    schemaDiffArgs[i] = "orders";
+                    attributesDiffArgs[i] = "orders";
+                } else if (stringIndex == 1) {
+                    baseArgs[i] = "1.0.0";
+                    schemaDiffArgs[i] = "1.0.0";
+                    attributesDiffArgs[i] = "1.0.0";
+                } else {
+                    baseArgs[i] = "https://schema-a";
+                    schemaDiffArgs[i] = "https://schema-b";
+                    attributesDiffArgs[i] = "https://schema-a";
+                }
+                stringIndex++;
+            } else {
+                baseArgs[i] = null;
+                schemaDiffArgs[i] = null;
+                attributesDiffArgs[i] = null;
+            }
+        }
+
+        Object base = constructor.newInstance(baseArgs);
+        Object schemaDiff = constructor.newInstance(schemaDiffArgs);
+        Object attributesDiff = constructor.newInstance(attributesDiffArgs);
+
+        assertFalse(base.equals(schemaDiff));
+        assertFalse(base.equals(attributesDiff));
+    }
 }

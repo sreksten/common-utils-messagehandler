@@ -26,6 +26,8 @@ Bridges for Log4J, SLF4J, JUL, Jaeger, and Grafana are also provided.
 
 # Primer
 
+## Introduction
+
 Logging is an important aspect of any computer program, from simple standalone applications to complex distributed
 systems. It can help to understand what is happening under the hood, run forensics analysis, and find errors, bugs,
 and bottlenecks in your code.
@@ -129,7 +131,7 @@ AbstractMessageHandler (implements MessageHandler)
 └── VoidMessageHandler (does nothing)
 ```
 
-## Equivalent with `ConsoleMessageHandler`
+## `ConsoleMessageHandler`: formatted print to the console
 
 Instead of using `System.out` and `System.err` directly, `ConsoleMessageHandler` gives level-aware logging and 
 exception handling through one interface. It outputs messages to the console, along with the current timestamp and log 
@@ -158,7 +160,7 @@ public class ConsoleHandlerExample {
 }
 ```
 
-## Severities and filtering (`SeverityNumber`)
+## Severities: filter upon importance
 
 To identify the severity level of a message, a `SeverityNumber` (`INFO`, `WARN`, `ERROR`, `DEBUG`, `TRACE`, with 
 numbered variants) is used. This is used to categorize messages by their importance and urgency, allowing for 
@@ -194,7 +196,7 @@ public class SeverityFilteringExample {
 }
 ```
 
-## `FileMessageHandler` and rotation (daily / size)
+## `FileMessageHandler`: store logs in files
 
 Soon you'll discover that logging on the console can help when debugging a standalone application, but for production
 environments, file-based logging is often preferred for its persistence and ability to handle large volumes of logs.
@@ -261,7 +263,7 @@ public class DailyRotationExample {
 ```
 When the day changes, the log file gets rotated: the old file gets a `.yyyy-MM-dd` suffix and a new one is created.
 
-## `SwingMessageHandler` for standalone desktop apps
+## `SwingMessageHandler`: standalone desktop apps
 
 For Swing/AWT apps, this handler shows popup dialogs instead of writing to console/file.
 
@@ -340,7 +342,7 @@ public class CompositeExample2 {
 }
 ```
 
-## `InMemoryMessageHandler` for testing
+## `InMemoryMessageHandler`: testing
 
 `InMemoryMessageHandler` is particularly useful in unit tests: it captures all messages in
 memory and exposes them for inspection, without writing to any output.
@@ -391,7 +393,7 @@ public class VoidHandlerExample {
 }
 ```
 
-## Adapters (JUL, SLF4J, Log4J)
+## Adapters: JUL, SLF4J, Log4J
 
 If you already have in place some other forms of logging based on JUL, SLF4J, or Log4J, you can use the
 provided adapters to integrate this package with them.
@@ -499,7 +501,6 @@ etc.) to log your messages.
 End the span with `span.end()`.
 
 This produces a series of logs that are correlated by a `traceId` (root operation) and one or more `spanId`s.
-
 
 ### How `MessageHandler`, `Tracer`, and `Span` are related
 
