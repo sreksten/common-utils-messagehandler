@@ -457,7 +457,7 @@ public class CustomFormatterExample {
 
 ## Tracer
 
-This part of the package is inspired by [OpenTelemetry](https://opentelemetry.io/) and helps deal with systems
+This part of the package tries to produce an output compliant with [OpenTelemetry](https://opentelemetry.io/) and helps deal with systems
 composed by one or more parts (for example, a web application that deals with many microservices). 
 
 In such an environment, one server could start a user request, but it could have to delegate something to
@@ -604,6 +604,8 @@ You can also load filter rules from properties via:
 - `loadPropertiesFromFile(...)`
 - `loadPropertiesFromResource(...)`
 
+From the example, it is clear that the key part of the property is actually a Regex.
+
 ## Advanced OTel-like model in this package
 
 The package includes an OTel-like model (`LogRecord`, `Span`, `SpanContext`, `Resource`, `InstrumentationScope`, etc.)
@@ -736,17 +738,20 @@ import com.threeamigos.common.util.implementations.messagehandler.JaegerMessageH
 
 public class BackendLogExportExample {
     public static void main(String[] args) {
-        JaegerMessageHandler jaegerLogs = new JaegerMessageHandler("http://localhost:4318/v1/logs");
-        jaegerLogs.info("log to jaeger-compatible OTLP endpoint");
+        JaegerMessageHandler jaegerLogs = new JaegerMessageHandler("http://localhost:4318/v1/traces");
+        jaegerLogs.info("log transformed into span event for Jaeger OTLP traces endpoint");
 
-        GrafanaMessageHandler grafanaLogs = new GrafanaMessageHandler("http://localhost:4318/v1/logs");
-        grafanaLogs.error("log to grafana-compatible OTLP endpoint");
+        GrafanaMessageHandler grafanaLogs = new GrafanaMessageHandler("http://localhost:3100/loki/api/v1/push");
+        grafanaLogs.error("log to Grafana Loki push endpoint");
 
         jaegerLogs.close();
         grafanaLogs.close();
     }
 }
 ```
+
+If you are exporting to a shared OpenTelemetry Collector instead of directly to backends,
+both handlers can target the same collector OTLP endpoint (commonly `http://localhost:4318/v1/logs`).
 
 ### Span export (traces) via dispatcher
 
