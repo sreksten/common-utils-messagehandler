@@ -17,6 +17,7 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.Filter;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanDispatcher;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanContext;
@@ -157,7 +158,7 @@ class TracerImpl implements Tracer {
 
     @Override
     public ConsoleMessageHandler getConsoleMessageHandler() {
-        return getConsoleMessageHandler(null);
+        return getConsoleMessageHandler((Filter) null);
     }
 
     @Override
@@ -166,16 +167,27 @@ class TracerImpl implements Tracer {
     }
 
     @Override
+    public ConsoleMessageHandler getConsoleMessageHandler(final LogRecordFormatter logRecordFormatter) {
+        return getConsoleMessageHandler(logRecordFormatter, null);
+    }
+
+    @Override
+    public ConsoleMessageHandler getConsoleMessageHandler(final LogRecordFormatter logRecordFormatter,
+                                                          final Filter filter) {
+        return createAndFilterSimpleHandler(
+                () -> createFactory(null).createConsole(logRecordFormatter),
+                filter,
+                null);
+    }
+
+    @Override
     public FileMessageHandler getFileMessageHandler(final String filePath) {
-        return getFileMessageHandler(filePath, null);
+        return getFileMessageHandler(filePath, (Filter) null);
     }
 
     @Override
     public FileMessageHandler getFileMessageHandler(final String filePath, final Filter filter) {
-        String resolvedPath = filePath;
-        if (resolvedPath == null || resolvedPath.trim().isEmpty()) {
-            resolvedPath = owner == null ? "message-handler.log" : owner.getDefaultFilePath();
-        }
+        String resolvedPath = resolveFilePath(filePath);
         final String filePathForFactory = resolvedPath;
         return createAndFilterSimpleHandler(
                 () -> createFactory(filePathForFactory).createFile(filePathForFactory),
@@ -184,14 +196,45 @@ class TracerImpl implements Tracer {
     }
 
     @Override
+    public FileMessageHandler getFileMessageHandler(final String filePath,
+                                                    final LogRecordFormatter logRecordFormatter) {
+        return getFileMessageHandler(filePath, logRecordFormatter, null);
+    }
+
+    @Override
+    public FileMessageHandler getFileMessageHandler(final String filePath,
+                                                    final LogRecordFormatter logRecordFormatter,
+                                                    final Filter filter) {
+        final String resolvedPath = resolveFilePath(filePath);
+        return createAndFilterSimpleHandler(
+                () -> createFactory(resolvedPath).createFile(resolvedPath, logRecordFormatter),
+                filter,
+                null);
+    }
+
+    @Override
     public FileMessageHandler getFileMessageHandler(final File file) {
-        return getFileMessageHandler(file, null);
+        return getFileMessageHandler(file, (Filter) null);
     }
 
     @Override
     public FileMessageHandler getFileMessageHandler(final File file, final Filter filter) {
         String path = file == null ? null : file.getPath();
         return getFileMessageHandler(path, filter);
+    }
+
+    @Override
+    public FileMessageHandler getFileMessageHandler(final File file,
+                                                    final LogRecordFormatter logRecordFormatter) {
+        return getFileMessageHandler(file, logRecordFormatter, null);
+    }
+
+    @Override
+    public FileMessageHandler getFileMessageHandler(final File file,
+                                                    final LogRecordFormatter logRecordFormatter,
+                                                    final Filter filter) {
+        String path = file == null ? null : file.getPath();
+        return getFileMessageHandler(path, logRecordFormatter, filter);
     }
 
     @Override
@@ -423,6 +466,14 @@ class TracerImpl implements Tracer {
         T handler = handlerSupplier.get();
         applyFilterLevels(handler, sourceClass, resolveEffectiveFilter(methodFilter));
         return handler;
+    }
+
+    private String resolveFilePath(final String filePath) {
+        String resolvedPath = filePath;
+        if (resolvedPath == null || resolvedPath.trim().isEmpty()) {
+            resolvedPath = owner == null ? "message-handler.log" : owner.getDefaultFilePath();
+        }
+        return resolvedPath;
     }
 
     private TracerMessageHandlerFactory createFactory(final String filePath) {

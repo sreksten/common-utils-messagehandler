@@ -4,6 +4,8 @@ import com.threeamigos.common.util.implementations.messagehandler.filters.Filter
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.StatusCode;
 import org.junit.jupiter.api.AfterEach;
@@ -12,6 +14,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -419,6 +426,130 @@ class TracerImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
     }
 
     @Test
+    @DisplayName("console formatter overloads should render formatted output and respect filters")
+    void consoleFormatterOverloadsShouldRenderFormattedOutputAndRespectFilters() throws Exception {
+        PrintStream originalOut = System.out;
+        PrintStream originalErr = System.err;
+        ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
+        ByteArrayOutputStream errBuffer = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(outBuffer, true, StandardCharsets.UTF_8.name()));
+        System.setErr(new PrintStream(errBuffer, true, StandardCharsets.UTF_8.name()));
+        try {
+            TracerImpl tracer = new TracerImpl("orders", "1.0.0", "schema", Collections.emptyList());
+            LogRecordFormatter formatter = logRecord -> "TRACER-CONSOLE:" + logRecord.getBody().asString();
+
+            MessageHandler unfiltered = tracer.getConsoleMessageHandler(formatter);
+            unfiltered.info("hello-console");
+            unfiltered.close();
+
+            com.threeamigos.common.util.interfaces.messagehandler.otel.Filter allowOnlyErrors = logRecord ->
+                    logRecord.getSeverityNumber() == SeverityNumber.ERROR ? logRecord : null;
+            MessageHandler filtered = tracer.getConsoleMessageHandler(formatter, allowOnlyErrors);
+            filtered.info("drop-console");
+            filtered.error("keep-console");
+            filtered.close();
+
+            String stdout = outBuffer.toString(StandardCharsets.UTF_8.name());
+            String stderr = errBuffer.toString(StandardCharsets.UTF_8.name());
+
+            assertTrue(stdout.contains("TRACER-CONSOLE:hello-console"));
+            assertFalse(stdout.contains("TRACER-CONSOLE:drop-console"));
+            assertTrue(stderr.contains("TRACER-CONSOLE:keep-console"));
+        } finally {
+            System.setOut(originalOut);
+            System.setErr(originalErr);
+        }
+    }
+
+    @Test
+    @DisplayName("file formatter overloads should render formatted output and respect filters")
+    void fileFormatterOverloadsShouldRenderFormattedOutputAndRespectFilters() throws Exception {
+        Path unfilteredFile = Files.createTempFile("tracer-impl-formatter-unfiltered-", ".log");
+        Path filteredFile = Files.createTempFile("tracer-impl-formatter-filtered-", ".log");
+        Path stringTargetFile = Files.createTempFile("tracer-impl-formatter-string-", ".log");
+        Path fileTargetFile = Files.createTempFile("tracer-impl-formatter-file-", ".log");
+        Path stringFilteredTargetFile = Files.createTempFile("tracer-impl-formatter-string-filtered-", ".log");
+        Path fileFilteredTargetFile = Files.createTempFile("tracer-impl-formatter-file-filtered-", ".log");
+
+        LogRecordFormatter formatter = logRecord -> "TRACER-FILE:" + logRecord.getBody().asString();
+
+        TracerProvider unfilteredProvider = TracerProvider.builder()
+                .serviceName("orders")
+                .defaultFilePath(unfilteredFile.toAbsolutePath().toString())
+                .build();
+        TracerImpl unfilteredTracer = (TracerImpl) unfilteredProvider.getTracer("orders-api", "1.0.0");
+
+        MessageHandler unfiltered = unfilteredTracer.getFileMessageHandler(
+                unfilteredFile.toAbsolutePath().toString(),
+                formatter);
+        unfiltered.info("hello-file");
+        unfiltered.close();
+
+        String unfilteredOutput = new String(Files.readAllBytes(unfilteredFile), StandardCharsets.UTF_8);
+        assertTrue(unfilteredOutput.contains("TRACER-FILE:hello-file"));
+
+        MessageHandler fromString = unfilteredTracer.getFileMessageHandler(stringTargetFile.toString(), formatter);
+        fromString.info("hello-file-string");
+        fromString.close();
+        String fromStringOutput = new String(Files.readAllBytes(stringTargetFile), StandardCharsets.UTF_8);
+        assertTrue(fromStringOutput.contains("TRACER-FILE:hello-file-string"));
+
+        MessageHandler fromFile = unfilteredTracer.getFileMessageHandler(fileTargetFile.toFile(), formatter);
+        fromFile.info("hello-file-object");
+        fromFile.close();
+        String fromFileOutput = new String(Files.readAllBytes(fileTargetFile), StandardCharsets.UTF_8);
+        assertTrue(fromFileOutput.contains("TRACER-FILE:hello-file-object"));
+
+        TracerProvider filteredProvider = TracerProvider.builder()
+                .serviceName("orders")
+                .defaultFilePath(filteredFile.toAbsolutePath().toString())
+                .build();
+        TracerImpl filteredTracer = (TracerImpl) filteredProvider.getTracer("orders-api", "1.0.0");
+
+        com.threeamigos.common.util.interfaces.messagehandler.otel.Filter allowOnlyErrors = logRecord ->
+                logRecord.getSeverityNumber() == SeverityNumber.ERROR ? logRecord : null;
+        MessageHandler filtered = filteredTracer.getFileMessageHandler(
+                filteredFile.toAbsolutePath().toString(),
+                formatter,
+                allowOnlyErrors);
+        filtered.info("drop-file");
+        filtered.error("keep-file");
+        filtered.close();
+
+        String filteredOutput = new String(Files.readAllBytes(filteredFile), StandardCharsets.UTF_8);
+        assertFalse(filteredOutput.contains("TRACER-FILE:drop-file"));
+        assertTrue(filteredOutput.contains("TRACER-FILE:keep-file"));
+
+        MessageHandler filteredFromString = filteredTracer.getFileMessageHandler(
+                stringFilteredTargetFile.toString(),
+                formatter,
+                allowOnlyErrors);
+        filteredFromString.info("drop-file-string");
+        filteredFromString.error("keep-file-string");
+        filteredFromString.close();
+        String filteredFromStringOutput = new String(Files.readAllBytes(stringFilteredTargetFile), StandardCharsets.UTF_8);
+        assertFalse(filteredFromStringOutput.contains("TRACER-FILE:drop-file-string"));
+        assertTrue(filteredFromStringOutput.contains("TRACER-FILE:keep-file-string"));
+
+        MessageHandler filteredFromFile = filteredTracer.getFileMessageHandler(
+                fileFilteredTargetFile.toFile(),
+                formatter,
+                allowOnlyErrors);
+        filteredFromFile.info("drop-file-object");
+        filteredFromFile.error("keep-file-object");
+        filteredFromFile.close();
+        String filteredFromFileOutput = new String(Files.readAllBytes(fileFilteredTargetFile), StandardCharsets.UTF_8);
+        assertFalse(filteredFromFileOutput.contains("TRACER-FILE:drop-file-object"));
+        assertTrue(filteredFromFileOutput.contains("TRACER-FILE:keep-file-object"));
+
+        MessageHandler fromNullFile = filteredTracer.getFileMessageHandler((java.io.File) null, formatter);
+        fromNullFile.info("hello-file-null");
+        fromNullFile.close();
+        String nullFileOutput = new String(Files.readAllBytes(filteredFile), StandardCharsets.UTF_8);
+        assertTrue(nullFileOutput.contains("TRACER-FILE:hello-file-null"));
+    }
+
+    @Test
     @DisplayName("applyFilterLevels should also evaluate source class branch")
     void applyFilterLevelsShouldAlsoEvaluateSourceClassBranch() throws Exception {
         TracerProvider provider = TracerProvider.builder().serviceName("orders").build();
@@ -559,7 +690,9 @@ class TracerImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
 
         MessageHandler fromNullPath = detached.getFileMessageHandler((String) null);
         MessageHandler fromBlankPath = detached.getFileMessageHandler("   ");
-        MessageHandler fromNullFile = detached.getFileMessageHandler((java.io.File) null, null);
+        MessageHandler fromNullFile = detached.getFileMessageHandler(
+                (java.io.File) null,
+                (com.threeamigos.common.util.interfaces.messagehandler.otel.Filter) null);
 
         assertTrue(fromNullPath instanceof com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler);
         assertTrue(fromBlankPath instanceof com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler);

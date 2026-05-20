@@ -91,6 +91,26 @@ public interface Tracer {
     ConsoleMessageHandler getConsoleMessageHandler(Filter filter);
 
     /**
+     * Creates a console-backed handler enriched with this tracer context and using the provided formatter.
+     *
+     * @param logRecordFormatter formatter used to render produced log records
+     * @return a tracer-aware console message handler
+     */
+    ConsoleMessageHandler getConsoleMessageHandler(LogRecordFormatter logRecordFormatter);
+
+    /**
+     * Creates a console-backed handler enriched with this tracer context, using the provided formatter,
+     * and filtered by the provided rules.
+     * <p>
+     * If {@code filter} is {@code null}, implementations may fall back to tracer-level filter configuration.
+     *
+     * @param logRecordFormatter formatter used to render produced log records
+     * @param filter per-handler filter, nullable
+     * @return a tracer-aware console message handler
+     */
+    ConsoleMessageHandler getConsoleMessageHandler(LogRecordFormatter logRecordFormatter, Filter filter);
+
+    /**
      * Creates a file-backed handler enriched with this tracer context.
      * <p>
      * If {@code filePath} is {@code null} or blank, implementations may use a provider default file path.
@@ -113,6 +133,32 @@ public interface Tracer {
     FileMessageHandler getFileMessageHandler(String filePath, Filter filter);
 
     /**
+     * Creates a file-backed handler enriched with this tracer context, using the provided formatter,
+     * and the provided file path.
+     * <p>
+     * If {@code filePath} is {@code null} or blank, implementations may use a provider default file path.
+     *
+     * @param filePath target file path, nullable
+     * @param logRecordFormatter formatter used to render produced log records
+     * @return a tracer-aware file message handler
+     */
+    FileMessageHandler getFileMessageHandler(String filePath, LogRecordFormatter logRecordFormatter);
+
+    /**
+     * Creates a file-backed handler enriched with this tracer context, using the provided formatter,
+     * and filtered by the provided rules.
+     * <p>
+     * If {@code filePath} is {@code null} or blank, implementations may use a provider default file path.
+     * If {@code filter} is {@code null}, implementations may fall back to tracer-level filter configuration.
+     *
+     * @param filePath target file path, nullable
+     * @param logRecordFormatter formatter used to render produced log records
+     * @param filter per-handler filter, nullable
+     * @return a tracer-aware file message handler
+     */
+    FileMessageHandler getFileMessageHandler(String filePath, LogRecordFormatter logRecordFormatter, Filter filter);
+
+    /**
      * Creates a file-backed handler enriched with this tracer context.
      *
      * @param file target file reference
@@ -130,6 +176,29 @@ public interface Tracer {
      * @return a tracer-aware file message handler
      */
     FileMessageHandler getFileMessageHandler(File file, Filter filter);
+
+    /**
+     * Creates a file-backed handler enriched with this tracer context, using the provided formatter,
+     * and the provided file reference.
+     *
+     * @param file target file reference
+     * @param logRecordFormatter formatter used to render produced log records
+     * @return a tracer-aware file message handler
+     */
+    FileMessageHandler getFileMessageHandler(File file, LogRecordFormatter logRecordFormatter);
+
+    /**
+     * Creates a file-backed handler enriched with this tracer context, using the provided formatter,
+     * and filtered by the provided rules.
+     * <p>
+     * If {@code filter} is {@code null}, implementations may fall back to tracer-level filter configuration.
+     *
+     * @param file target file reference
+     * @param logRecordFormatter formatter used to render produced log records
+     * @param filter per-handler filter, nullable
+     * @return a tracer-aware file message handler
+     */
+    FileMessageHandler getFileMessageHandler(File file, LogRecordFormatter logRecordFormatter, Filter filter);
 
     /**
      * Creates an in-memory handler enriched with this tracer context.

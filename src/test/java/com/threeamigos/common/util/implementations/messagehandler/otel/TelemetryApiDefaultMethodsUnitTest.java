@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Filter;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -23,10 +24,16 @@ class TelemetryApiDefaultMethodsUnitTest {
         assertNotDefault("getLogRecordFactory");
         assertNotDefault("getConsoleMessageHandler");
         assertNotDefault("getConsoleMessageHandler", Filter.class);
+        assertNotDefault("getConsoleMessageHandler", LogRecordFormatter.class);
+        assertNotDefault("getConsoleMessageHandler", LogRecordFormatter.class, Filter.class);
         assertNotDefault("getFileMessageHandler", String.class);
         assertNotDefault("getFileMessageHandler", String.class, Filter.class);
+        assertNotDefault("getFileMessageHandler", String.class, LogRecordFormatter.class);
+        assertNotDefault("getFileMessageHandler", String.class, LogRecordFormatter.class, Filter.class);
         assertNotDefault("getFileMessageHandler", File.class);
         assertNotDefault("getFileMessageHandler", File.class, Filter.class);
+        assertNotDefault("getFileMessageHandler", File.class, LogRecordFormatter.class);
+        assertNotDefault("getFileMessageHandler", File.class, LogRecordFormatter.class, Filter.class);
         assertNotDefault("getInMemoryMessageHandler");
         assertNotDefault("getInMemoryMessageHandler", Filter.class);
         assertNotDefault("getJULMessageHandler", java.util.logging.Logger.class);

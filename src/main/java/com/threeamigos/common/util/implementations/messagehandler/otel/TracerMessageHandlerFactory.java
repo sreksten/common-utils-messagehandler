@@ -42,8 +42,17 @@ final class TracerMessageHandlerFactory {
         return new ConsoleMessageHandler(logRecordFactory, formatter);
     }
 
+    ConsoleMessageHandler createConsole(final LogRecordFormatter logRecordFormatter) {
+        return new ConsoleMessageHandler(logRecordFactory, logRecordFormatter);
+    }
+
     FileMessageHandler createFile(final String filePath) {
         return new FileMessageHandler(logRecordFactory, formatter, filePath);
+    }
+
+    FileMessageHandler createFile(final String filePath,
+                                  final LogRecordFormatter logRecordFormatter) {
+        return new FileMessageHandler(logRecordFactory, logRecordFormatter, filePath);
     }
 
     InMemoryMessageHandler createInMemory() {
