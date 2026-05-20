@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
@@ -15,8 +16,11 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @DisplayName("InMemoryMessageHandler unit test")
@@ -448,25 +452,16 @@ class InMemoryMessageHandlerUnitTest {
     void shouldRenderMessagesAndExceptionsThroughProvidedFormatter() {
         LogRecordFactory factory = mock(LogRecordFactory.class);
         LogRecordFormatter formatter = mock(LogRecordFormatter.class);
-        com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord infoRecord =
-                mock(com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord.class);
-        com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord exceptionRecord =
-                mock(com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord.class);
         RuntimeException boom = new RuntimeException("boom");
 
-        when(factory.create(SeverityNumber.INFO, "plain-info")).thenReturn(infoRecord);
-        when(formatter.format(infoRecord)).thenReturn("formatted-info");
-        when(factory.create("prefix", boom)).thenReturn(exceptionRecord);
-        when(formatter.format(exceptionRecord)).thenReturn("formatted-prefix");
+        when(formatter.format(any(LogRecord.class))).thenReturn("formatted-info", "formatted-prefix");
 
         InMemoryMessageHandler sut = new InMemoryMessageHandler(factory, formatter);
         sut.info("plain-info");
         sut.exception("prefix", boom);
 
-        verify(factory).create(SeverityNumber.INFO, "plain-info");
-        verify(factory).create("prefix", boom);
-        verify(formatter).format(infoRecord);
-        verify(formatter).format(exceptionRecord);
+        verify(formatter, times(2)).format(any(LogRecord.class));
+        verifyNoInteractions(factory);
         assertEquals("formatted-info", sut.getAllInfoMessages().get(0));
         assertEquals("formatted-prefix: boom", sut.getAllExceptionMessages().get(0));
         assertEquals("formatted-prefix: boom", sut.getLastMessage());

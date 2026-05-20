@@ -23,7 +23,6 @@ import java.util.stream.Collectors;
 public class InMemoryMessageHandler extends AbstractMessageHandler {
 
     private final int maxEntries;
-    private final LogRecordFactory logRecordFactory;
     private final LogRecordFormatter logRecordFormatter;
 
     private final ArrayDeque<Holder> allMessages = new ArrayDeque<>();
@@ -77,7 +76,6 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
             throw new IllegalArgumentException("maxEntries must be positive");
         }
         this.maxEntries = maxEntries;
-        this.logRecordFactory = logRecordFactory;
         this.logRecordFormatter = logRecordFormatter;
     }
 
@@ -107,18 +105,18 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     }
 
     private String formatMessage(final SeverityNumber level, final String message) {
-        if (logRecordFactory == null || logRecordFormatter == null) {
+        if (logRecordFormatter == null) {
             return message;
         }
-        LogRecord logRecord = logRecordFactory.create(level, message);
+        LogRecord logRecord = createLogRecord(level, message);
         return logRecordFormatter.format(logRecord);
     }
 
     private String formatExceptionMessage(final String message, final Throwable throwable) {
-        if (logRecordFactory == null || logRecordFormatter == null) {
+        if (logRecordFormatter == null) {
             return message;
         }
-        LogRecord logRecord = logRecordFactory.create(message, throwable);
+        LogRecord logRecord = createLogRecord(message, throwable);
         return logRecordFormatter.format(logRecord);
     }
 

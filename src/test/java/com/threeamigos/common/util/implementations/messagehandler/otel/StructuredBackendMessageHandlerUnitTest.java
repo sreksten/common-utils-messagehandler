@@ -1,7 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.RawJsonRecordFormatter;
 import org.junit.jupiter.api.DisplayName;
@@ -21,9 +20,8 @@ class StructuredBackendMessageHandlerUnitTest extends AbstractOtelValidatorLogTr
     @DisplayName("structured backend handler should format and forward message and throwable")
     void structuredBackendHandlerShouldFormatAndForwardMessageAndThrowable() {
         InMemoryMessageHandler backend = new InMemoryMessageHandler();
-        LogRecordFactory factory = new LogRecordFactoryImpl();
         StructuredBackendMessageHandler handler =
-                new StructuredBackendMessageHandler(backend, factory, new RawJsonRecordFormatter());
+                new StructuredBackendMessageHandler(backend, new RawJsonRecordFormatter());
 
         handler.handleMessage(SeverityNumber.INFO, "hello");
         handler.exception("boom", new IllegalStateException("x"));

@@ -1,7 +1,10 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
 import com.threeamigos.common.util.implementations.messagehandler.filters.FilterByClassName;
+import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Filter;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
@@ -24,6 +27,7 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -34,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 @DisplayName("TracerImpl unit tests")
 @Tag("unit")
@@ -264,6 +269,84 @@ class TracerImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         fileFromString.close();
         fileFromFile.close();
         fileFromFileNoFilter.close();
+    }
+
+    @Test
+    @DisplayName("applyFilterLevels should enrich probes with source class attributes when provided")
+    void applyFilterLevelsShouldEnrichProbesWithSourceClassAttributesWhenProvided() throws Exception {
+        TracerImpl tracer = new TracerImpl("orders", "1.0.0", "schema", Collections.emptyList());
+        InMemoryMessageHandler handler = new InMemoryMessageHandler();
+        Method applyFilterLevels = TracerImpl.class.getDeclaredMethod(
+                "applyFilterLevels",
+                MessageHandler.class,
+                Class.class,
+                Filter.class);
+        applyFilterLevels.setAccessible(true);
+
+        Filter namespaceRequiredFilter = record -> {
+            List<KeyValue> attributes = record.getAttributes();
+            if (attributes == null) {
+                return null;
+            }
+            for (KeyValue attribute : attributes) {
+                if ("code.namespace".equals(attribute.getKey())
+                        && attribute.getValue() != null
+                        && attribute.getValue().asString() != null
+                        && attribute.getValue().asString().equals(TracerImplUnitTest.class.getName())) {
+                    return record;
+                }
+            }
+            return null;
+        };
+
+        applyFilterLevels.invoke(tracer, handler, TracerImplUnitTest.class, namespaceRequiredFilter);
+
+        assertTrue(handler.isInfoEnabled());
+        assertTrue(handler.isDebugEnabled());
+        assertTrue(handler.isTraceEnabled());
+    }
+
+    @Test
+    @DisplayName("applyFilterLevels should support non-LogRecordImpl probes without namespace enrichment")
+    void applyFilterLevelsShouldSupportNonLogRecordImplProbesWithoutNamespaceEnrichment() throws Exception {
+        TracerImpl tracer = new TracerImpl("orders", "1.0.0", "schema", Collections.emptyList()) {
+            @Override
+            LogRecord createFilterProbe(final SeverityNumber severityNumber) {
+                return mock(LogRecord.class);
+            }
+        };
+        InMemoryMessageHandler handler = new InMemoryMessageHandler();
+        Method applyFilterLevels = TracerImpl.class.getDeclaredMethod(
+                "applyFilterLevels",
+                MessageHandler.class,
+                Class.class,
+                Filter.class);
+        applyFilterLevels.setAccessible(true);
+
+        applyFilterLevels.invoke(tracer, handler, TracerImplUnitTest.class, (Filter) record -> record);
+
+        assertTrue(handler.isInfoEnabled());
+        assertTrue(handler.isDebugEnabled());
+        assertTrue(handler.isTraceEnabled());
+    }
+
+    @Test
+    @DisplayName("applyFilterLevels should no-op for handlers outside AbstractMessageHandler hierarchy")
+    void applyFilterLevelsShouldNoOpForHandlersOutsideAbstractMessageHandlerHierarchy() throws Exception {
+        TracerImpl tracer = new TracerImpl("orders", "1.0.0", "schema", Collections.emptyList());
+        MessageHandler nonAbstractHandler = mock(MessageHandler.class);
+        Method applyFilterLevels = TracerImpl.class.getDeclaredMethod(
+                "applyFilterLevels",
+                MessageHandler.class,
+                Class.class,
+                Filter.class);
+        applyFilterLevels.setAccessible(true);
+
+        assertDoesNotThrow(() -> applyFilterLevels.invoke(
+                tracer,
+                nonAbstractHandler,
+                TracerImplUnitTest.class,
+                (Filter) record -> record));
     }
 
     @Test

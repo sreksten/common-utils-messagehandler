@@ -132,25 +132,17 @@ class Log4JMessageHandlerUnitTest {
         Logger logger = mock(Logger.class);
         LogRecordFactory factory = mock(LogRecordFactory.class);
         LogRecordFormatter formatter = mock(LogRecordFormatter.class);
-        com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord infoRecord =
-                mock(com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord.class);
-        com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord exceptionRecord =
-                mock(com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord.class);
         RuntimeException boom = new RuntimeException("boom");
 
-        when(factory.create(SeverityNumber.INFO, "plain-info")).thenReturn(infoRecord);
-        when(formatter.format(infoRecord)).thenReturn("formatted-info");
-        when(factory.create("prefix", boom)).thenReturn(exceptionRecord);
-        when(formatter.format(exceptionRecord)).thenReturn("formatted-prefix");
+        when(formatter.format(org.mockito.ArgumentMatchers.any(
+                com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord.class)))
+                .thenReturn("formatted-info", "formatted-prefix");
 
         Log4JMessageHandler handler = new Log4JMessageHandler(logger, factory, formatter);
         handler.info("plain-info");
         handler.exception("prefix", boom);
 
-        verify(factory).create(SeverityNumber.INFO, "plain-info");
-        verify(factory).create("prefix", boom);
-        verify(formatter).format(infoRecord);
-        verify(formatter).format(exceptionRecord);
+        verifyNoInteractions(factory);
         verify(logger).info("formatted-info");
         verify(logger).error("formatted-prefix", (Throwable) boom);
     }

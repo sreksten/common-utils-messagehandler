@@ -14,8 +14,8 @@ import com.threeamigos.common.util.implementations.messagehandler.otel.formatter
 import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.RawJsonRecordFormatter;
 import com.threeamigos.common.util.implementations.messagehandler.utils.GrafanaLogRecordDispatcher;
 import com.threeamigos.common.util.implementations.messagehandler.utils.JaegerLogRecordDispatcher;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
 import org.apache.logging.log4j.Logger;
 
 import java.util.Map;
@@ -27,86 +27,83 @@ import java.util.Map;
  */
 final class TracerMessageHandlerFactory {
 
-    private final LogRecordFactory logRecordFactory;
-    private final String defaultFilePath;
+    private final Tracer tracer;
     private final LogRecordFormatter formatter = new RawJsonRecordFormatter();
     private final LogRecordFormatter exportLogsFormatter = new ExportLogsServiceRequestLogRecordFormatter();
 
-    TracerMessageHandlerFactory(final LogRecordFactory logRecordFactory,
-                                final String defaultFilePath) {
-        this.logRecordFactory = logRecordFactory;
-        this.defaultFilePath = defaultFilePath;
+    TracerMessageHandlerFactory(final Tracer tracer) {
+        this.tracer = tracer;
     }
 
     ConsoleMessageHandler createConsole() {
-        return new ConsoleMessageHandler(logRecordFactory, formatter);
+        return bind(new ConsoleMessageHandler(new LogRecordFactoryImpl(), formatter));
     }
 
     ConsoleMessageHandler createConsole(final LogRecordFormatter logRecordFormatter) {
-        return new ConsoleMessageHandler(logRecordFactory, logRecordFormatter);
+        return bind(new ConsoleMessageHandler(new LogRecordFactoryImpl(), logRecordFormatter));
     }
 
     FileMessageHandler createFile(final String filePath) {
-        return new FileMessageHandler(logRecordFactory, formatter, filePath);
+        return bind(new FileMessageHandler(new LogRecordFactoryImpl(), formatter, filePath));
     }
 
     FileMessageHandler createFile(final String filePath,
                                   final LogRecordFormatter logRecordFormatter) {
-        return new FileMessageHandler(logRecordFactory, logRecordFormatter, filePath);
+        return bind(new FileMessageHandler(new LogRecordFactoryImpl(), logRecordFormatter, filePath));
     }
 
     InMemoryMessageHandler createInMemory() {
-        return new InMemoryMessageHandler(logRecordFactory, formatter);
+        return bind(new InMemoryMessageHandler(new LogRecordFactoryImpl(), formatter));
     }
 
     JULMessageHandler createJUL(final String loggerName) {
-        return new JULMessageHandler(loggerName, logRecordFactory, formatter);
+        return bind(new JULMessageHandler(loggerName, new LogRecordFactoryImpl(), formatter));
     }
 
     JULMessageHandler createJUL(final java.util.logging.Logger logger) {
-        return new JULMessageHandler(logger, logRecordFactory, formatter);
+        return bind(new JULMessageHandler(logger, new LogRecordFactoryImpl(), formatter));
     }
 
     Log4JMessageHandler createLog4J(final String loggerName) {
-        return new Log4JMessageHandler(loggerName, logRecordFactory, formatter);
+        return bind(new Log4JMessageHandler(loggerName, new LogRecordFactoryImpl(), formatter));
     }
 
     Log4JMessageHandler createLog4J(final Logger logger) {
-        return new Log4JMessageHandler(logger, logRecordFactory, formatter);
+        return bind(new Log4JMessageHandler(logger, new LogRecordFactoryImpl(), formatter));
     }
 
     SLF4JMessageHandler createSLF4J(final String loggerName) {
-        return new SLF4JMessageHandler(loggerName, logRecordFactory, formatter);
+        return bind(new SLF4JMessageHandler(loggerName, new LogRecordFactoryImpl(), formatter));
     }
 
     SLF4JMessageHandler createSLF4J(final org.slf4j.Logger logger) {
-        return new SLF4JMessageHandler(logger, logRecordFactory, formatter);
+        return bind(new SLF4JMessageHandler(logger, new LogRecordFactoryImpl(), formatter));
     }
 
     SwingMessageHandler createSwing() {
-        return new SwingMessageHandler(logRecordFactory, formatter);
+        return bind(new SwingMessageHandler(new LogRecordFactoryImpl(), formatter));
     }
 
     JaegerMessageHandler createJaeger(final String endpointUrl) {
-        return new JaegerMessageHandler(
-                logRecordFactory,
+        return bind(new JaegerMessageHandler(
+                new LogRecordFactoryImpl(),
                 exportLogsFormatter,
                 new JaegerLogRecordDispatcher(endpointUrl),
                 false,
                 0,
-                false);
+                false));
     }
 
     JaegerMessageHandler createJaeger(final String endpointUrl,
                                       final String username,
                                       final String password) {
-        return new JaegerMessageHandler(
-                logRecordFactory,
+        return bind(new JaegerMessageHandler(
+                new LogRecordFactoryImpl(),
                 exportLogsFormatter,
                 new JaegerLogRecordDispatcher(endpointUrl, username, password),
                 false,
                 0,
-                false);
+                false));
     }
 
     JaegerMessageHandler createJaeger(final String endpointUrl,
@@ -119,8 +116,8 @@ final class TracerMessageHandlerFactory {
                                       final boolean async,
                                       final int queueCapacity,
                                       final boolean registerShutdownHook) {
-        return new JaegerMessageHandler(
-                logRecordFactory,
+        return bind(new JaegerMessageHandler(
+                new LogRecordFactoryImpl(),
                 exportLogsFormatter,
                 new JaegerLogRecordDispatcher(
                         endpointUrl,
@@ -132,29 +129,29 @@ final class TracerMessageHandlerFactory {
                         additionalHeaders),
                 async,
                 queueCapacity,
-                registerShutdownHook);
+                registerShutdownHook));
     }
 
     GrafanaMessageHandler createGrafana(final String endpointUrl) {
-        return new GrafanaMessageHandler(
-                logRecordFactory,
+        return bind(new GrafanaMessageHandler(
+                new LogRecordFactoryImpl(),
                 exportLogsFormatter,
                 new GrafanaLogRecordDispatcher(endpointUrl),
                 false,
                 0,
-                false);
+                false));
     }
 
     GrafanaMessageHandler createGrafana(final String endpointUrl,
                                         final String username,
                                         final String password) {
-        return new GrafanaMessageHandler(
-                logRecordFactory,
+        return bind(new GrafanaMessageHandler(
+                new LogRecordFactoryImpl(),
                 exportLogsFormatter,
                 new GrafanaLogRecordDispatcher(endpointUrl, username, password),
                 false,
                 0,
-                false);
+                false));
     }
 
     GrafanaMessageHandler createGrafana(final String endpointUrl,
@@ -167,8 +164,8 @@ final class TracerMessageHandlerFactory {
                                         final boolean async,
                                         final int queueCapacity,
                                         final boolean registerShutdownHook) {
-        return new GrafanaMessageHandler(
-                logRecordFactory,
+        return bind(new GrafanaMessageHandler(
+                new LogRecordFactoryImpl(),
                 exportLogsFormatter,
                 new GrafanaLogRecordDispatcher(
                         endpointUrl,
@@ -180,10 +177,14 @@ final class TracerMessageHandlerFactory {
                         additionalHeaders),
                 async,
                 queueCapacity,
-                registerShutdownHook);
+                registerShutdownHook));
     }
 
     VoidMessageHandler createVoid() {
-        return new VoidMessageHandler();
+        return bind(new VoidMessageHandler());
+    }
+
+    private <T extends com.threeamigos.common.util.interfaces.messagehandler.MessageHandler> T bind(final T handler) {
+        return HandlerTracerBinder.bindTracer(handler, tracer);
     }
 }

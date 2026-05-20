@@ -30,7 +30,6 @@ import java.util.logging.Logger;
 public class JULMessageHandler extends AbstractMessageHandler {
 
     private final Logger logger;
-    private final LogRecordFactory logRecordFactory;
     private final LogRecordFormatter logRecordFormatter;
 
     /**
@@ -47,7 +46,6 @@ public class JULMessageHandler extends AbstractMessageHandler {
                              final @Nullable LogRecordFactory logRecordFactory,
                              final @Nullable LogRecordFormatter logRecordFormatter) {
         this.logger = Objects.requireNonNull(logger, MessageHandlerResourceBundle.get("loggerCannotBeNull"));
-        this.logRecordFactory = logRecordFactory;
         this.logRecordFormatter = logRecordFormatter;
     }
 
@@ -73,7 +71,6 @@ public class JULMessageHandler extends AbstractMessageHandler {
             throw new IllegalArgumentException(MessageHandlerResourceBundle.get("loggerNameCannotBeEmpty"));
         }
         this.logger = Logger.getLogger(loggerName);
-        this.logRecordFactory = logRecordFactory;
         this.logRecordFormatter = logRecordFormatter;
     }
 
@@ -128,18 +125,18 @@ public class JULMessageHandler extends AbstractMessageHandler {
     }
 
     private String formatMessage(final SeverityNumber level, final String message) {
-        if (logRecordFactory == null || logRecordFormatter == null) {
+        if (logRecordFormatter == null) {
             return message;
         }
-        LogRecord logRecord = logRecordFactory.create(level, message);
+        LogRecord logRecord = createLogRecord(level, message);
         return logRecordFormatter.format(logRecord);
     }
 
     private String formatExceptionMessage(final String message, final Throwable throwable) {
-        if (logRecordFactory == null || logRecordFormatter == null) {
+        if (logRecordFormatter == null) {
             return message;
         }
-        LogRecord logRecord = logRecordFactory.create(message, throwable);
+        LogRecord logRecord = createLogRecord(message, throwable);
         return logRecordFormatter.format(logRecord);
     }
 }

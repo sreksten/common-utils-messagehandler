@@ -1,10 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
-import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.ExportLogsServiceRequestLogRecordFormatter;
-import com.threeamigos.common.util.implementations.messagehandler.utils.GrafanaLogRecordDispatcher;
-import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
 import org.junit.jupiter.api.DisplayName;
@@ -54,17 +50,9 @@ class GrafanaMessageHandlerIntegrationTest {
                 .serviceVersion(serviceVersion)
                 .build();
         Tracer tracer = provider.getTracer(serviceName, serviceVersion);
-        LogRecordFactory logRecordFactory = tracer.getLogRecordFactory();
-
-        MessageHandler handler = new GrafanaMessageHandler(
-                logRecordFactory,
-                new ExportLogsServiceRequestLogRecordFormatter(),
-                new GrafanaLogRecordDispatcher(pushEndpoint),
-                false,
-                0,
-                false);
+        GrafanaMessageHandler handler = tracer.getGrafanaMessageHandler(pushEndpoint);
         List<String> errors = new ArrayList<String>();
-        ((GrafanaMessageHandler) handler).setErrorConsumer(errors::add);
+        handler.setErrorConsumer(errors::add);
 
         Span span = tracer.createSpan("grafana-integration-span");
         try {

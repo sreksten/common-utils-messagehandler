@@ -1,12 +1,12 @@
 package com.threeamigos.common.util.implementations.messagehandler.otel;
 
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("TracerMessageHandlerFactory unit tests")
@@ -17,8 +17,9 @@ class TracerMessageHandlerFactoryUnitTest extends AbstractOtelValidatorLogTrapUn
     @Test
     @DisplayName("factory should create all handler backends")
     void factoryShouldCreateAllHandlerBackends() {
-        LogRecordFactory logRecordFactory = new LogRecordFactoryImpl();
-        TracerMessageHandlerFactory factory = new TracerMessageHandlerFactory(logRecordFactory, "target/factory-test.log");
+        TracerProvider provider = TracerProvider.createProvider();
+        TracerMessageHandlerFactory factory = new TracerMessageHandlerFactory(
+                provider.getTracer("factory-tests", "1.0.0"));
 
         MessageHandler console = factory.createConsole();
         MessageHandler file = factory.createFile("target/factory-test-explicit.log");
@@ -57,6 +58,9 @@ class TracerMessageHandlerFactoryUnitTest extends AbstractOtelValidatorLogTrapUn
         assertTrue(grafana instanceof com.threeamigos.common.util.implementations.messagehandler.GrafanaMessageHandler);
         assertTrue(grafanaWithBasicAuth instanceof com.threeamigos.common.util.implementations.messagehandler.GrafanaMessageHandler);
         assertTrue(noop instanceof com.threeamigos.common.util.implementations.messagehandler.VoidMessageHandler);
+        com.threeamigos.common.util.interfaces.messagehandler.otel.Span span = console.startSpan("factory-bound-span");
+        assertNotNull(span);
+        span.end();
 
         assertDoesNotThrow(() -> {
             console.info("a");

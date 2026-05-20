@@ -283,13 +283,13 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
 
     @Override
     public void handleMessage(@Nonnull SeverityNumber level, @Nonnull String message) {
-        LogRecord logRecord = logRecordFactory.create(level, message);
+        LogRecord logRecord = createLogRecord(level, message);
         writeMessage(logRecordFormatter.format(logRecord));
     }
 
     @Override
     protected void handleExceptionInternal(@Nonnull String message, @Nonnull Throwable throwable) {
-        LogRecord logRecord = logRecordFactory.create(message, throwable);
+        LogRecord logRecord = createLogRecord(message, throwable);
         writeMessage(logRecordFormatter.format(logRecord));
     }
 

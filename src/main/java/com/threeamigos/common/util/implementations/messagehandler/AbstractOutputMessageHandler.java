@@ -59,14 +59,12 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
     private Thread shutdownHook;
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final Object dispatchLock = new Object();
-    protected final LogRecordFactory logRecordFactory;
     protected LogRecordFormatter logRecordFormatter;
 
     public AbstractOutputMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
                                         final @Nonnull LogRecordFormatter logRecordFormatter) {
         Objects.requireNonNull(logRecordFactory, MessageHandlerResourceBundle.get("nullLogRecordFactoryProvided"));
         Objects.requireNonNull(logRecordFormatter, MessageHandlerResourceBundle.get("nullFormatterProvided"));
-        this.logRecordFactory = logRecordFactory;
         this.logRecordFormatter = logRecordFormatter;
     }
 

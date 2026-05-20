@@ -21,7 +21,6 @@ import java.awt.*;
 public class SwingMessageHandler extends AbstractMessageHandler {
 
     private Component parentComponent;
-    private final LogRecordFactory logRecordFactory;
     private final LogRecordFormatter logRecordFormatter;
 
     /**
@@ -38,7 +37,6 @@ public class SwingMessageHandler extends AbstractMessageHandler {
                                final @Nullable LogRecordFactory logRecordFactory,
                                final @Nullable LogRecordFormatter logRecordFormatter) {
         this.parentComponent = parentComponent;
-        this.logRecordFactory = logRecordFactory;
         this.logRecordFormatter = logRecordFormatter;
     }
 
@@ -139,18 +137,18 @@ public class SwingMessageHandler extends AbstractMessageHandler {
     }
 
     private String formatMessage(final SeverityNumber level, final String message) {
-        if (logRecordFactory == null || logRecordFormatter == null) {
+        if (logRecordFormatter == null) {
             return message;
         }
-        LogRecord logRecord = logRecordFactory.create(level, message);
+        LogRecord logRecord = createLogRecord(level, message);
         return logRecordFormatter.format(logRecord);
     }
 
     private String formatExceptionMessage(final String message, final Throwable throwable) {
-        if (logRecordFactory == null || logRecordFormatter == null) {
+        if (logRecordFormatter == null) {
             return message;
         }
-        LogRecord logRecord = logRecordFactory.create(message, throwable);
+        LogRecord logRecord = createLogRecord(message, throwable);
         return logRecordFormatter.format(logRecord);
     }
 }

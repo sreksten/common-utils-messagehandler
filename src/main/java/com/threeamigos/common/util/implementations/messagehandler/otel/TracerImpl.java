@@ -478,9 +478,9 @@ class TracerImpl implements Tracer {
 
     private TracerMessageHandlerFactory createFactory(final String filePath) {
         if (owner == null) {
-            return new TracerMessageHandlerFactory(new LogRecordFactoryImpl(), "message-handler.log");
+            return new TracerMessageHandlerFactory(this);
         }
-        return owner.buildMessageHandlerFactory(instrumentationScope, filePath);
+        return owner.buildMessageHandlerFactory(this, instrumentationScope, filePath);
     }
 
     private AutoCloseable attachCorrelationScope(final SpanContext spanContext) {

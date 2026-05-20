@@ -15,6 +15,7 @@ import java.util.logging.Logger;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @DisplayName("JULMessageHandler unit tests")
@@ -165,28 +166,20 @@ class JULMessageHandlerUnitTest {
 
         LogRecordFactory factory = mock(LogRecordFactory.class);
         LogRecordFormatter formatter = mock(LogRecordFormatter.class);
-        com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord infoRecord =
-                mock(com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord.class);
-        com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord exceptionRecord =
-                mock(com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord.class);
         RuntimeException boom = new RuntimeException("boom");
 
-        when(factory.create(SeverityNumber.INFO, "plain-info")).thenReturn(infoRecord);
-        when(formatter.format(infoRecord)).thenReturn("formatted-info");
-        when(factory.create("prefix", boom)).thenReturn(exceptionRecord);
-        when(formatter.format(exceptionRecord)).thenReturn("formatted-prefix");
+        when(formatter.format(org.mockito.ArgumentMatchers.any(
+                com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord.class)))
+                .thenReturn("formatted-info", "formatted-prefix");
 
         JULMessageHandler handler = new JULMessageHandler(logger, factory, formatter);
 
         handler.info("plain-info");
-        verify(factory).create(SeverityNumber.INFO, "plain-info");
-        verify(formatter).format(infoRecord);
         assertEquals("formatted-info", capturingHandler.last.getMessage());
 
         handler.exception("prefix", boom);
-        verify(factory).create("prefix", boom);
-        verify(formatter).format(exceptionRecord);
         assertEquals("formatted-prefix: boom", capturingHandler.last.getMessage());
+        verifyNoInteractions(factory);
     }
 
     @Test

@@ -1,10 +1,13 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordFactoryImpl;
+import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
 import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.ExportLogsServiceRequestLogRecordFormatter;
 import com.threeamigos.common.util.implementations.messagehandler.utils.GrafanaLogRecordDispatcher;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
 import jakarta.annotation.Nonnull;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -15,6 +18,7 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
@@ -161,6 +165,30 @@ class GrafanaMessageHandlerUnitTest {
         } finally {
             handler.close();
         }
+    }
+
+    @Test
+    @DisplayName("startSpan on grafana handler exports spans only when provider span dispatcher is configured")
+    void startSpanOnGrafanaHandlerExportsSpansOnlyWhenProviderSpanDispatcherIsConfigured() {
+        TracerProvider provider = TracerProvider.builder()
+                .serviceName("checkout-api")
+                .serviceVersion("1.0.0")
+                .build();
+        Tracer tracer = provider.getTracer("checkout-api", "1.0.0");
+        GrafanaMessageHandler handler = tracer.getGrafanaMessageHandler("http://localhost:3100/loki/api/v1/push");
+
+        AtomicInteger exportedSpans = new AtomicInteger(0);
+
+        Span withoutDispatcher = handler.startSpan("without-dispatcher");
+        withoutDispatcher.end();
+        assertEquals(0, exportedSpans.get());
+
+        provider.setDefaultSpanDispatcher(spanData -> exportedSpans.incrementAndGet());
+        Span withDispatcher = handler.startSpan("with-dispatcher");
+        withDispatcher.end();
+        assertEquals(1, exportedSpans.get());
+
+        handler.close();
     }
 
     private static void waitUntilClosed(final GrafanaMessageHandler handler, final long timeoutMillis) throws Exception {

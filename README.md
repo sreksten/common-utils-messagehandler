@@ -107,8 +107,11 @@ but it has a `ThrowableWithMessageHandler` with an `exception(Throwable, String)
 As these interfaces are quite a lot, a composite interface called `MessageHandler` is defined,
 which collects all of them.
 
-The MessageHandler exposes an additional method `handleMessage(SeverityNumber, String)` that allows to specify directly
-the severity level of a message. This because internally the package supports the whole OpenTelemetry `SeverityNumber`s:
+The MessageHandler exposes additional methods:
+- `handleMessage(SeverityNumber, String)` to specify directly the severity level of a message;
+- `startSpan(String)` to start a span directly from the handler when the handler is tracer-bound.
+
+Internally the package supports the whole OpenTelemetry `SeverityNumber`s:
 `INFO`, `INFO2`, `INFO3`, `INFO4`, `WARN`, `WARN2`, ...
 For more information, see [OpenTelemetry Logs Data Model - 
 field SeverityNumber](https://opentelemetry.io/docs/specs/otel/logs/data-model/#field-severitynumber).
@@ -127,7 +130,7 @@ AbstractMessageHandler (implements MessageHandler)
 ├── Log4JMessageHandler (Apache Log4j 2 bridge)
 ├── SLF4JMessageHandler (SLF4J bridge)
 ├── JaegerMessageHandler (Jaeger bridge, for sending OpenTelemetry traces and logs)
-├── GrafanaMessageHandler (Grafana bridge, for sending OpenTelemetry traces and logs)
+├── GrafanaMessageHandler (Grafana bridge, for sending OpenTelemetry logs)
 └── VoidMessageHandler (does nothing)
 ```
 
@@ -225,7 +228,6 @@ daily.
 ```java
 import com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler;
 import com.threeamigos.common.util.implementations.messagehandler.file.SizeRotationPolicy;
-import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordFactoryImpl;
 import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.ConsoleLogRecordFormatter;
 
 public class SizeRotationExample {
@@ -247,7 +249,6 @@ a new one is created.
 ```java
 import com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler;
 import com.threeamigos.common.util.implementations.messagehandler.file.DailyRotationPolicy;
-import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordFactoryImpl;
 import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.ConsoleLogRecordFormatter;
 
 public class DailyRotationExample {
@@ -436,7 +437,6 @@ an abbreviation (initial letters only): the `ClassNameReducer.reduce`. E.g., it 
 
 ```java
 import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
-import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordFactoryImpl;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
 
@@ -493,7 +493,8 @@ application (in this case the `serviceName` is your application name), or a micr
 your service. So for each module you want to instrument, you have to obtain a `Tracer` from that provider for the module
 or component (`provider.getTracer(instrumentationName, version, ...)`). 
 
-`Span` represents one timed operation. Start a `Span` with `tracer.createSpan(...)` when an operation begins.
+`Span` represents one timed operation. Start a `Span` either with `tracer.createSpan(...)`, or directly from a
+tracer-created handler with `handler.startSpan(...)`.
 
 Use a `MessageHandler` created from that `Tracer` (`tracer.getConsoleMessageHandler()`, `getFileMessageHandler(...)`, 
 etc.) to log your messages.
@@ -509,14 +510,13 @@ This is supported.
 If your goal is one output file and multiple tracers (for different modules/components), use:
 1. one shared `TracerProvider`
 2. multiple `Tracer` instances from that provider (`provider.getTracer(...)`)
-3. one shared `FileMessageHandler` created from `provider.getLogRecordFactory()`
+3. one tracer-created file handler per tracer, targeting the same file path
 
 For this setup, an OpenTelemetry Collector is not required.
 
 ```java
-import com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler;
 import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
-import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.RawJsonRecordFormatter;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
 
@@ -527,40 +527,39 @@ public class MultipleTracersSingleFileExample {
                 .defaultFilePath("logs/system.log")
                 .build();
 
-        FileMessageHandler sharedFileHandler = new FileMessageHandler(
-                provider.getLogRecordFactory(),
-                new RawJsonRecordFormatter(),
-                provider.getDefaultFilePath());
-
         Tracer apiTracer = provider.getTracer("api-module", "1.0.0");
         Tracer dbTracer = provider.getTracer("db-module", "1.0.0");
+        MessageHandler apiHandler = apiTracer.getFileMessageHandler(provider.getDefaultFilePath());
+        MessageHandler dbHandler = dbTracer.getFileMessageHandler(provider.getDefaultFilePath());
 
-        Span apiSpan = apiTracer.createSpan("api.request");
+        Span apiSpan = apiHandler.startSpan("api.request");
         try {
-            sharedFileHandler.info("API request started");
+            apiHandler.info("API request started");
         } finally {
             apiSpan.end();
         }
 
-        Span dbSpan = dbTracer.createSpan("db.query");
+        Span dbSpan = dbHandler.startSpan("db.query");
         try {
-            sharedFileHandler.info("DB query started");
+            dbHandler.info("DB query started");
         } finally {
             dbSpan.end();
         }
 
-        sharedFileHandler.close();
+        apiHandler.close();
+        dbHandler.close();
     }
 }
 ```
 
 Notes:
-- Prefer one shared `FileMessageHandler` per file path. Creating many file handlers for the same file can cause interleaved writes.
+- Creating many file handlers for the same file can cause interleaved writes.
 - Use a Collector when you need central aggregation/export across multiple services/processes/backends, not for a single JVM writing to one file.
 
 ### How `MessageHandler`, `Tracer`, and `Span` are related
 
 - A `MessageHandler` created by a `Tracer` is enriched with the tracer scope and provider metadata.
+- The same tracer-created handler can start spans directly with `startSpan(name)`.
 - When a span is active on the current thread, emitted logs are automatically correlated with that span context
   (trace id + span id).
 - The same log can also be appended as a span event (`"log"`) on the active span.
@@ -586,7 +585,7 @@ public class TracerWorkflowExample {
         Tracer tracer = provider.getTracer("checkout-api", "1.0.0");
         MessageHandler handler = tracer.getConsoleMessageHandler();
 
-        Span span = tracer.createSpan("checkout.request");
+        Span span = handler.startSpan("checkout.request");
         try {
             handler.info("Checkout request started");
             handler.warn("Inventory service latency is increasing");
@@ -781,7 +780,7 @@ Specifically:
 - `traceId`, `spanId`, `traceFlags` are set only when the record's correlation fields are missing.
 - Common attributes are appended only for keys not already present on the record.
 
-## Jaeger/Grafana logs and traces (traces/spans intro)
+## Jaeger/Grafana backend usage (logs vs traces)
 
 A **trace** represents one end-to-end request flow.  
 A **span** is one timed operation inside that trace (DB call, HTTP call, business step, etc.).
@@ -809,6 +808,11 @@ public class BackendLogExportExample {
 If you are exporting to a shared OpenTelemetry Collector instead of directly to backends,
 both handlers can target the same collector OTLP endpoint (commonly `http://localhost:4318/v1/logs`).
 
+Important:
+- `GrafanaMessageHandler` exports log records only (Loki push payload or OTLP logs payload depending on endpoint).
+- Calling `startSpan(...)` / `span.end()` does not export traces by itself.
+- Trace export happens only when a span dispatcher is configured on `TracerProvider`.
+
 ### Span export (traces) via dispatcher
 
 ```java
@@ -834,6 +838,40 @@ public class SpanExportExample {
 
 For Grafana Tempo, use `GrafanaSpanDispatcher` similarly.
 
+### Grafana Loki logs + Tempo traces (full example)
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.GrafanaMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
+import com.threeamigos.common.util.implementations.messagehandler.utils.GrafanaSpanDispatcher;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
+
+public class GrafanaLogsAndTracesExample {
+    public static void main(String[] args) {
+        TracerProvider provider = TracerProvider.builder()
+                .serviceName("checkout-api")
+                .serviceVersion("1.0.0")
+                .build();
+
+        // Required for trace export (Tempo OTLP traces endpoint)
+        provider.setDefaultSpanDispatcher(new GrafanaSpanDispatcher("http://localhost:14318/v1/traces"));
+
+        Tracer tracer = provider.getTracer("checkout-api", "1.0.0");
+        GrafanaMessageHandler logs = tracer.getGrafanaMessageHandler("http://localhost:3100/loki/api/v1/push");
+
+        Span span = logs.startSpan("checkout.request");
+        try {
+            logs.info("checkout request started");
+            logs.info("checkout request completed");
+        } finally {
+            span.end(); // exported to Tempo because default span dispatcher is configured
+            logs.close(); // log records exported to Loki
+        }
+    }
+}
+```
+
 ## Correlation mechanism (with examples)
 
 Correlation is thread-local by design. For multi-thread execution, propagate correlation explicitly.
@@ -841,7 +879,7 @@ Correlation is thread-local by design. For multi-thread execution, propagate cor
 ### Who needs this
 
 Most users do not need to touch correlation APIs directly. If your usage is:
-1. `TracerProvider.builder(...)` → `getTracer(...)` → `get*MessageHandler(...)` → `info/warn/error/...`
+1. `TracerProvider.builder(...)` → `getTracer(...)` → `get*MessageHandler(...)` → `startSpan(...)`/`info/warn/error/...`
 
 then correlation is handled automatically for same-thread execution. Use the APIs below only for:
 - HTTP ingress context attachment (for example `traceparent`/`tracestate` from servlet filters)
@@ -1046,14 +1084,19 @@ public final class CheckoutServlet extends javax.servlet.http.HttpServlet {
         Tracer tracer = (Tracer) req.getAttribute("mh.tracer");
         com.threeamigos.common.util.interfaces.messagehandler.MessageHandler handler =
                 tracer.getFileMessageHandler("message-handler.log");
+        com.threeamigos.common.util.interfaces.messagehandler.otel.Span span =
+                handler.startSpan("checkout.request");
 
-        handler.info("checkout request received");
         try {
+            handler.info("checkout request received");
             handler.info("checkout completed");
             resp.setStatus(javax.servlet.http.HttpServletResponse.SC_OK);
         } catch (RuntimeException ex) {
             handler.exception("checkout failed", ex);
             resp.setStatus(javax.servlet.http.HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+        } finally {
+            span.end();
+            handler.close();
         }
     }
 }
@@ -1062,12 +1105,13 @@ public final class CheckoutServlet extends javax.servlet.http.HttpServlet {
 ## Jakarta EE / WildFly CDI wiring
 
 In a Jakarta EE container (WildFly, Payara, Open Liberty, etc.) with CDI enabled, wire
-`TracerProvider` and `Tracer` as CDI producer beans:
+`TracerProvider`, `Tracer`, and `MessageHandler` as CDI producer beans:
 
 ```java
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
 
 @ApplicationScoped
@@ -1084,6 +1128,11 @@ public class TelemetryProducers {
 
     @Produces @ApplicationScoped
     public Tracer tracer() { return tracerProvider.getTracer("checkout-api", "1.0.0"); }
+
+    @Produces @ApplicationScoped
+    public MessageHandler messageHandler(Tracer tracer) {
+        return tracer.getFileMessageHandler("message-handler.log");
+    }
 }
 ```
 
@@ -1097,18 +1146,23 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
 
 @WebServlet("/checkout")
 public class CheckoutServlet extends HttpServlet {
 
-    @Inject Tracer tracer;
+    @Inject MessageHandler handler;
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp)
             throws IOException {
-        MessageHandler handler = tracer.getFileMessageHandler("message-handler.log");
-        handler.info("checkout request received");
+        Span span = handler.startSpan("checkout.request");
+        try {
+            handler.info("checkout request received");
+            resp.setStatus(HttpServletResponse.SC_OK);
+        } finally {
+            span.end();
+        }
     }
 }
 ```
@@ -1121,12 +1175,17 @@ Note: CDI must be enabled for the deployment (add `beans.xml` to `WEB-INF` or `M
 2. Null message suppliers are ignored (no-op).
 3. If a supplier returns null, the message is ignored (no-op).
 4. A null severity is treated as `SeverityNumber.INFO`.
-5. Async dispatch is optional and available only in output handlers based on `AbstractOutputMessageHandler`:
+5. `MessageHandler.startSpan(name)` works only on tracer-created handlers.
+6. Calling `startSpan(name)` on non-tracer handlers throws `IllegalStateException` (localized message).
+7. There is no `endSpan(...)` helper on handlers; callers close spans explicitly with `span.end()`.
+8. Async dispatch is optional and available only in output handlers based on `AbstractOutputMessageHandler`:
    - `ConsoleMessageHandler`
    - `FileMessageHandler`
    - `JaegerMessageHandler`
    - `GrafanaMessageHandler`
-6. Other handlers are synchronous unless they implement their own threading model.
+9. Other handlers are synchronous unless they implement their own threading model.
+10. `GrafanaMessageHandler` exports logs only; configure `TracerProvider#setDefaultSpanDispatcher(...)`
+    (for example with `GrafanaSpanDispatcher`) to export spans/traces.
 
 ## Java compatibility
 

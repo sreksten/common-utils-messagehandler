@@ -228,15 +228,10 @@ public class TracerProvider {
                 filter);
     }
 
-    TracerMessageHandlerFactory buildMessageHandlerFactory(final @Nullable InstrumentationScope scope) {
-        return buildMessageHandlerFactory(scope, null);
-    }
-
-    TracerMessageHandlerFactory buildMessageHandlerFactory(final @Nullable InstrumentationScope scope,
+    TracerMessageHandlerFactory buildMessageHandlerFactory(final Tracer tracer,
+                                                           final @Nullable InstrumentationScope scope,
                                                            final @Nullable String filePath) {
-        String normalizedFilePath = normalizeNullable(filePath);
-        String resolvedFilePath = normalizedFilePath == null ? defaultFilePath : normalizedFilePath;
-        return new TracerMessageHandlerFactory(getLogRecordFactory(scope), resolvedFilePath);
+        return new TracerMessageHandlerFactory(tracer);
     }
 
     public LogRecordFactory getLogRecordFactory() {

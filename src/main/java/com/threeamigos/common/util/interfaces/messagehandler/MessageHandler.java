@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.interfaces.messagehandler;
 
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
 import jakarta.annotation.Nonnull;
 
 /**
@@ -76,6 +77,16 @@ public interface MessageHandler extends
      * @param message the validated, non-null info message to handle
      */
     void handleMessage(final @Nonnull SeverityNumber level, final @Nonnull String message);
+
+    /**
+     * Starts a span using the tracer bound to this handler instance.
+     * <p>
+     * The caller is responsible for ending the returned span via {@link Span#end()}.
+     *
+     * @param name span name
+     * @return started span
+     */
+    Span startSpan(final @Nonnull String name);
 
     /**
      * Releases any resources held by this handler.

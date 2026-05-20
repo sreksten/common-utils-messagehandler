@@ -69,14 +69,14 @@ public class ConsoleMessageHandler extends AbstractOutputMessageHandler {
 
     @Override
     public void handleMessage(@Nonnull SeverityNumber level, @Nonnull String message) {
-        LogRecord logRecord = logRecordFactory.create(level, message);
+        LogRecord logRecord = createLogRecord(level, message);
         PrintStream stream = level.compareTo(SeverityNumber.ERROR) >= 0 ? System.err : System.out;
         print(stream, logRecordFormatter.format(logRecord));
     }
 
     @Override
     protected void handleExceptionInternal(@Nonnull String message, @Nonnull Throwable throwable) {
-        LogRecord logRecord = logRecordFactory.create(message, throwable);
+        LogRecord logRecord = createLogRecord(message, throwable);
         String formatted = logRecordFormatter.format(logRecord);
         dispatch(() -> {
             synchronized (PRINT_LOCK) {

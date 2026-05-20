@@ -2,13 +2,19 @@ package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.implementations.messagehandler.file.DailyRotationPolicy;
 import com.threeamigos.common.util.implementations.messagehandler.file.SizeRotationPolicy;
+import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
+import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.RawJsonRecordFormatter;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Objects;
 
@@ -245,6 +251,55 @@ public class ReadmeUnitTest {
         SwingMessageHandler swingMessageHandler = new SwingMessageHandler();
         swingMessageHandler.info("This is a test message from Swing handler");
         swingMessageHandler.error("This is a test error message from Swing handler");
+    }
+
+    @Test
+    @DisplayName("Using multiple Tracers to track different parts of a system")
+    void usingMultipleTracersToTrackDifferentPartsOfSystem() throws IOException {
+        final String logFileName = "/tmp/system.log";
+        File file = new File(logFileName);
+        if (file.exists()) {
+            assertTrue(file.delete());
+        }
+
+        TracerProvider provider = TracerProvider.builder()
+                .serviceName("checkout-service")
+                .defaultFilePath(logFileName)
+                .build();
+
+        FileMessageHandler sharedFileHandler = new FileMessageHandler(
+                provider.getLogRecordFactory(),
+                new RawJsonRecordFormatter(),
+                provider.getDefaultFilePath()
+        );
+
+        Tracer apiTracer = provider.getTracer("api-module", "1.0.0");
+        Tracer dbTracer = provider.getTracer("db-module", "1.0.0");
+
+        Span apiSpan = apiTracer.createSpan("api.request");
+        try {
+            sharedFileHandler.info("API request started");
+        } finally {
+            apiSpan.end();
+        }
+
+        Span dbSpan = dbTracer.createSpan("db.query");
+        try {
+            sharedFileHandler.info("DB query started");
+        } finally {
+            dbSpan.end();
+        }
+
+        sharedFileHandler.close();
+
+        assertTrue(file.exists());
+        String content = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+        assertTrue(content.contains("API request started"));
+        assertTrue(content.contains("DB query started"));
+        assertTrue(content.contains("api-module"));
+        assertTrue(content.contains("db-module"));
+
+        assertTrue(file.delete());
     }
 
     private void clearOldFiles(String logFileName) {

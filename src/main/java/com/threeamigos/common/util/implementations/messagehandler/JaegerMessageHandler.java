@@ -177,13 +177,13 @@ public class JaegerMessageHandler extends AbstractOutputMessageHandler {
 
     @Override
     public void handleMessage(final @Nonnull SeverityNumber level, final @Nonnull String message) {
-        LogRecord logRecord = logRecordFactory.create(level, message);
+        LogRecord logRecord = createLogRecord(level, message);
         dispatchRecord(logRecord);
     }
 
     @Override
     protected void handleExceptionInternal(final @Nonnull String message, final @Nonnull Throwable throwable) {
-        LogRecord logRecord = logRecordFactory.create(message, throwable);
+        LogRecord logRecord = createLogRecord(message, throwable);
         dispatchRecord(logRecord);
     }
 

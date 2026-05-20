@@ -1,7 +1,12 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
+import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordFactoryImpl;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
 import jakarta.annotation.Nonnull;
 
 import java.util.ArrayList;
@@ -36,6 +41,14 @@ import java.util.function.Supplier;
  */
 public abstract class AbstractMessageHandler implements MessageHandler {
 
+    private static final LogRecordFactory DEFAULT_LOG_RECORD_FACTORY = new LogRecordFactoryImpl();
+
+    /**
+     * Bound internally by otel package code through reflection to keep tracer linkage
+     * hidden from the public API.
+     */
+    private Tracer tracer;
+
     /**
      * Performs the actual exception dispatch.
      * <p>
@@ -45,6 +58,35 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * @param throwable exception to dispatch
      */
     protected abstract void handleExceptionInternal(final @Nonnull String message, final @Nonnull Throwable throwable);
+
+    @Override
+    public Span startSpan(final @Nonnull String name) {
+        Tracer boundTracer = tracer;
+        if (boundTracer == null) {
+            throw new IllegalStateException(MessageHandlerResourceBundle.get("cannotStartSpanNoTracerBound"));
+        }
+        return boundTracer.createSpan(name);
+    }
+
+    Tracer getBoundTracerForTests() {
+        return tracer;
+    }
+
+    protected final LogRecord createLogRecord(final @Nonnull SeverityNumber level, final @Nonnull String message) {
+        return resolveLogRecordFactory().create(level, message);
+    }
+
+    protected final LogRecord createLogRecord(final @Nonnull String message, final @Nonnull Throwable throwable) {
+        return resolveLogRecordFactory().create(message, throwable);
+    }
+
+    private LogRecordFactory resolveLogRecordFactory() {
+        Tracer boundTracer = tracer;
+        if (boundTracer != null) {
+            return boundTracer.getLogRecordFactory();
+        }
+        return DEFAULT_LOG_RECORD_FACTORY;
+    }
 
     private volatile int enabledLevels =
                     1 << SeverityNumber.INFO.getValue() |
