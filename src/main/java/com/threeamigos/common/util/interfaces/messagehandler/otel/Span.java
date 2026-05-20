@@ -44,6 +44,19 @@ public interface Span {
         return getSpanContext();
     }
 
+    /**
+     * Creates a child span using this span as parent.
+     * <p>
+     * Implementations with tracer context should return a fully recording child span.
+     * Implementations without child-creation capabilities may return a non-recording span.
+     *
+     * @param spanName child span name
+     * @return created child span (never {@code null})
+     */
+    default Span create(final String spanName) {
+        return Span.wrap(getSpanContext());
+    }
+
     boolean isRecording();
 
     void setAttribute(String key, AnyValue value);

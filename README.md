@@ -495,6 +495,8 @@ or component (`provider.getTracer(instrumentationName, version, ...)`).
 
 `Span` represents one timed operation. Start a `Span` either with `tracer.createSpan(...)`, or directly from a
 tracer-created handler with `handler.startSpan(...)`.
+Once you have a parent span, you can create child spans directly from it with `parentSpan.create("child-name")`
+(equivalent to `tracer.createSpan("child-name", parentSpan.getSpanContext())`).
 
 Use a `MessageHandler` created from that `Tracer` (`tracer.getConsoleMessageHandler()`, `getFileMessageHandler(...)`, 
 etc.) to log your messages.
@@ -560,6 +562,7 @@ Notes:
 
 - A `MessageHandler` created by a `Tracer` is enriched with the tracer scope and provider metadata.
 - The same tracer-created handler can start spans directly with `startSpan(name)`.
+- A `Span` can produce child spans directly with `span.create(childName)`, without injecting `Tracer` at call sites.
 - When a span is active on the current thread, emitted logs are automatically correlated with that span context
   (trace id + span id).
 - The same log can also be appended as a span event (`"log"`) on the active span.
@@ -617,7 +620,8 @@ public class ParentChildSpanExample {
                 .getTracer("checkout-api", "1.0.0");
 
         Span parent = tracer.createSpan("checkout");
-        Span child = tracer.createSpan("checkout.payment-authorize", parent.getSpanContext());
+        // child span from parent span
+        Span child = parent.create("checkout.payment-authorize");
 
         child.addEvent("payment-provider-call");
         child.end();

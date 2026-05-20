@@ -9,6 +9,7 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanData;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanDispatcher;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanContext;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.StatusCode;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -80,6 +81,57 @@ class SpanImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         assertNotNull(span.getInstrumentationScope());
         assertEquals("orders", span.getInstrumentationScope().getName());
         assertEquals("1.0.0", span.getInstrumentationScope().getVersion());
+    }
+
+    @Test
+    @DisplayName("create should produce child span using parent context when tracer is bound")
+    void createShouldProduceChildSpanUsingParentContextWhenTracerIsBound() throws Exception {
+        Tracer tracer = new TracerImpl("orders", "1.0.0", null, Collections.<KeyValue>emptyList());
+        Span parent = tracer.createSpan("parent");
+
+        Span child = parent.create("child");
+
+        assertEquals(parent.getSpanContext().getTraceId(), child.getSpanContext().getTraceId());
+        assertEquals(parent.getSpanContext().getSpanId(), privateField(child, "parentSpanId"));
+        child.end();
+        parent.end();
+    }
+
+    @Test
+    @DisplayName("create should produce child span with same trace id when tracer is not bound")
+    void createShouldProduceChildSpanWithSameTraceIdWhenTracerIsNotBound() throws Exception {
+        SpanImpl parent = new SpanImpl("parent", context);
+
+        Span child = parent.create("child");
+
+        assertEquals(context.getTraceId(), child.getSpanContext().getTraceId());
+        assertEquals(context.getSpanId(), privateField(child, "parentSpanId"));
+        child.end();
+    }
+
+    @Test
+    @DisplayName("create should generate a fresh child context when parent context is invalid")
+    void createShouldGenerateFreshChildContextWhenParentContextIsInvalid() throws Exception {
+        SpanImpl parent = new SpanImpl("parent", new SpanContextImpl());
+
+        Span child = parent.create("child");
+
+        assertTrue(child.getSpanContext().isValid());
+        assertNull(privateField(child, "parentSpanId"));
+        child.end();
+    }
+
+    @Test
+    @DisplayName("create should generate a child context when internal parent context is null")
+    void createShouldGenerateChildContextWhenInternalParentContextIsNull() throws Exception {
+        SpanImpl parent = new SpanImpl("parent", context);
+        setField(parent, "spanContext", null);
+
+        Span child = parent.create("child");
+
+        assertTrue(child.getSpanContext().isValid());
+        assertNull(privateField(child, "parentSpanId"));
+        child.end();
     }
 
     @Test
@@ -327,6 +379,12 @@ class SpanImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         Field f = SpanImpl.class.getDeclaredField("ended");
         f.setAccessible(true);
         f.set(span, value);
+    }
+
+    private static void setField(final Object target, final String name, final Object value) throws Exception {
+        Field f = target.getClass().getDeclaredField(name);
+        f.setAccessible(true);
+        f.set(target, value);
     }
 
     private static void runWhileSecondRecordingCheckShouldFail(final SpanImpl span,

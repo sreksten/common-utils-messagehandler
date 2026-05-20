@@ -11,6 +11,8 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanDispatcher
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanContext;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.StatusCode;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
+import com.threeamigos.common.util.implementations.messagehandler.tracecontext.TraceContextGenerator;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -47,6 +49,7 @@ final class SpanImpl implements Span {
     private final AutoCloseable scopeToken;
     private final String parentSpanId;
     private final SpanDispatcher spanDispatcher;
+    private final Tracer spanCreator;
     private final Map<String, AnyValue> attributes = new LinkedHashMap<>();
     private final List<Event> events = new ArrayList<>();
     private final List<Link> links = new ArrayList<>();
@@ -86,6 +89,19 @@ final class SpanImpl implements Span {
              final AutoCloseable scopeToken,
              final String parentSpanId,
              final SpanDispatcher spanDispatcher) {
+        this(name, spanContext, instrumentationScope, startTimestamp, recordingEnabled,
+                scopeToken, parentSpanId, spanDispatcher, null);
+    }
+
+    SpanImpl(final String name,
+             final SpanContext spanContext,
+             final InstrumentationScope instrumentationScope,
+             final Instant startTimestamp,
+             final boolean recordingEnabled,
+             final AutoCloseable scopeToken,
+             final String parentSpanId,
+             final SpanDispatcher spanDispatcher,
+             final Tracer spanCreator) {
         this.name = OpenTelemetryAttributeValidator.requireNonBlank(name, "spanName");
         if (spanContext == null) {
             OpenTelemetryAttributeValidator.handleBundled("spanContextMustNotBeNull");
@@ -104,6 +120,7 @@ final class SpanImpl implements Span {
         this.scopeToken = scopeToken;
         this.parentSpanId = parentSpanId;
         this.spanDispatcher = spanDispatcher;
+        this.spanCreator = spanCreator;
         this.ended = !recordingEnabled;
     }
 
@@ -115,6 +132,42 @@ final class SpanImpl implements Span {
     @Override
     public InstrumentationScope getInstrumentationScope() {
         return instrumentationScope;
+    }
+
+    @Override
+    public Span create(final String spanName) {
+        if (spanCreator != null) {
+            return spanCreator.createSpan(spanName, spanContext);
+        }
+        String normalizedName = OpenTelemetryAttributeValidator.requireNonBlank(spanName, "spanName");
+        String parentId = null;
+        SpanContext childContext;
+        if (spanContext == null || !spanContext.isValid()) {
+            childContext = new SpanContextImpl(
+                    TraceContextGenerator.generateTraceId(),
+                    TraceContextGenerator.generateParentId(),
+                    (byte) 0x00,
+                    false,
+                    new TraceStateImpl());
+        } else {
+            parentId = spanContext.getSpanId();
+            childContext = new SpanContextImpl(
+                    spanContext.getTraceId(),
+                    TraceContextGenerator.generateParentId(),
+                    spanContext.getTraceFlags(),
+                    false,
+                    spanContext.getTraceState());
+        }
+        return new SpanImpl(
+                normalizedName,
+                childContext,
+                instrumentationScope,
+                Instant.now(),
+                true,
+                null,
+                parentId,
+                spanDispatcher,
+                null);
     }
 
     @Override

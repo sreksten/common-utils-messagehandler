@@ -136,7 +136,8 @@ class TracerImpl implements Tracer {
                 true,
                 scopeToken,
                 parentSpanId,
-                spanDispatcher);
+                spanDispatcher,
+                this);
         if (owner != null) {
             owner.getCorrelationResolver().setActiveSpan(span);
         }

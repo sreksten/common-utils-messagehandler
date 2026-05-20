@@ -33,6 +33,17 @@ class SpanInterfaceUnitTest {
     }
 
     @Test
+    @DisplayName("default create should return a wrapped non-recording span")
+    void defaultCreateShouldReturnWrappedNonRecordingSpan() {
+        ProbeSpan span = new ProbeSpan();
+
+        Span child = span.create("child-span");
+
+        assertFalse(child.isRecording());
+        assertSame(span.getSpanContext(), child.getSpanContext());
+    }
+
+    @Test
     @DisplayName("wrap should expose the provided context and remain non-recording")
     void wrapShouldExposeProvidedContextAndRemainNonRecording() {
         SpanContext providedContext = new StubSpanContext();
