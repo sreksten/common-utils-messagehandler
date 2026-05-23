@@ -315,6 +315,89 @@ class ConsoleMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("Should keep distinct locks for System.out and System.err")
+    void shouldKeepDistinctLocksForSystemOutAndSystemErr() throws Exception {
+        Field outLockField = ConsoleMessageHandler.class.getDeclaredField("OUT_PRINT_LOCK");
+        Field errLockField = ConsoleMessageHandler.class.getDeclaredField("ERR_PRINT_LOCK");
+        outLockField.setAccessible(true);
+        errLockField.setAccessible(true);
+
+        Object outLock = outLockField.get(null);
+        Object errLock = errLockField.get(null);
+
+        assertNotNull(outLock);
+        assertNotNull(errLock);
+        assertNotSame(outLock, errLock);
+    }
+
+    @Test
+    @DisplayName("System.err writes should not wait for a blocked System.out write")
+    void systemErrWritesShouldNotWaitForBlockedSystemOutWrite() throws Exception {
+        PrintStream originalOut = System.out;
+        PrintStream originalErr = System.err;
+        CountDownLatch outEntered = new CountDownLatch(1);
+        CountDownLatch releaseOut = new CountDownLatch(1);
+        CountDownLatch errPrinted = new CountDownLatch(1);
+        AtomicBoolean firstOutCall = new AtomicBoolean(true);
+
+        PrintStream blockingOut = new PrintStream(new ByteArrayOutputStream(), true, StandardCharsets.UTF_8.name()) {
+            @Override
+            public void println(String x) {
+                if (firstOutCall.compareAndSet(true, false)) {
+                    outEntered.countDown();
+                    try {
+                        releaseOut.await(2, TimeUnit.SECONDS);
+                    } catch (InterruptedException ignored) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+                super.println(x);
+            }
+        };
+        PrintStream signalingErr = new PrintStream(new ByteArrayOutputStream(), true, StandardCharsets.UTF_8.name()) {
+            @Override
+            public void println(String x) {
+                errPrinted.countDown();
+                super.println(x);
+            }
+        };
+
+        System.setOut(blockingOut);
+        System.setErr(signalingErr);
+
+        ConsoleMessageHandler handler = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        Future<?> outFuture = null;
+        Future<?> errFuture = null;
+        try {
+            outFuture = executor.submit(() -> handler.info("hold-out"));
+            assertTrue(outEntered.await(500, TimeUnit.MILLISECONDS),
+                    "Test setup failed: out write did not enter blocking section");
+
+            errFuture = executor.submit(() -> handler.error("err-now"));
+            assertTrue(errPrinted.await(500, TimeUnit.MILLISECONDS),
+                    "err write should not be blocked by out lock");
+
+            releaseOut.countDown();
+            outFuture.get(2, TimeUnit.SECONDS);
+            errFuture.get(2, TimeUnit.SECONDS);
+        } finally {
+            releaseOut.countDown();
+            if (outFuture != null) {
+                outFuture.cancel(true);
+            }
+            if (errFuture != null) {
+                errFuture.cancel(true);
+            }
+            executor.shutdownNow();
+            executor.awaitTermination(2, TimeUnit.SECONDS);
+            handler.close();
+            System.setOut(originalOut);
+            System.setErr(originalErr);
+        }
+    }
+
+    @Test
     @DisplayName("RawJsonRecordFormatter should produce NDJSON output to System.out")
     void jsonFormatterShouldProduceNdjsonOutput() throws Exception {
         ByteArrayOutputStream outContent = new ByteArrayOutputStream();
@@ -469,6 +552,15 @@ class ConsoleMessageHandlerUnitTest {
         ConsoleMessageHandler handler = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER, true, 1, false);
         Thread hook = getShutdownHook(handler);
         assertNull(hook);
+        handler.close();
+    }
+
+    @Test
+    @DisplayName("Async convenience constructor should register shutdown hook by default")
+    void asyncConvenienceConstructorShouldRegisterShutdownHookByDefault() throws Exception {
+        ConsoleMessageHandler handler = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER, true, 1);
+        Thread hook = getShutdownHook(handler);
+        assertNotNull(hook);
         handler.close();
     }
 

@@ -17,6 +17,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -160,6 +161,39 @@ class JaegerMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("closeOnDispatchError in async mode should schedule close only once")
+    void closeOnDispatchErrorAsyncShouldScheduleCloseOnlyOnce() throws Exception {
+        CapturingDispatcher dispatcher = new CapturingDispatcher();
+        dispatcher.throwable = new IOException("boom");
+        CloseCountingJaegerMessageHandler sut = new CloseCountingJaegerMessageHandler(dispatcher);
+        sut.setErrorConsumer(msg -> {
+        });
+        sut.setCloseOnDispatchError(true);
+
+        try {
+            for (int i = 0; i < 300; i++) {
+                try {
+                    sut.info("trigger-" + i);
+                } catch (IllegalStateException ignored) {
+                    // Expected once the close thread completes.
+                }
+            }
+
+            long deadline = System.currentTimeMillis() + 5000;
+            while (sut.getCloseInvocations() == 0 && System.currentTimeMillis() < deadline) {
+                Thread.sleep(10L);
+            }
+            assertTrue(sut.getCloseInvocations() >= 1, "close() should be invoked at least once");
+
+            Thread.sleep(400L);
+            assertEquals(1, sut.getCloseInvocations(),
+                    "Async close-on-dispatch-error must schedule exactly one close request");
+        } finally {
+            sut.forceCloseWithoutCounting();
+        }
+    }
+
+    @Test
     @DisplayName("constructors and guards should validate parameters")
     void constructorsAndGuardsShouldValidateParameters() {
         JaegerMessageHandler simple = new JaegerMessageHandler("http://localhost:4318/v1/logs");
@@ -260,6 +294,33 @@ class JaegerMessageHandlerUnitTest {
             }
             payloads.add(formattedExportLogsServiceRequestJson);
             return null;
+        }
+    }
+
+    private static final class CloseCountingJaegerMessageHandler extends JaegerMessageHandler {
+        private final AtomicInteger closeInvocations = new AtomicInteger();
+
+        private CloseCountingJaegerMessageHandler(final CapturingDispatcher dispatcher) {
+            super(new LogRecordFactoryImpl(), logRecord -> "{}", dispatcher, true, 4096, false);
+        }
+
+        @Override
+        public void close() {
+            closeInvocations.incrementAndGet();
+            try {
+                Thread.sleep(150L);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+            super.close();
+        }
+
+        private int getCloseInvocations() {
+            return closeInvocations.get();
+        }
+
+        private void forceCloseWithoutCounting() {
+            super.close();
         }
     }
 

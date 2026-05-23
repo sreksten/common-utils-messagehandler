@@ -20,7 +20,8 @@ import java.io.PrintStream;
  */
 public class ConsoleMessageHandler extends AbstractOutputMessageHandler {
 
-    private static final Object PRINT_LOCK = new Object();
+    private static final Object OUT_PRINT_LOCK = new Object();
+    private static final Object ERR_PRINT_LOCK = new Object();
 
     /**
      * Creates a synchronous {@code ConsoleMessageHandler} that writes directly on the calling thread.
@@ -45,13 +46,18 @@ public class ConsoleMessageHandler extends AbstractOutputMessageHandler {
     }
 
     /**
+     * Creates a {@code ConsoleMessageHandler} with optional asynchronous dispatch.
+     * <p>
+     * Convenience default: when {@code async} is {@code true}, a JVM shutdown hook is
+     * registered automatically to close the handler and flush queued messages.
+     *
      * @param async whether to dispatch logging to a background worker
      * @param queueCapacity capacity for the async queue; 0 or negative => unbounded
      */
     public ConsoleMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
                                  final @Nonnull LogRecordFormatter logRecordFormatter,
                                  boolean async, int queueCapacity) {
-        this(logRecordFactory, logRecordFormatter, async, queueCapacity, false);
+        this(logRecordFactory, logRecordFormatter, async, queueCapacity, true);
     }
 
     /**
@@ -71,7 +77,8 @@ public class ConsoleMessageHandler extends AbstractOutputMessageHandler {
     public void handleMessage(@Nonnull SeverityNumber level, @Nonnull String message) {
         LogRecord logRecord = createLogRecord(level, message);
         PrintStream stream = level.compareTo(SeverityNumber.ERROR) >= 0 ? System.err : System.out;
-        print(stream, logRecordFormatter.format(logRecord));
+        Object printLock = level.compareTo(SeverityNumber.ERROR) >= 0 ? ERR_PRINT_LOCK : OUT_PRINT_LOCK;
+        print(stream, logRecordFormatter.format(logRecord), printLock);
     }
 
     @Override
@@ -79,15 +86,15 @@ public class ConsoleMessageHandler extends AbstractOutputMessageHandler {
         LogRecord logRecord = createLogRecord(message, throwable);
         String formatted = logRecordFormatter.format(logRecord);
         dispatch(() -> {
-            synchronized (PRINT_LOCK) {
+            synchronized (ERR_PRINT_LOCK) {
                 System.err.println(formatted);
             }
         });
     }
 
-    private void print(PrintStream stream, String formatted) {
+    private void print(PrintStream stream, String formatted, Object printLock) {
         Runnable task = () -> {
-            synchronized (PRINT_LOCK) {
+            synchronized (printLock) {
                 stream.println(formatted);
             }
         };

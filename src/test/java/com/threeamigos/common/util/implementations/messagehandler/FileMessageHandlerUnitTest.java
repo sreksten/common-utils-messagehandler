@@ -18,6 +18,7 @@ import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.io.BufferedWriter;
 import java.io.FileWriter;
+import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -26,6 +27,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -136,6 +138,45 @@ class FileMessageHandlerUnitTest {
                     return true;
                 }
             };
+        }
+    }
+
+    private static class AsyncErrorCloseCountingFileMessageHandler extends FileMessageHandler {
+        private final AtomicInteger closeInvocations = new AtomicInteger();
+
+        private AsyncErrorCloseCountingFileMessageHandler(String filename) {
+            super(FACTORY, DEFAULT_FORMATTER, filename, true, 4096, false);
+        }
+
+        @Override
+        protected PrintWriter openWriter(Path filePath) throws IOException {
+            return new PrintWriter(new java.io.StringWriter()) {
+                @Override
+                public boolean checkError() {
+                    return true;
+                }
+            };
+        }
+
+        @Override
+        public void close() {
+            closeInvocations.incrementAndGet();
+            try {
+                // Keep the first close request busy briefly so repeated write failures
+                // would have a chance to trigger extra close requests if not guarded.
+                Thread.sleep(150);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+            super.close();
+        }
+
+        private int getCloseInvocations() {
+            return closeInvocations.get();
+        }
+
+        private void forceCloseWithoutCounting() {
+            super.close();
         }
     }
 
@@ -305,6 +346,33 @@ class FileMessageHandlerUnitTest {
         FileMessageHandler handler = new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString(), true, 10, true);
         try {
             handler.info("hello");
+        } finally {
+            handler.close();
+        }
+    }
+
+    @Test
+    @DisplayName("Async convenience constructor should register shutdown hook by default")
+    void asyncConvenienceConstructorShouldRegisterShutdownHookByDefault() throws Exception {
+        Path file = Files.createTempFile("fmh-default-hook", ".log");
+        Files.deleteIfExists(file);
+        FileMessageHandler handler = new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString(), true, 10);
+        try {
+            assertNotNull(getShutdownHook(handler));
+        } finally {
+            handler.close();
+        }
+    }
+
+    @Test
+    @DisplayName("Async rotation convenience constructor should register shutdown hook by default")
+    void asyncRotationConvenienceConstructorShouldRegisterShutdownHookByDefault() throws Exception {
+        Path file = Files.createTempFile("fmh-default-hook-rotation", ".log");
+        Files.deleteIfExists(file);
+        FileMessageHandler handler = new FileMessageHandler(
+                FACTORY, DEFAULT_FORMATTER, file.toString(), true, 10, new SizeRotationPolicy(Long.MAX_VALUE));
+        try {
+            assertNotNull(getShutdownHook(handler));
         } finally {
             handler.close();
         }
@@ -790,6 +858,40 @@ class FileMessageHandlerUnitTest {
     }
 
     @Test
+    @Timeout(value = 10, unit = TimeUnit.SECONDS)
+    @DisplayName("checkWriteError: async closeOnWriteError should schedule close only once")
+    void checkWriteErrorCloseOnWriteErrorAsyncShouldScheduleCloseOnlyOnce() throws Exception {
+        Path file = Files.createTempFile("fmh-close-on-error-single-close", ".log");
+        AsyncErrorCloseCountingFileMessageHandler handler = new AsyncErrorCloseCountingFileMessageHandler(file.toString());
+        handler.setErrorConsumer(msg -> {
+        });
+        handler.setCloseOnWriteError(true);
+
+        try {
+            for (int i = 0; i < 300; i++) {
+                try {
+                    handler.info("trigger-" + i);
+                } catch (IllegalStateException ignored) {
+                    // Expected once the close thread completes.
+                }
+            }
+
+            long deadline = System.currentTimeMillis() + 5000;
+            while (handler.getCloseInvocations() == 0 && System.currentTimeMillis() < deadline) {
+                Thread.sleep(10);
+            }
+            assertTrue(handler.getCloseInvocations() >= 1, "close() should be invoked at least once");
+
+            // Give queued failures time to process; no additional close requests should appear.
+            Thread.sleep(400);
+            assertEquals(1, handler.getCloseInvocations(),
+                    "Async close-on-write-error must schedule exactly one close request");
+        } finally {
+            handler.forceCloseWithoutCounting();
+        }
+    }
+
+    @Test
     @DisplayName("rotateIfNeeded: IOException when re-opening after rotation should notify errorConsumer")
     void rotateIfNeededFailureNotifiesErrorConsumer() throws Exception {
         Path file = Files.createTempFile("fmh-rotate-reopen-fail", ".log");
@@ -836,5 +938,11 @@ class FileMessageHandlerUnitTest {
         }
 
         assertEquals(messages, infoLines, "Queued writes were not drained after worker interruption");
+    }
+
+    private Thread getShutdownHook(final FileMessageHandler handler) throws Exception {
+        Field shutdownHookField = AbstractOutputMessageHandler.class.getDeclaredField("shutdownHook");
+        shutdownHookField.setAccessible(true);
+        return (Thread) shutdownHookField.get(handler);
     }
 }

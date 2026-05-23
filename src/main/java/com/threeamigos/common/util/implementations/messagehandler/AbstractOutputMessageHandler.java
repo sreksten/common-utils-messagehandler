@@ -48,6 +48,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * exits, the caller thread performs one additional drain pass to capture tasks enqueued in the
  * window between the interrupt and the worker's own drain, then calls {@link #closeOutput()} to
  * release the underlying output resource.
+ *
+ * <h3>Close-on-error helper for subclasses</h3>
+ * <p>
+ * Subclasses that support "close on unrecoverable write/dispatch error" should use
+ * {@link #requestCloseOnErrorIfEnabled(boolean, String)}. It prevents deadlocks in async mode and
+ * guarantees one-shot close-thread scheduling under repeated failures.
  * <p>
  * @author Stefano Reksten
  */
@@ -58,6 +64,7 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
     private ExecutorService worker;
     private Thread shutdownHook;
     private final AtomicBoolean closed = new AtomicBoolean(false);
+    private final AtomicBoolean asyncCloseOnErrorScheduled = new AtomicBoolean(false);
     private final Object dispatchLock = new Object();
     protected volatile LogRecordFormatter logRecordFormatter;
 
@@ -243,6 +250,31 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
      */
     protected final boolean isAsync() {
         return async;
+    }
+
+    /**
+     * Requests handler shutdown when an unrecoverable write/dispatch error occurs.
+     * <p>
+     * In synchronous mode, {@link #close()} is executed immediately on the caller thread.
+     * In asynchronous mode, {@link #close()} is dispatched on a dedicated thread to avoid
+     * deadlocking the single async worker, and only the first request spawns that thread.
+     *
+     * @param closeOnError whether close-on-error behavior is enabled by the subclass
+     * @param closeThreadName thread name to use when asynchronous close must be scheduled
+     */
+    protected final void requestCloseOnErrorIfEnabled(final boolean closeOnError,
+                                                      final @Nonnull String closeThreadName) {
+        if (!closeOnError) {
+            return;
+        }
+        Objects.requireNonNull(closeThreadName, "closeThreadName must not be null");
+        if (!isAsync()) {
+            close();
+            return;
+        }
+        if (asyncCloseOnErrorScheduled.compareAndSet(false, true)) {
+            new Thread(this::close, closeThreadName).start();
+        }
     }
 
     private void drainQueueInCallerThread() {

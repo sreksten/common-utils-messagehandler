@@ -33,6 +33,9 @@ import java.util.function.Consumer;
  *   <li><strong>Re-open on external rotation</strong>: pass {@code reopenOnExternalRotation=true}
  *       to have the handler silently re-create the log file when an external tool (e.g.
  *       {@code logrotate}) has moved or deleted it.</li>
+ *   <li><strong>Close-on-write-error</strong>: when enabled, asynchronous mode schedules
+ *       at most one close request thread, preventing thread proliferation under persistent
+ *       write failures.</li>
  * </ul>
  */
 public class FileMessageHandler extends AbstractOutputMessageHandler {
@@ -134,6 +137,9 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      * <p>
      * Parent directories are created automatically if they do not exist. Appends to the file if it
      * already exists.
+     * <p>
+     * Convenience default: when {@code async} is {@code true}, a JVM shutdown hook is
+     * registered automatically to close the handler and flush queued writes.
      *
      * @param filename      path to the log file; must not be {@code null} or blank
      * @param async         {@code true} to dispatch writes via a background worker thread
@@ -144,7 +150,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
                               final @Nonnull LogRecordFormatter logRecordFormatter,
                               final @Nonnull String filename,
                               final boolean async, final int queueCapacity) {
-        this(logRecordFactory, logRecordFormatter, filename, async, queueCapacity, false, null, false);
+        this(logRecordFactory, logRecordFormatter, filename, async, queueCapacity, true, null, false);
     }
 
     /**
@@ -190,6 +196,9 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
 
     /**
      * Creates a {@code FileMessageHandler} with optional asynchronous dispatch and log rotation.
+     * <p>
+     * Convenience default: when {@code async} is {@code true}, a JVM shutdown hook is
+     * registered automatically to close the handler and flush queued writes.
      *
      * @param filename       path to the log file; must not be {@code null} or blank
      * @param async          {@code true} to dispatch writes via a background worker thread
@@ -203,7 +212,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
                               final @Nonnull String filename,
                               final boolean async, final int queueCapacity,
                               final RotationPolicy rotationPolicy) {
-        this(logRecordFactory, logRecordFormatter, filename, async, queueCapacity, false, rotationPolicy, false);
+        this(logRecordFactory, logRecordFormatter, filename, async, queueCapacity, true, rotationPolicy, false);
     }
 
     /**
@@ -273,6 +282,9 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      * When {@code true}, a write error detected by {@link PrintWriter#checkError()} (and not
      * resolved by the automatic recovery attempt) triggers {@link #close()}. In async mode the
      * close is dispatched on a new thread to avoid a deadlock with the worker thread.
+     * <p>
+     * In async mode, only the first failure schedules a close thread; subsequent failures will
+     * not schedule additional close threads.
      *
      * @param closeOnWriteError {@code true} to auto-close on unrecoverable write error
      */
@@ -329,13 +341,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
         // Layer 2: notify via the configurable consumer
         errorConsumer.accept(MessageHandlerResourceBundle.get("fileWriteError"));
         // Layer 3: optionally close
-        if (closeOnWriteError) {
-            if (isAsync()) {
-                new Thread(this::close, "FileMessageHandler-close-on-error").start();
-            } else {
-                close();
-            }
-        }
+        requestCloseOnErrorIfEnabled(closeOnWriteError, "FileMessageHandler-close-on-error");
     }
 
     /**

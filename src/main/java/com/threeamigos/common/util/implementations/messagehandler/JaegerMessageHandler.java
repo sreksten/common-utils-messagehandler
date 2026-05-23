@@ -51,7 +51,8 @@ import java.util.function.Consumer;
  * <p>
  * Dispatch errors are captured and reported to a configurable {@link Consumer} (default: {@code System.err::println}).
  * Optionally, the handler can auto-close itself after a dispatch failure via
- * {@link #setCloseOnDispatchError(boolean)}.
+ * {@link #setCloseOnDispatchError(boolean)}. In async mode, close scheduling is one-shot, so
+ * repeated failures do not create unbounded close threads.
  *
  * <h2>Authentication</h2>
  * <p>
@@ -168,6 +169,7 @@ public class JaegerMessageHandler extends AbstractOutputMessageHandler {
      * Enables or disables auto-close after a dispatch error.
      * <p>
      * In async mode, close is triggered on a separate thread to avoid waiting on the worker thread itself.
+     * Only the first failure schedules that close thread.
      *
      * @param closeOnDispatchError {@code true} to auto-close on dispatch errors
      */
@@ -200,12 +202,6 @@ public class JaegerMessageHandler extends AbstractOutputMessageHandler {
     private void handleDispatchFailure(final IOException error) {
         String details = error.getMessage() == null ? error.getClass().getName() : error.getMessage();
         errorConsumer.accept(MessageHandlerResourceBundle.format("jaegerDispatchError", details));
-        if (closeOnDispatchError) {
-            if (isAsync()) {
-                new Thread(this::close, "JaegerMessageHandler-close-on-error").start();
-            } else {
-                close();
-            }
-        }
+        requestCloseOnErrorIfEnabled(closeOnDispatchError, "JaegerMessageHandler-close-on-error");
     }
 }

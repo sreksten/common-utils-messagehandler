@@ -23,6 +23,11 @@ import java.util.function.Consumer;
  * <p>
  * Unlike Jaeger-focused flows, this handler keeps messages as logs and does not convert
  * them to span events.
+ * <p>
+ * Dispatch failures are reported via a configurable error consumer (default: {@code System.err::println}).
+ * Optional close-on-dispatch-error behavior can be enabled through
+ * {@link #setCloseOnDispatchError(boolean)}. In async mode, close scheduling is one-shot, so
+ * repeated failures do not create unbounded close threads.
  */
 public class GrafanaMessageHandler extends AbstractOutputMessageHandler {
 
@@ -84,11 +89,24 @@ public class GrafanaMessageHandler extends AbstractOutputMessageHandler {
                 "GrafanaMessageHandler-async", "GrafanaMessageHandler-shutdown");
     }
 
+    /**
+     * Sets the error consumer invoked whenever HTTP dispatch fails.
+     *
+     * @param errorConsumer non-null consumer for localized error messages
+     */
     public void setErrorConsumer(final @Nonnull Consumer<String> errorConsumer) {
         Objects.requireNonNull(errorConsumer, MessageHandlerResourceBundle.get("nullErrorConsumerProvided"));
         this.errorConsumer = errorConsumer;
     }
 
+    /**
+     * Enables or disables auto-close after a dispatch error.
+     * <p>
+     * In async mode, close is triggered on a separate thread to avoid waiting on the worker thread itself.
+     * Only the first failure schedules that close thread.
+     *
+     * @param closeOnDispatchError {@code true} to auto-close on dispatch errors
+     */
     public void setCloseOnDispatchError(final boolean closeOnDispatchError) {
         this.closeOnDispatchError = closeOnDispatchError;
     }
@@ -118,12 +136,6 @@ public class GrafanaMessageHandler extends AbstractOutputMessageHandler {
     private void handleDispatchFailure(final IOException error) {
         String details = error.getMessage() == null ? error.getClass().getName() : error.getMessage();
         errorConsumer.accept(MessageHandlerResourceBundle.format("grafanaDispatchError", details));
-        if (closeOnDispatchError) {
-            if (isAsync()) {
-                new Thread(this::close, "GrafanaMessageHandler-close-on-error").start();
-            } else {
-                close();
-            }
-        }
+        requestCloseOnErrorIfEnabled(closeOnDispatchError, "GrafanaMessageHandler-close-on-error");
     }
 }
