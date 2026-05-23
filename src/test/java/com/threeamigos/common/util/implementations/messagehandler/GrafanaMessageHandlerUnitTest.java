@@ -247,6 +247,39 @@ class GrafanaMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("adaptive retry budget should scale with throughput and cap per-window retries")
+    void adaptiveRetryBudgetShouldScaleWithThroughputAndCapPerWindowRetries() {
+        CapturingDispatcher dispatcher = new CapturingDispatcher();
+        dispatcher.failNextDispatches(3, new IOException("transient overload"));
+        List<String> errors = new ArrayList<String>();
+
+        GrafanaMessageHandler sut = new GrafanaMessageHandler(
+                new LogRecordFactoryImpl(),
+                logRecord -> "{}",
+                dispatcher,
+                false, 0, false);
+        sut.setErrorConsumer(errors::add);
+        sut.setHttpRetryPolicy(3, 0L, 0L);
+        sut.setHttpAdaptiveRetryBudgetPolicy(100, 0, 30_000L, 0.0d);
+
+        sut.info("first");
+        sut.info("second");
+
+        AbstractOutputMessageHandler.HandlerHealthMetrics metrics = sut.getHandlerHealthMetrics();
+        sut.close();
+
+        assertEquals(Arrays.asList(1, 1, 2, 2), dispatcher.batchSizes);
+        assertEquals(5, dispatcher.invocations.get());
+        assertEquals(2, dispatcher.payloads.size());
+        assertEquals(1, errors.size());
+        assertEquals(1L, metrics.getSuccessfulOperations());
+        assertEquals(1L, metrics.getFailedOperations());
+        assertEquals(2L, metrics.getRetryAttempts());
+        assertEquals(1L, metrics.getRetrySuccesses());
+        assertEquals(1L, metrics.getRetryFailures());
+    }
+
+    @Test
     @DisplayName("closeOnDispatchError should close handler in async mode")
     void closeOnDispatchErrorShouldCloseAsyncHandler() throws Exception {
         CapturingDispatcher dispatcher = new CapturingDispatcher();
@@ -316,6 +349,13 @@ class GrafanaMessageHandlerUnitTest {
         assertThrows(NullPointerException.class, () -> sut.setErrorConsumer(null));
         assertThrows(NullPointerException.class, () -> new GrafanaMessageHandler(
                 new LogRecordFactoryImpl(), logRecord -> "{}", null, false, 0, false));
+        assertThrows(IllegalArgumentException.class, () -> sut.setHttpCircuitBreakerPolicy(0, 100L, 1));
+        assertThrows(IllegalArgumentException.class, () -> sut.setHttpCircuitBreakerPolicy(1, 0L, 1));
+        assertThrows(IllegalArgumentException.class, () -> sut.setHttpCircuitBreakerPolicy(1, 100L, 0));
+        assertThrows(IllegalArgumentException.class, () -> sut.setHttpAdaptiveRetryBudgetPolicy(-1, 0, 1000L, 0.0d));
+        assertThrows(IllegalArgumentException.class, () -> sut.setHttpAdaptiveRetryBudgetPolicy(100, -1, 1000L, 0.0d));
+        assertThrows(IllegalArgumentException.class, () -> sut.setHttpAdaptiveRetryBudgetPolicy(100, 0, 0L, 0.0d));
+        assertThrows(IllegalArgumentException.class, () -> sut.setHttpAdaptiveRetryBudgetPolicy(100, 0, 1000L, 1.5d));
     }
 
     @Test

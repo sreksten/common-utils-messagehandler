@@ -233,6 +233,46 @@ class JaegerMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("circuit breaker should open after consecutive failures and recover after cool-down")
+    void circuitBreakerShouldOpenAfterConsecutiveFailuresAndRecoverAfterCoolDown() throws Exception {
+        CapturingDispatcher dispatcher = new CapturingDispatcher();
+        dispatcher.throwable = new IOException("collector unavailable");
+        List<String> errors = new ArrayList<String>();
+
+        JaegerMessageHandler sut = new JaegerMessageHandler(
+                new LogRecordFactoryImpl(),
+                logRecord -> "{}",
+                dispatcher,
+                false, 0, false);
+        sut.setErrorConsumer(errors::add);
+        sut.setHttpRetryPolicy(0, 0L, 0L);
+        sut.setHttpCircuitBreakerPolicy(2, 80L, 1);
+
+        sut.info("first");
+        sut.info("second");
+
+        dispatcher.throwable = null;
+        sut.info("third-fast-fail");
+
+        assertEquals(Arrays.asList(1, 2), dispatcher.batchSizes);
+        assertEquals(3, errors.size());
+        assertTrue(errors.get(2).toLowerCase().contains("circuit breaker open"));
+
+        Thread.sleep(100L);
+        sut.info("fourth-recovery");
+
+        AbstractOutputMessageHandler.HandlerHealthMetrics metrics = sut.getHandlerHealthMetrics();
+        sut.close();
+
+        assertEquals(Arrays.asList(1, 2, 4), dispatcher.batchSizes);
+        assertEquals(4, dispatcher.payloads.size());
+        assertEquals(1L, metrics.getSuccessfulOperations());
+        assertEquals(3L, metrics.getFailedOperations());
+        assertEquals(0L, metrics.getConsecutiveFailures());
+        assertTrue(metrics.isHealthy());
+    }
+
+    @Test
     @DisplayName("runtime dispatch failures should not propagate to caller and should update metrics")
     void runtimeDispatchFailuresShouldNotPropagateAndShouldUpdateMetrics() {
         CapturingDispatcher dispatcher = new CapturingDispatcher();
@@ -349,6 +389,13 @@ class JaegerMessageHandlerUnitTest {
         assertThrows(NullPointerException.class, () -> sut.setErrorConsumer(null));
         assertThrows(NullPointerException.class, () -> new JaegerMessageHandler(
                 new LogRecordFactoryImpl(), logRecord -> "{}", null, false, 0, false));
+        assertThrows(IllegalArgumentException.class, () -> sut.setHttpCircuitBreakerPolicy(0, 100L, 1));
+        assertThrows(IllegalArgumentException.class, () -> sut.setHttpCircuitBreakerPolicy(1, 0L, 1));
+        assertThrows(IllegalArgumentException.class, () -> sut.setHttpCircuitBreakerPolicy(1, 100L, 0));
+        assertThrows(IllegalArgumentException.class, () -> sut.setHttpAdaptiveRetryBudgetPolicy(-1, 0, 1000L, 0.0d));
+        assertThrows(IllegalArgumentException.class, () -> sut.setHttpAdaptiveRetryBudgetPolicy(100, -1, 1000L, 0.0d));
+        assertThrows(IllegalArgumentException.class, () -> sut.setHttpAdaptiveRetryBudgetPolicy(100, 0, 0L, 0.0d));
+        assertThrows(IllegalArgumentException.class, () -> sut.setHttpAdaptiveRetryBudgetPolicy(100, 0, 1000L, 1.5d));
     }
 
     @Test
