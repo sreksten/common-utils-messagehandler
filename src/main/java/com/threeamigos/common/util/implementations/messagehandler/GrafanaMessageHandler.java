@@ -24,6 +24,10 @@ import java.util.function.Consumer;
  * Unlike Jaeger-focused flows, this handler keeps messages as logs and does not convert
  * them to span events.
  * <p>
+ * Default constructors serialize logs with {@link ExportLogsServiceRequestLogRecordFormatter},
+ * so payloads are JSON by default (OTLP ExportLogsServiceRequest JSON; or Loki JSON payload
+ * when using a Loki push endpoint).
+ * <p>
  * Dispatch failures are reported via a configurable error consumer (default: {@code System.err::println}).
  * Optional close-on-dispatch-error behavior can be enabled through
  * {@link #setCloseOnDispatchError(boolean)}. In async mode, close scheduling is one-shot, so

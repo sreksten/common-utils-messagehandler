@@ -483,6 +483,10 @@ simple `String` to a `MessageHandler`, internally this package uses a representa
 Thus, having a grasp of how it works, you can choose what to show. Of course, this
 has greater effectiveness if you have instrumented your application properly with a `Tracer` (more on that later).
 
+`JaegerMessageHandler` and `GrafanaMessageHandler` differ here: their default constructors already
+emit JSON payloads (OTLP `ExportLogsServiceRequest` JSON; Grafana can also emit Loki push JSON
+when targeting a Loki push endpoint).
+
 A utility class is bundled that offers a static method to reduce a long class name by replacing the package name with
 an abbreviation (initial letters only): the `ClassNameReducer.reduce`. E.g., it could replace
 `com.threeamigos.common.utils.TestClass` with `c.t.c.u.TestClass`, a-la SpringBoot.
@@ -1255,6 +1259,9 @@ Note: CDI must be enabled for the deployment (add `beans.xml` to `WEB-INF` or `M
     `new NoRotationPolicy()` to disable rotation explicitly.
 15. `FileMessageHandler` inter-process locking is opt-in (`new FileMessageHandler(path, true)` or
     full constructor with `interProcessLocking=true`) and uses a sidecar `.lck` file.
+16. `JaegerMessageHandler` and `GrafanaMessageHandler` use JSON payloads by default
+    (`ExportLogsServiceRequestLogRecordFormatter`); `ConsoleMessageHandler` and
+    `FileMessageHandler` default to `ConsoleLogRecordFormatter` (human-readable text).
 
 ## Java compatibility
 

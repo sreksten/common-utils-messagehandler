@@ -15,6 +15,10 @@ import java.io.PrintStream;
  * An implementation of the {@link MessageHandler} interface that uses the
  * console to print info, warning, trace, and debug messages to System.out and errors and
  * exceptions to System.err.
+ * <p>
+ * Default constructors use {@link ConsoleLogRecordFormatter}, which is human-readable text output
+ * (not JSON). To emit JSON, provide a custom formatter such as
+ * {@link com.threeamigos.common.util.implementations.messagehandler.otel.formatters.RawJsonRecordFormatter}.
  *
  * @author Stefano Reksten
  */

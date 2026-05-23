@@ -33,6 +33,11 @@ import java.util.function.Consumer;
  * MessageHandler implementation that writes log messages to a file.
  * Supports optional async dispatch with a background worker and shutdown hook.
  * <p>
+ * Constructors that do not accept a custom formatter use
+ * {@link ConsoleLogRecordFormatter}, which produces human-readable text output (not JSON).
+ * To emit JSON lines, pass a custom formatter (for example
+ * {@link com.threeamigos.common.util.implementations.messagehandler.otel.formatters.RawJsonRecordFormatter}).
+ * <p>
  * A size-based rotation policy is enabled by default for constructors that do not accept an
  * explicit {@link RotationPolicy}. The default threshold is
  * {@value #DEFAULT_SIZE_ROTATION_MAX_BYTES} bytes.

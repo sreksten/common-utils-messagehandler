@@ -25,6 +25,7 @@ import java.util.function.Consumer;
  * It serializes each {@link LogRecord} with
  * {@link ExportLogsServiceRequestLogRecordFormatter} by default and delegates the actual HTTP POST operation to
  * {@link JaegerLogRecordDispatcher}.
+ * The default payload is JSON (OTLP ExportLogsServiceRequest JSON).
  *
  * <h2>Recommended Usage</h2>
  * <p>
