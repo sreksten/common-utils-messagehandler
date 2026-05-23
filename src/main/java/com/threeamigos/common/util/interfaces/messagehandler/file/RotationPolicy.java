@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.interfaces.messagehandler.file;
 
 import com.threeamigos.common.util.implementations.messagehandler.file.DailyRotationPolicy;
+import com.threeamigos.common.util.implementations.messagehandler.file.NoRotationPolicy;
 import com.threeamigos.common.util.implementations.messagehandler.file.SizeRotationPolicy;
 import jakarta.annotation.Nonnull;
 
@@ -24,6 +25,8 @@ import java.util.function.Supplier;
  *       threshold.</li>
  *   <li>{@link DailyRotationPolicy}
  *       — rotates once per calendar day, naming the archived file with the date it was opened.</li>
+ *   <li>{@link NoRotationPolicy}
+ *       — explicit no-rotation policy for handlers that should keep writing to a single file.</li>
  * </ul>
  *
  * @author Stefano Reksten

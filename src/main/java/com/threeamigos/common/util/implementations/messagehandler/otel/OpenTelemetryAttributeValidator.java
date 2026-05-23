@@ -12,22 +12,28 @@ import java.util.Set;
 
 /**
  * Shared validation helpers for OTel key-value collections.
+ *
+ * <p>Strict/lenient behavior defaults to {@code OTEL_ERROR_HANDLER_LENIENT}, resolved once when this
+ * class is initialized. A runtime override can be applied through
+ * {@link #setLenientModeOverride(boolean)} and cleared with {@link #clearLenientModeOverride()}.
  */
 public final class OpenTelemetryAttributeValidator {
 
     static final int DEFAULT_ATTRIBUTE_COUNT_LIMIT = 128;
-    private static volatile boolean lenient;
+    private static final boolean LENIENT_MODE_FROM_ENV;
+    private static volatile Boolean lenientModeOverride;
     private static volatile LogTrap testLogTrap;
 
     static {
-        lenient = "true".equalsIgnoreCase(System.getenv("OTEL_ERROR_HANDLER_LENIENT"));
+        LENIENT_MODE_FROM_ENV = "true".equalsIgnoreCase(System.getenv("OTEL_ERROR_HANDLER_LENIENT"));
+        lenientModeOverride = null;
     }
 
     private OpenTelemetryAttributeValidator() {
     }
 
     public static void handle(final String message) {
-        if (lenient) {
+        if (isLenientMode()) {
             logWithStackTrace(message, new IllegalArgumentException(message));
         } else {
             throw new IllegalArgumentException(message);
@@ -36,15 +42,45 @@ public final class OpenTelemetryAttributeValidator {
 
     public static void handleBundled(final String errorMessage) {
         String message = resolveBundledMessage(errorMessage);
-        if (lenient) {
+        if (isLenientMode()) {
             logWithStackTrace(message, new IllegalArgumentException(message));
         } else {
             throw new IllegalArgumentException(message);
         }
     }
 
+    /**
+     * Returns the effective lenient mode.
+     *
+     * <p>If a runtime override is configured through {@link #setLenientModeOverride(boolean)}, that
+     * value is returned. Otherwise, the mode resolved from {@code OTEL_ERROR_HANDLER_LENIENT} at class
+     * initialization time is returned.
+     *
+     * @return {@code true} when validation errors are logged and suppressed, {@code false} when
+     *         validation errors throw {@link IllegalArgumentException}
+     */
     public static boolean isLenientMode() {
-        return lenient;
+        Boolean override = lenientModeOverride;
+        return override != null ? override.booleanValue() : LENIENT_MODE_FROM_ENV;
+    }
+
+    /**
+     * Applies a runtime override for lenient mode.
+     *
+     * <p>The override takes precedence over the value loaded from
+     * {@code OTEL_ERROR_HANDLER_LENIENT} until {@link #clearLenientModeOverride()} is called.
+     *
+     * @param value {@code true} to enable lenient mode, {@code false} to force strict mode
+     */
+    public static void setLenientModeOverride(final boolean value) {
+        lenientModeOverride = Boolean.valueOf(value);
+    }
+
+    /**
+     * Clears the runtime lenient-mode override and restores environment-based behavior.
+     */
+    public static void clearLenientModeOverride() {
+        lenientModeOverride = null;
     }
 
     public static void report(final String message) {
@@ -64,7 +100,7 @@ public final class OpenTelemetryAttributeValidator {
     }
 
     static void setLenientModeForTests(final boolean value) {
-        lenient = value;
+        setLenientModeOverride(value);
     }
 
     static void setLogTrapForTests(final LogTrap trap) {
@@ -151,7 +187,7 @@ public final class OpenTelemetryAttributeValidator {
     }
 
     private static void handle(final String message, final boolean forceLenient) {
-        if (forceLenient || lenient) {
+        if (forceLenient || isLenientMode()) {
             logWithStackTrace(message, new IllegalArgumentException(message));
         } else {
             throw new IllegalArgumentException(message);
@@ -210,7 +246,7 @@ public final class OpenTelemetryAttributeValidator {
                     ? MessageHandlerResourceBundle.get(errorMessage)
                     : MessageHandlerResourceBundle.format(errorMessage, args);
         } catch (Exception e) {
-            if (lenient) {
+            if (isLenientMode()) {
                 logWithStackTrace(e.getMessage(), e);
             } else if (args == null || args.length == 0) {
                 throw e;

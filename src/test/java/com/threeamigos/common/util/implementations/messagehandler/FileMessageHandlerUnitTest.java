@@ -1,9 +1,11 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.implementations.messagehandler.file.DailyRotationPolicy;
+import com.threeamigos.common.util.implementations.messagehandler.file.NoRotationPolicy;
 import com.threeamigos.common.util.implementations.messagehandler.file.SizeRotationPolicy;
 import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordFactoryImpl;
 import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.RawJsonRecordFormatter;
+import com.threeamigos.common.util.interfaces.messagehandler.file.RotationPolicy;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
@@ -25,6 +27,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -113,7 +116,7 @@ class FileMessageHandlerUnitTest {
      */
     private static class FailingReopenFileMessageHandler extends FileMessageHandler {
         private FailingReopenFileMessageHandler(String filename) {
-            super(FACTORY, DEFAULT_FORMATTER, filename, false, 0, false, null, true);
+            super(FACTORY, DEFAULT_FORMATTER, filename, false, 0, false, new NoRotationPolicy(), true);
         }
 
         @Override
@@ -336,6 +339,47 @@ class FileMessageHandlerUnitTest {
         assertTrue(Files.readAllLines(fileWithFormatter).stream().anyMatch(l -> l.contains("from-formatter")));
         assertTrue(Files.readAllLines(fileWithPolicy).stream().anyMatch(l -> l.contains("from-policy")));
         assertTrue(Files.readAllLines(fileWithFormatterAndPolicy).stream().anyMatch(l -> l.contains("from-formatter-policy")));
+    }
+
+    @Test
+    @DisplayName("No-policy constructors should default to size-based rotation with the documented max size")
+    void noPolicyConstructorsShouldDefaultToSizeBasedRotationWithDocumentedMaxSize() throws Exception {
+        Path fileDefault = Files.createTempFile("fmh-default-policy-default", ".log");
+        Path fileFormatter = Files.createTempFile("fmh-default-policy-formatter", ".log");
+        Path fileFactory = Files.createTempFile("fmh-default-policy-factory", ".log");
+        Path fileAsync = Files.createTempFile("fmh-default-policy-async", ".log");
+        Path fileAsyncWithHook = Files.createTempFile("fmh-default-policy-async-hook", ".log");
+
+        try (FileMessageHandler defaultCtor = new FileMessageHandler(fileDefault.toString());
+             FileMessageHandler formatterCtor = new FileMessageHandler(fileFormatter.toString(), DEFAULT_FORMATTER);
+             FileMessageHandler factoryCtor = new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, fileFactory.toString());
+             FileMessageHandler asyncCtor = new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, fileAsync.toString(), true, 10);
+             FileMessageHandler asyncWithHookCtor = new FileMessageHandler(
+                     FACTORY, DEFAULT_FORMATTER, fileAsyncWithHook.toString(), true, 10, true)) {
+
+            assertDefaultSizeRotationPolicy(defaultCtor);
+            assertDefaultSizeRotationPolicy(formatterCtor);
+            assertDefaultSizeRotationPolicy(factoryCtor);
+            assertDefaultSizeRotationPolicy(asyncCtor);
+            assertDefaultSizeRotationPolicy(asyncWithHookCtor);
+        }
+    }
+
+    @Test
+    @DisplayName("Rotation-policy constructors should reject null and require explicit NoRotationPolicy")
+    void rotationPolicyConstructorsShouldRejectNullAndRequireExplicitNoRotationPolicy() throws Exception {
+        Path file = Files.createTempFile("fmh-null-rotation-policy", ".log");
+
+        assertThrows(NullPointerException.class, () ->
+                new FileMessageHandler(file.toString(), (RotationPolicy) null));
+        assertThrows(NullPointerException.class, () ->
+                new FileMessageHandler(file.toString(), DEFAULT_FORMATTER, null));
+        assertThrows(NullPointerException.class, () ->
+                new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString(), (RotationPolicy) null));
+        assertThrows(NullPointerException.class, () ->
+                new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString(), true, 16, null));
+        assertThrows(NullPointerException.class, () ->
+                new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString(), false, 0, false, null, true));
     }
 
     @Test
@@ -715,7 +759,7 @@ class FileMessageHandlerUnitTest {
         Path file = Files.createTempFile("fmh-reopen", ".log");
         Files.deleteIfExists(file);
         try (FileMessageHandler handler = new FileMessageHandler(
-                FACTORY, DEFAULT_FORMATTER, file.toString(), false, 0, false, null, true)) {
+                FACTORY, DEFAULT_FORMATTER, file.toString(), false, 0, false, new NoRotationPolicy(), true)) {
             handler.info("before-delete");
             // Simulate external rotation: delete the file
             Files.deleteIfExists(file);
@@ -782,6 +826,25 @@ class FileMessageHandlerUnitTest {
             handler.info("ok");
         }
         assertTrue(Files.readAllLines(file).stream().anyMatch(l -> l.contains("ok")));
+    }
+
+    @Test
+    @DisplayName("NoRotationPolicy should prevent rotation even when payload exceeds default size threshold")
+    void noRotationPolicyShouldPreventRotationWithLargePayload() throws Exception {
+        Path file = Files.createTempFile("fmh-no-rotation-policy", ".log");
+        Files.deleteIfExists(file);
+
+        char[] payloadChars = new char[(int) FileMessageHandler.DEFAULT_SIZE_ROTATION_MAX_BYTES + 1024];
+        Arrays.fill(payloadChars, 'x');
+        String oversizedPayload = new String(payloadChars);
+
+        try (FileMessageHandler handler = new FileMessageHandler(
+                FACTORY, DEFAULT_FORMATTER, file.toString(), new NoRotationPolicy())) {
+            handler.info(oversizedPayload);
+        }
+
+        assertEquals(0L, countRotatedFiles(file),
+                "No rotated archive should be created when NoRotationPolicy is used");
     }
 
     // -------------------------------------------------------------------------
@@ -944,5 +1007,35 @@ class FileMessageHandlerUnitTest {
         Field shutdownHookField = AbstractOutputMessageHandler.class.getDeclaredField("shutdownHook");
         shutdownHookField.setAccessible(true);
         return (Thread) shutdownHookField.get(handler);
+    }
+
+    private static void assertDefaultSizeRotationPolicy(final FileMessageHandler handler) throws Exception {
+        Object policy = getRotationPolicy(handler);
+        assertTrue(policy instanceof SizeRotationPolicy,
+                "No-policy constructors must configure SizeRotationPolicy by default");
+        assertEquals(FileMessageHandler.DEFAULT_SIZE_ROTATION_MAX_BYTES, getSizeRotationMaxBytes((SizeRotationPolicy) policy),
+                "Default SizeRotationPolicy max size must match FileMessageHandler.DEFAULT_SIZE_ROTATION_MAX_BYTES");
+    }
+
+    private static Object getRotationPolicy(final FileMessageHandler handler) throws Exception {
+        Field rotationPolicyField = FileMessageHandler.class.getDeclaredField("rotationPolicy");
+        rotationPolicyField.setAccessible(true);
+        return rotationPolicyField.get(handler);
+    }
+
+    private static long getSizeRotationMaxBytes(final SizeRotationPolicy policy) throws Exception {
+        Field maxBytesField = SizeRotationPolicy.class.getDeclaredField("maxBytes");
+        maxBytesField.setAccessible(true);
+        return (Long) maxBytesField.get(policy);
+    }
+
+    private static long countRotatedFiles(final Path file) throws IOException {
+        Path directory = file.toAbsolutePath().getParent();
+        String baseName = file.getFileName().toString();
+        try (Stream<Path> candidates = Files.list(directory)) {
+            return candidates
+                    .filter(path -> path.getFileName().toString().startsWith(baseName + "."))
+                    .count();
+        }
     }
 }

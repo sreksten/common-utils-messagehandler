@@ -221,8 +221,16 @@ public class FileLoggingExample {
 }
 ```
 Logs can grow quite large, so a form of rotation is often needed. When you rotate a log, you stop writing to
-the old log file and start writing to a new file. This package supports two types of rotation policies: size-based and 
-daily.
+the old log file and start writing to a new file.
+
+By default, `FileMessageHandler` constructors that do not accept a `RotationPolicy` use size-based
+rotation with a threshold of `10 MB` (`10 * 1024 * 1024` bytes, exposed as
+`FileMessageHandler.DEFAULT_SIZE_ROTATION_MAX_BYTES`).
+
+This package supports three rotation-policy options: size-based, daily, and an explicit no-rotation
+policy.
+Constructors that accept a `RotationPolicy` expect a non-null value; use `new NoRotationPolicy()`
+when you want to disable rotation.
 
 ### Size-based rotation
 
@@ -264,6 +272,24 @@ public class DailyRotationExample {
 }
 ```
 When the day changes, the log file gets rotated: the old file gets a `.yyyy-MM-dd` suffix and a new one is created.
+
+### Disable rotation explicitly (opt-in)
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.file.NoRotationPolicy;
+
+public class NoRotationExample {
+    public static void main(String[] args) {
+        FileMessageHandler handler = new FileMessageHandler(
+                "logs/app.log",
+                new NoRotationPolicy()
+        );
+        handler.info("Always append to the same file");
+        handler.close();
+    }
+}
+```
 
 ## `SwingMessageHandler`: standalone desktop apps
 
@@ -1204,6 +1230,9 @@ Note: CDI must be enabled for the deployment (add `beans.xml` to `WEB-INF` or `M
 11. `CompositeMessageHandler.close()` closes all currently registered delegates.
 12. `SwingMessageHandler` dialogs are no-ops in headless environments.
 13. `exception(...)` overloads treat null message/throwable inputs as no-op.
+14. `FileMessageHandler` constructors without an explicit `RotationPolicy` use default size-based
+    rotation (`FileMessageHandler.DEFAULT_SIZE_ROTATION_MAX_BYTES` = 10 MB). Use
+    `new NoRotationPolicy()` to disable rotation explicitly.
 
 ## Java compatibility
 

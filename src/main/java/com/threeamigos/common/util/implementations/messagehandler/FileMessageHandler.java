@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.implementations.messagehandler.file.DailyRotationPolicy;
+import com.threeamigos.common.util.implementations.messagehandler.file.NoRotationPolicy;
 import com.threeamigos.common.util.implementations.messagehandler.file.SizeRotationPolicy;
 import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordFactoryImpl;
 import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.ConsoleLogRecordFormatter;
@@ -26,10 +27,15 @@ import java.util.function.Consumer;
  * MessageHandler implementation that writes log messages to a file.
  * Supports optional async dispatch with a background worker and shutdown hook.
  * <p>
- * Two additional features are available via dedicated constructors:
+ * A size-based rotation policy is enabled by default for constructors that do not accept an
+ * explicit {@link RotationPolicy}. The default threshold is
+ * {@value #DEFAULT_SIZE_ROTATION_MAX_BYTES} bytes.
+ * <p>
+ * Additional features are available via dedicated constructors:
  * <ul>
  *   <li><strong>Log rotation</strong>: pass a {@link RotationPolicy} to rotate by size
- *       ({@link SizeRotationPolicy}) or by calendar day ({@link DailyRotationPolicy}).</li>
+ *       ({@link SizeRotationPolicy}), by calendar day ({@link DailyRotationPolicy}), or disable
+ *       rotation explicitly with {@link NoRotationPolicy}.</li>
  *   <li><strong>Re-open on external rotation</strong>: pass {@code reopenOnExternalRotation=true}
  *       to have the handler silently re-create the log file when an external tool (e.g.
  *       {@code logrotate}) has moved or deleted it.</li>
@@ -42,6 +48,11 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
 
     private static final int LINE_SEPARATOR_BYTES_LENGTH =
             System.lineSeparator().getBytes(StandardCharsets.UTF_8).length;
+    /**
+     * Default maximum file size (in bytes) used by no-policy constructors before size-based
+     * rotation archives the current log file and starts a new one.
+     */
+    public static final long DEFAULT_SIZE_ROTATION_MAX_BYTES = 10L * 1024L * 1024L;
 
     private PrintWriter writer;
     private final Path filePath;
@@ -61,13 +72,18 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      * <p>
      * Parent directories are created automatically if they do not exist. Appends to the file if it
      * already exists.
+     * <p>
+     * Uses a default {@link SizeRotationPolicy} with threshold
+     * {@value #DEFAULT_SIZE_ROTATION_MAX_BYTES} bytes. To disable rotation, use a constructor
+     * that accepts a {@link RotationPolicy} and pass {@link NoRotationPolicy}.
      *
      * @param filename path to the log file; must not be {@code null} or blank
      * @throws IllegalArgumentException if the path is null, blank, points to a directory,
      *                                  is not writable, or cannot be created
      */
     public FileMessageHandler(final @Nonnull String filename) {
-        this(new LogRecordFactoryImpl(), new ConsoleLogRecordFormatter(), filename, false, 0, false, null, true);
+        this(new LogRecordFactoryImpl(), new ConsoleLogRecordFormatter(), filename, false, 0, false,
+                defaultSizeRotationPolicy(), true);
     }
 
     /**
@@ -75,6 +91,10 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      * <p>
      * Parent directories are created automatically if they do not exist. Appends to the file if it
      * already exists.
+     * <p>
+     * Uses a default {@link SizeRotationPolicy} with threshold
+     * {@value #DEFAULT_SIZE_ROTATION_MAX_BYTES} bytes. To disable rotation, use a constructor
+     * that accepts a {@link RotationPolicy} and pass {@link NoRotationPolicy}.
      *
      * @param filename path to the log file; must not be {@code null} or blank
      * @param formatter formatter to use for log records; must not be {@code null}
@@ -82,7 +102,8 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      *                                  is not writable, or cannot be created
      */
     public FileMessageHandler(final @Nonnull String filename, final @Nonnull LogRecordFormatter formatter) {
-        this(new LogRecordFactoryImpl(), formatter, filename, false, 0, false, null, true);
+        this(new LogRecordFactoryImpl(), formatter, filename, false, 0, false,
+                defaultSizeRotationPolicy(), true);
     }
 
     /**
@@ -92,7 +113,9 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      * already exists.
      *
      * @param filename path to the log file; must not be {@code null} or blank
-     * @param rotationPolicy rotation policy to use; must not be {@code null}
+     * @param rotationPolicy rotation policy to use; must not be {@code null}. Pass
+     *                       {@link NoRotationPolicy} to disable rotation explicitly.
+     * @throws NullPointerException if {@code rotationPolicy} is {@code null}
      * @throws IllegalArgumentException if the path is null, blank, points to a directory,
      *                                  is not writable, or cannot be created
      */
@@ -108,7 +131,9 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      *
      * @param filename path to the log file; must not be {@code null} or blank
      * @param formatter formatter to use for log records; must not be {@code null}
-     * @param rotationPolicy rotation policy to use; must not be {@code null}
+     * @param rotationPolicy rotation policy to use; must not be {@code null}. Pass
+     *                       {@link NoRotationPolicy} to disable rotation explicitly.
+     * @throws NullPointerException if {@code rotationPolicy} is {@code null}
      * @throws IllegalArgumentException if the path is null, blank, points to a directory,
      *                                  is not writable, or cannot be created
      */
@@ -121,6 +146,10 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      * <p>
      * Parent directories are created automatically if they do not exist. Appends to the file if it
      * already exists.
+     * <p>
+     * Uses a default {@link SizeRotationPolicy} with threshold
+     * {@value #DEFAULT_SIZE_ROTATION_MAX_BYTES} bytes. To disable rotation, use a constructor
+     * that accepts a {@link RotationPolicy} and pass {@link NoRotationPolicy}.
      *
      * @param filename path to the log file; must not be {@code null} or blank
      * @throws IllegalArgumentException if the path is null, blank, points to a directory,
@@ -129,7 +158,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
     public FileMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
                               final @Nonnull LogRecordFormatter logRecordFormatter,
                               final @Nonnull String filename) {
-        this(logRecordFactory, logRecordFormatter, filename, false, 0, false, null, false);
+        this(logRecordFactory, logRecordFormatter, filename, false, 0, false, defaultSizeRotationPolicy(), false);
     }
 
     /**
@@ -140,6 +169,10 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      * <p>
      * Convenience default: when {@code async} is {@code true}, a JVM shutdown hook is
      * registered automatically to close the handler and flush queued writes.
+     * <p>
+     * Uses a default {@link SizeRotationPolicy} with threshold
+     * {@value #DEFAULT_SIZE_ROTATION_MAX_BYTES} bytes. To disable rotation, use a constructor
+     * that accepts a {@link RotationPolicy} and pass {@link NoRotationPolicy}.
      *
      * @param filename      path to the log file; must not be {@code null} or blank
      * @param async         {@code true} to dispatch writes via a background worker thread
@@ -150,7 +183,8 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
                               final @Nonnull LogRecordFormatter logRecordFormatter,
                               final @Nonnull String filename,
                               final boolean async, final int queueCapacity) {
-        this(logRecordFactory, logRecordFormatter, filename, async, queueCapacity, true, null, false);
+        this(logRecordFactory, logRecordFormatter, filename, async, queueCapacity, true,
+                defaultSizeRotationPolicy(), false);
     }
 
     /**
@@ -159,6 +193,10 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      * <p>
      * Parent directories are created automatically if they do not exist. Appends to the file if it
      * already exists.
+     * <p>
+     * Uses a default {@link SizeRotationPolicy} with threshold
+     * {@value #DEFAULT_SIZE_ROTATION_MAX_BYTES} bytes. To disable rotation, use a constructor
+     * that accepts a {@link RotationPolicy} and pass {@link NoRotationPolicy}.
      *
      * @param filename             path to the log file; must not be {@code null} or blank
      * @param async                {@code true} to dispatch writes via a background worker thread
@@ -172,7 +210,8 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
                               final @Nonnull String filename,
                               final boolean async, final int queueCapacity,
                               final boolean registerShutdownHook) {
-        this(logRecordFactory, logRecordFormatter, filename, async, queueCapacity, registerShutdownHook, null, false);
+        this(logRecordFactory, logRecordFormatter, filename, async, queueCapacity, registerShutdownHook,
+                defaultSizeRotationPolicy(), false);
     }
 
     // -------------------------------------------------------------------------
@@ -183,8 +222,9 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      * Creates a synchronous {@code FileMessageHandler} with log rotation.
      *
      * @param filename       path to the log file; must not be {@code null} or blank
-     * @param rotationPolicy policy that decides when and how to rotate the file;
-     *                       {@code null} disables rotation
+     * @param rotationPolicy policy that decides when and how to rotate the file; must not be
+     *                       {@code null}. Pass {@link NoRotationPolicy} for explicit no-rotation.
+     * @throws NullPointerException if {@code rotationPolicy} is {@code null}
      * @throws IllegalArgumentException if the path is invalid or the file cannot be opened for writing
      */
     public FileMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
@@ -203,8 +243,9 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      * @param filename       path to the log file; must not be {@code null} or blank
      * @param async          {@code true} to dispatch writes via a background worker thread
      * @param queueCapacity  maximum number of queued write tasks when async; {@code 0} or negative means unbounded
-     * @param rotationPolicy policy that decides when and how to rotate the file;
-     *                       {@code null} disables rotation
+     * @param rotationPolicy policy that decides when and how to rotate the file; must not be
+     *                       {@code null}. Pass {@link NoRotationPolicy} for explicit no-rotation.
+     * @throws NullPointerException if {@code rotationPolicy} is {@code null}
      * @throws IllegalArgumentException if the path is invalid or the file cannot be opened for writing
      */
     public FileMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
@@ -222,10 +263,12 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      * @param async                    {@code true} to dispatch writes via a background worker thread
      * @param queueCapacity            maximum number of queued write tasks when async; {@code 0} or negative means unbounded
      * @param registerShutdownHook     {@code true} to register a JVM shutdown hook
-     * @param rotationPolicy           policy that decides when and how to rotate the file;
-     *                                 {@code null} disables rotation
+     * @param rotationPolicy           policy that decides when and how to rotate the file; must
+     *                                 not be {@code null}. Pass {@link NoRotationPolicy} for
+     *                                 explicit no-rotation.
      * @param reopenOnExternalRotation {@code true} to silently re-create the log file if it has
      *                                 been deleted or moved by an external tool (e.g. {@code logrotate})
+     * @throws NullPointerException if {@code rotationPolicy} is {@code null}
      * @throws IllegalArgumentException if the path is invalid or the file cannot be opened for writing
      */
     public FileMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
@@ -246,7 +289,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
                                final boolean reopenOnExternalRotation) {
         super(logRecordFactory, logRecordFormatter);
         this.filePath = filePath;
-        this.rotationPolicy = rotationPolicy;
+        this.rotationPolicy = Objects.requireNonNull(rotationPolicy, "rotationPolicy must not be null");
         this.reopenOnExternalRotation = reopenOnExternalRotation;
         try {
             this.writer = openWriter(filePath);
@@ -375,7 +418,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      * to let the policy reset its state.
      */
     private void rotateIfNeeded() {
-        if (rotationPolicy == null || !rotationPolicy.shouldRotate(filePath, bytesWritten)) {
+        if (!rotationPolicy.shouldRotate(filePath, bytesWritten)) {
             return;
         }
         Path dest = rotationPolicy.rotatedFilePath(filePath);
@@ -396,6 +439,10 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
             return 0L;
         }
         return Files.size(filePath);
+    }
+
+    private static RotationPolicy defaultSizeRotationPolicy() {
+        return new SizeRotationPolicy(DEFAULT_SIZE_ROTATION_MAX_BYTES);
     }
 
     private static Path prepareFilePath(final String filename) {

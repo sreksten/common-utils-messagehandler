@@ -82,6 +82,30 @@ class OpenTelemetryAttributeValidatorErrorHandlingUnitTest {
     }
 
     @Test
+    @DisplayName("runtime override should take precedence over baseline and be clearable")
+    void runtimeOverrideShouldTakePrecedenceOverBaselineAndBeClearable() {
+        OpenTelemetryAttributeValidator.clearLenientModeOverride();
+        boolean baseline = OpenTelemetryAttributeValidator.isLenientMode();
+        boolean override = !baseline;
+
+        OpenTelemetryAttributeValidator.setLenientModeOverride(override);
+        assertEquals(override, OpenTelemetryAttributeValidator.isLenientMode());
+
+        if (override) {
+            List<LoggedError> loggedErrors = trapLogs(() ->
+                    OpenTelemetryAttributeValidator.handle("runtime-override-lenient"));
+            assertTrue(hasMessageWithThrowable(loggedErrors, "runtime-override-lenient", IllegalArgumentException.class));
+        } else {
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                    () -> OpenTelemetryAttributeValidator.handle("runtime-override-strict"));
+            assertEquals("runtime-override-strict", exception.getMessage());
+        }
+
+        OpenTelemetryAttributeValidator.clearLenientModeOverride();
+        assertEquals(baseline, OpenTelemetryAttributeValidator.isLenientMode());
+    }
+
+    @Test
     @DisplayName("report should create default throwable when null and fallback when trap fails")
     void reportShouldCreateDefaultThrowableWhenNullAndFallbackWhenTrapFails() {
         setLenient(true);
