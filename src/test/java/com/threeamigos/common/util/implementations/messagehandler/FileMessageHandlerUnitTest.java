@@ -586,6 +586,37 @@ class FileMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("Size rotation should account for bytes already present in append-mode files")
+    void sizeRotationShouldAccountForBytesAlreadyPresentInAppendModeFiles() throws Exception {
+        Path file = Files.createTempFile("fmh-size-rotate-existing", ".log");
+        String existingContent = "1234567890";
+        Files.write(file, existingContent.getBytes(StandardCharsets.UTF_8));
+
+        long existingSize = Files.size(file);
+        String message = "abcd";
+        long threshold = existingSize + message.getBytes(StandardCharsets.UTF_8).length;
+        SizeRotationPolicy policy = new SizeRotationPolicy(threshold);
+
+        try (FileMessageHandler handler = new FileMessageHandler(
+                FACTORY,
+                logRecord -> logRecord.getBody().asString(),
+                file.toString(),
+                policy)) {
+            handler.info(message);
+        }
+
+        Path dir = file.toAbsolutePath().getParent();
+        String baseName = file.getFileName().toString();
+        try (Stream<Path> candidates = Files.list(dir)) {
+            long rotatedCount = candidates
+                    .filter(path -> path.getFileName().toString().startsWith(baseName + "."))
+                    .count();
+            assertTrue(rotatedCount >= 1,
+                    "Rotation should trigger after first write when existing file bytes already consume threshold");
+        }
+    }
+
+    @Test
     @DisplayName("Daily rotation should archive the current file using the open date")
     void dailyRotationShouldArchiveCurrentFileUsingOpenDate() throws Exception {
         Path file = Files.createTempFile("fmh-daily-rotate", ".log");

@@ -20,7 +20,7 @@ import java.awt.*;
  */
 public class SwingMessageHandler extends AbstractMessageHandler {
 
-    private Component parentComponent;
+    private volatile Component parentComponent;
     private final LogRecordFormatter logRecordFormatter;
 
     /**

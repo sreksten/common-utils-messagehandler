@@ -212,6 +212,35 @@ class CompositeMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("close should close all registered delegates")
+    void closeShouldCloseAllRegisteredDelegates() {
+        CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
+
+        sut.close();
+
+        verify(firstMessageHandler, times(1)).close();
+        verify(secondMessageHandler, times(1)).close();
+    }
+
+    @Test
+    @DisplayName("close should continue when a delegate close fails and report the error")
+    void closeShouldContinueWhenADelegateCloseFailsAndReportTheError() {
+        RuntimeException boom = new RuntimeException("boom");
+        doThrow(boom).when(firstMessageHandler).close();
+        List<String> errors = new ArrayList<String>();
+
+        CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
+        sut.setErrorConsumer(errors::add);
+
+        assertDoesNotThrow(sut::close);
+
+        verify(firstMessageHandler, times(1)).close();
+        verify(secondMessageHandler, times(1)).close();
+        assertEquals(1, errors.size());
+        assertTrue(errors.get(0).contains("Exception during dispatch"));
+    }
+
+    @Test
     @DisplayName("default constructor should use COMPOSITE_ONLY level control mode")
     void defaultConstructorShouldUseCompositeOnlyLevelControlMode() {
         CompositeMessageHandler sut = new CompositeMessageHandler();
@@ -979,14 +1008,17 @@ class CompositeMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null exception is provided")
-    void shouldThrowAnExceptionIfANullExceptionIsProvided() {
+    @DisplayName("Should ignore a null exception")
+    void shouldIgnoreANullException() {
         // Given
         CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
         // When
         Exception exception = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.exception(exception));
+        assertDoesNotThrow(() -> sut.exception(exception));
+        for (MessageHandler messageHandler : sut.getMessageHandlers()) {
+            verify(messageHandler, never()).exception(any(Throwable.class));
+        }
     }
 
     @Test

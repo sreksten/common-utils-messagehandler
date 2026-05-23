@@ -6,9 +6,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -173,13 +176,14 @@ class AbstractMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("exception methods should validate inputs and honor exception flag")
-    void exceptionMethodsShouldValidateInputsAndHonorFlag() {
+    @DisplayName("exception methods should ignore null message or throwable and honor exception flag")
+    void exceptionMethodsShouldIgnoreNullMessageOrThrowableAndHonorExceptionFlag() {
         ProbeMessageHandler sut = new ProbeMessageHandler();
 
-        assertThrows(NullPointerException.class, () -> sut.exception((Exception) null));
+        assertDoesNotThrow(() -> sut.exception((Exception) null));
         assertDoesNotThrow(() -> sut.exception(null, new RuntimeException("x")));
-        assertThrows(NullPointerException.class, () -> sut.exception("prefix", null));
+        assertDoesNotThrow(() -> sut.exception("prefix", null));
+        assertEquals(0, sut.callCount);
 
         RuntimeException ex = new RuntimeException("boom");
         sut.exception("prefix", ex);
@@ -191,6 +195,24 @@ class AbstractMessageHandlerUnitTest {
         sut.exception(new RuntimeException("dropped"));
         assertEquals(1, sut.callCount);
         assertTrue(sut.lastException == ex);
+
+        assertDoesNotThrow(() -> sut.exception((Exception) null));
+        assertDoesNotThrow(() -> sut.exception("still-validated", null));
+        assertEquals(1, sut.callCount);
+    }
+
+    @Test
+    @DisplayName("enabled levels should be backed by AtomicInteger")
+    void enabledLevelsShouldBeBackedByAtomicInteger() throws Exception {
+        Field enabledLevelsField = AbstractMessageHandler.class.getDeclaredField("enabledLevels");
+        assertEquals(AtomicInteger.class, enabledLevelsField.getType());
+    }
+
+    @Test
+    @DisplayName("tracer field should be volatile for cross-thread visibility")
+    void tracerFieldShouldBeVolatileForCrossThreadVisibility() throws Exception {
+        Field tracerField = AbstractMessageHandler.class.getDeclaredField("tracer");
+        assertTrue(Modifier.isVolatile(tracerField.getModifiers()));
     }
 
     @Test

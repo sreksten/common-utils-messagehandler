@@ -402,6 +402,22 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
         this.errorConsumer = errorConsumer;
     }
 
+    /**
+     * Closes all currently registered delegates.
+     * <p>
+     * The delegate list is snapshotted under the read lock, then each delegate is closed
+     * independently. Failures from one delegate are reported through {@code errorConsumer}
+     * and do not prevent closing subsequent delegates.
+     */
+    @Override
+    public void close() {
+        forEachHandler(handler -> {
+            if (handler != this) {
+                handler.close();
+            }
+        });
+    }
+
     @Override
     public void handleMessage(@Nonnull SeverityNumber level, @Nonnull String message) {
         forEachHandler(mh -> {

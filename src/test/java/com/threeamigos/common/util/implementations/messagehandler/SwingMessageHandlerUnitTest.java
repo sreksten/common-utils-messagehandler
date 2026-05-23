@@ -9,6 +9,8 @@ import org.junit.jupiter.api.Test;
 
 import javax.swing.*;
 import java.awt.*;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -76,6 +78,13 @@ class SwingMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("Parent component field should be volatile for cross-thread visibility")
+    void parentComponentFieldShouldBeVolatileForCrossThreadVisibility() throws Exception {
+        Field parentComponentField = SwingMessageHandler.class.getDeclaredField("parentComponent");
+        assertTrue(Modifier.isVolatile(parentComponentField.getModifiers()));
+    }
+
+    @Test
     @DisplayName("Should ignore null info message")
     void shouldIgnoreNullInfoMessage() {
         CapturingSwingMessageHandler sut = new CapturingSwingMessageHandler();
@@ -126,10 +135,11 @@ class SwingMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null exception is provided")
-    void shouldThrowAnExceptionIfANullExceptionIsProvided() {
-        SwingMessageHandler sut = new SwingMessageHandler();
-        assertThrows(NullPointerException.class, () -> sut.exception((Exception) null));
+    @DisplayName("Should ignore a null exception")
+    void shouldIgnoreANullException() {
+        CapturingSwingMessageHandler sut = new CapturingSwingMessageHandler();
+        assertDoesNotThrow(() -> sut.exception((Exception) null));
+        assertEquals(0, sut.calls);
     }
 
     @Test
@@ -141,10 +151,11 @@ class SwingMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null exception is provided with message")
-    void shouldThrowAnExceptionIfANullExceptionIsProvidedWithMessage() {
-        SwingMessageHandler sut = new SwingMessageHandler();
-        assertThrows(NullPointerException.class, () -> sut.exception("message", null));
+    @DisplayName("Should ignore a null exception when a message is provided")
+    void shouldIgnoreANullExceptionWhenAMessageIsProvided() {
+        CapturingSwingMessageHandler sut = new CapturingSwingMessageHandler();
+        assertDoesNotThrow(() -> sut.exception("message", null));
+        assertEquals(0, sut.calls);
     }
 
     @Test

@@ -8,8 +8,8 @@ This subpackage addresses the following needs:
 
 The `com.threeamigos.common.util.interfaces.messagehandler` package contains some functional interfaces (`Handler`s)
 that can be used to deal with info, warn, error, fatal, debug, or trace messages, and `Throwable`s.
-For convenience, all those interfaces are grouped in a more general `MessageHandler` interface.
-Implementations include a console logger, a rotable file, an in-memory store (useful to run tests),
+For convenience, all those interfaces are grouped in a `MessageHandler` interface.
+Implementations include a console logger, an optionally rotable file, an in-memory store (useful to run tests),
 a popup dialog, and a composite used to route messages to one or more other handlers.
 For each of those, you can enable or disable any given level of messages. Thus, you can disable debug
 or trace messages if you want to run your application in production mode. Or, using the composite,
@@ -22,7 +22,8 @@ unchanged. Should not be too difficult to e.g., implement a handler that sends m
 
 These handlers can accept a simple `String` or a `Supplier<String>`, which can be useful for lazy evaluation of messages.
 
-Bridges for Log4J, SLF4J, JUL, Jaeger, and Grafana are also provided.
+Bridges for Log4J, SLF4J, and JUL are also provided, together with OTLP/HTTP handlers
+for Jaeger- and Grafana-compatible backends.
 
 # Primer
 
@@ -109,7 +110,7 @@ which collects all of them.
 
 The MessageHandler exposes additional methods:
 - `handleMessage(SeverityNumber, String)` to specify directly the severity level of a message;
-- `startSpan(String)` to start a span directly from the handler when the handler is tracer-bound.
+- `startSpan(String)` to start a Span directly (more on that later) from the handler when the handler is tracer-bound.
 
 Internally the package supports the whole OpenTelemetry `SeverityNumber`s:
 `INFO`, `INFO2`, `INFO3`, `INFO4`, `WARN`, `WARN2`, ...
@@ -129,8 +130,8 @@ AbstractMessageHandler (implements MessageHandler)
 ├── JULMessageHandler (java.util.logging bridge)
 ├── Log4JMessageHandler (Apache Log4j 2 bridge)
 ├── SLF4JMessageHandler (SLF4J bridge)
-├── JaegerMessageHandler (Jaeger bridge, for sending OpenTelemetry traces and logs)
-├── GrafanaMessageHandler (Grafana bridge, for sending OpenTelemetry logs)
+├── JaegerMessageHandler (OTLP/HTTP log transport for Jaeger-compatible pipelines)
+├── GrafanaMessageHandler (OTLP/HTTP log transport for Grafana-compatible pipelines)
 └── VoidMessageHandler (does nothing)
 ```
 
@@ -284,12 +285,21 @@ public class SwingHandlerExample {
     }
 }
 ```
+`SwingMessageHandler` requires a graphical runtime. In headless environments, dialogs are
+silently suppressed by design (calls become no-ops).
+
 Very probably, when dealing with a standalone application, you might want to show info messages to the user, while
 writing debug and error information to a file. You can do this using the next `MessageHandler`.
 
 ## `CompositeMessageHandler`: fan-out to multiple outputs
 
 Use it when one log call must go to multiple destinations. For example, to the console and to a file.
+Level control can be configured through `CompositeMessageHandler.LevelControlMode`:
+- `COMPOSITE_ONLY` (default): only the composite gates levels.
+- `PROPAGATE_TO_DELEGATES`: composite level changes are also applied to level-aware delegates.
+- `DELEGATE_ONLY`: delegates own their level state; composite level mutators throw.
+
+Calling `composite.close()` closes all registered delegates.
 
 ```java
 import com.threeamigos.common.util.implementations.messagehandler.CompositeMessageHandler;
@@ -307,8 +317,6 @@ public class CompositeExample {
         composite.error("Same fan-out for errors");
 
         composite.close();
-        console.close();
-        file.close();
     }
 }
 ```
@@ -337,8 +345,6 @@ public class CompositeExample2 {
         composite.error("This will go to a file but not to the console");
 
         composite.close();
-        console.close();
-        file.close();
     }
 }
 ```
@@ -457,8 +463,8 @@ public class CustomFormatterExample {
 
 ## Tracer
 
-This part of the package tries to produce an output compliant with [OpenTelemetry](https://opentelemetry.io/) and helps deal with systems
-composed by one or more parts (for example, a web application that deals with many microservices). 
+This part of the package tries to produce an output compliant with [OpenTelemetry](https://opentelemetry.io/) and helps
+deal with systems composed by one or more parts (for example, a web application interacting with many microservices). 
 
 In such an environment, one server could start a user request, but it could have to delegate something to
 another server or microservice. In this case, logs could be produced in more than one server. Usually, all those logs
@@ -485,15 +491,15 @@ You can then query a system like Grafana or Jaeger to visualize the trace and un
 
 ### Workflow
 
-`TracerProvider` is the application-level factory/configuration point. You have to build one `TracerProvider` for your
-service (`serviceName`, `serviceVersion`, environment, shared attributes), where the service might be a standalone 
+THe `TracerProvider` is the application-level factory/configuration point. You have to build one `TracerProvider` for
+your service (`serviceName`, `serviceVersion`, environment, shared attributes), where the service might be a standalone 
 application (in this case the `serviceName` is your application name), or a microservice. 
 
-`Tracer` is scoped to an instrumentation name/version. Basically, it could be a library, or module, or a component of
+ A `Tracer` is scoped to an instrumentation name/version. Basically, it could be a library, or module, or a component of
 your service. So for each module you want to instrument, you have to obtain a `Tracer` from that provider for the module
 or component (`provider.getTracer(instrumentationName, version, ...)`). 
 
-`Span` represents one timed operation. Start a `Span` either with `tracer.createSpan(...)`, or directly from a
+A `Span` represents one timed operation. Start a `Span` either with `tracer.createSpan(...)`, or directly from a
 tracer-created handler with `handler.startSpan(...)`.
 Once you have a parent span, you can create child spans directly from it with `parentSpan.create("child-name")`
 (equivalent to `tracer.createSpan("child-name", parentSpan.getSpanContext())`).
@@ -506,8 +512,6 @@ End the span with `span.end()`.
 This produces a series of logs that are correlated by a `traceId` (root operation) and one or more `spanId`s.
 
 ### Using multiple Tracers to track different parts of a system
-
-This is supported.
 
 If your goal is one output file and multiple tracers (for different modules/components), use:
 1. one shared `TracerProvider`
@@ -554,9 +558,7 @@ public class MultipleTracersSingleFileExample {
 }
 ```
 
-Notes:
-- Creating many file handlers for the same file can cause interleaved writes.
-- Use a Collector when you need central aggregation/export across multiple services/processes/backends, not for a single JVM writing to one file.
+Note: creating many file handlers for the same file can cause interleaved writes.
 
 ### How `MessageHandler`, `Tracer`, and `Span` are related
 
@@ -664,6 +666,10 @@ You can also load filter rules from properties via:
 - `loadPropertiesFromResource(...)`
 
 From the example, it is clear that the key part of the property is actually a Regex.
+
+The value of the property indicates the minimum `SeverityNumber` the log record should have to be included in the log
+output. To completely remove a class or package, use OFF instead of INFO n a property file, or use the `prune(...)`
+method to disable it programmatically.
 
 ## Advanced OTel-like model in this package
 
@@ -1190,6 +1196,9 @@ Note: CDI must be enabled for the deployment (add `beans.xml` to `WEB-INF` or `M
 9. Other handlers are synchronous unless they implement their own threading model.
 10. `GrafanaMessageHandler` exports logs only; configure `TracerProvider#setDefaultSpanDispatcher(...)`
     (for example with `GrafanaSpanDispatcher`) to export spans/traces.
+11. `CompositeMessageHandler.close()` closes all currently registered delegates.
+12. `SwingMessageHandler` dialogs are no-ops in headless environments.
+13. `exception(...)` overloads treat null message/throwable inputs as no-op.
 
 ## Java compatibility
 

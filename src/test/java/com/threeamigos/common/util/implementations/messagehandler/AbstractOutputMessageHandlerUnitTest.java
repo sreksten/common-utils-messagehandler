@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -176,6 +177,13 @@ class AbstractOutputMessageHandlerUnitTest {
 
         LogRecord record = FACTORY.create(SeverityNumber.INFO, "test");
         assertEquals("CUSTOM:INFO:test", handler.getLogRecordFormatter().format(record));
+    }
+
+    @Test
+    @DisplayName("logRecordFormatter field should be volatile for runtime formatter swaps")
+    void logRecordFormatterFieldShouldBeVolatileForRuntimeFormatterSwaps() throws Exception {
+        Field formatterField = AbstractOutputMessageHandler.class.getDeclaredField("logRecordFormatter");
+        assertTrue(Modifier.isVolatile(formatterField.getModifiers()));
     }
 
     @Test

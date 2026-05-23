@@ -22,11 +22,13 @@ public interface ThrowableWithMessageHandler {
 
     /**
      * Handles a Throwable together with a caller-supplied contextual message.
+     * <p>
+     * Implementations based on {@code AbstractMessageHandler} treat {@code null} values
+     * as a no-op and return immediately.
      *
      * @param message   a non-null string describing the context in which the Throwable occurred
      *                  (e.g., the operation attempted or the resource involved)
      * @param throwable a non-null Throwable to handle
-     * @throws NullPointerException if either {@code message} or {@code throwable} is {@code null}
      */
     void exception(final @Nonnull String message, final @Nonnull Throwable throwable);
 

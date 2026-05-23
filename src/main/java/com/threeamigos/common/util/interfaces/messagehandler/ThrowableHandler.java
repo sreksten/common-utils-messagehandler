@@ -16,9 +16,11 @@ public interface ThrowableHandler {
 
     /**
      * Handles a single Throwable.
+     * <p>
+     * Implementations based on {@code AbstractMessageHandler} treat
+     * {@code null} values as a no-op and return immediately.
      *
      * @param throwable the non-null Throwable to handle
-     * @throws NullPointerException if {@code throwable} is {@code null}
      */
     void exception(final @Nonnull Throwable throwable);
 

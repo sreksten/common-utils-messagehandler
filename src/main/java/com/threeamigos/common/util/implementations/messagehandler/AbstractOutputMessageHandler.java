@@ -59,7 +59,7 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
     private Thread shutdownHook;
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final Object dispatchLock = new Object();
-    protected LogRecordFormatter logRecordFormatter;
+    protected volatile LogRecordFormatter logRecordFormatter;
 
     public AbstractOutputMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
                                         final @Nonnull LogRecordFormatter logRecordFormatter) {

@@ -12,7 +12,7 @@ import jakarta.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 /**
@@ -47,7 +47,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * Bound internally by otel package code through reflection to keep tracer linkage
      * hidden from the public API.
      */
-    private Tracer tracer;
+    private volatile Tracer tracer;
 
     /**
      * Performs the actual exception dispatch.
@@ -88,7 +88,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
         return DEFAULT_LOG_RECORD_FACTORY;
     }
 
-    private volatile int enabledLevels =
+    private static final int DEFAULT_ENABLED_LEVELS_MASK =
                     1 << SeverityNumber.INFO.getValue() |
                     1 << SeverityNumber.INFO2.getValue() |
                     1 << SeverityNumber.INFO3.getValue() |
@@ -104,8 +104,9 @@ public abstract class AbstractMessageHandler implements MessageHandler {
                     1 << SeverityNumber.FATAL.getValue() |
                     1 << SeverityNumber.FATAL2.getValue() |
                     1 << SeverityNumber.FATAL3.getValue() |
-                    1 << SeverityNumber.FATAL4.getValue()
-            ;
+                    1 << SeverityNumber.FATAL4.getValue();
+
+    private final AtomicInteger enabledLevels = new AtomicInteger(DEFAULT_ENABLED_LEVELS_MASK);
 
     private static SeverityNumber normalizeLevel(final SeverityNumber level) {
         return level != null ? level : SeverityNumber.INFO;
@@ -116,50 +117,58 @@ public abstract class AbstractMessageHandler implements MessageHandler {
     }
 
     public void enable(final Collection<SeverityNumber> levels) {
-        int newEnabledLevels = enabledLevels;
-        for (SeverityNumber level : levels) {
-            newEnabledLevels |= levelMask(level);
-        }
-        enabledLevels = newEnabledLevels;
+        enabledLevels.updateAndGet(currentMask -> {
+            int updatedMask = currentMask;
+            for (SeverityNumber level : levels) {
+                updatedMask |= levelMask(level);
+            }
+            return updatedMask;
+        });
     }
 
     public void enable(final SeverityNumber ... levels) {
-        int newEnabledLevels = enabledLevels;
-        for (SeverityNumber level : levels) {
-            newEnabledLevels |= levelMask(level);
-        }
-        enabledLevels = newEnabledLevels;
+        enabledLevels.updateAndGet(currentMask -> {
+            int updatedMask = currentMask;
+            for (SeverityNumber level : levels) {
+                updatedMask |= levelMask(level);
+            }
+            return updatedMask;
+        });
     }
 
     public void disable(final Collection<SeverityNumber> levels) {
-        int newEnabledLevels = enabledLevels;
-        for (SeverityNumber level : levels) {
-            newEnabledLevels &= ~levelMask(level);
-        }
-        enabledLevels = newEnabledLevels;
+        enabledLevels.updateAndGet(currentMask -> {
+            int updatedMask = currentMask;
+            for (SeverityNumber level : levels) {
+                updatedMask &= ~levelMask(level);
+            }
+            return updatedMask;
+        });
     }
 
     public void disable(final SeverityNumber ... levels) {
-        int newEnabledLevels = enabledLevels;
-        for (SeverityNumber level : levels) {
-            newEnabledLevels &= ~levelMask(level);
-        }
-        enabledLevels = newEnabledLevels;
+        enabledLevels.updateAndGet(currentMask -> {
+            int updatedMask = currentMask;
+            for (SeverityNumber level : levels) {
+                updatedMask &= ~levelMask(level);
+            }
+            return updatedMask;
+        });
     }
 
     public boolean isEnabled(final @Nonnull SeverityNumber level) {
-        return (enabledLevels & levelMask(level)) != 0;
+        return (enabledLevels.get() & levelMask(level)) != 0;
     }
 
     public void setEnabled(final @Nonnull SeverityNumber level, final boolean enabled) {
         SeverityNumber effectiveLevel = normalizeLevel(level);
-        int newEnabledLevels = enabledLevels;
-        if (enabled) {
-            newEnabledLevels |= levelMask(effectiveLevel);
-        } else {
-            newEnabledLevels &= ~levelMask(effectiveLevel);
-        }
-        enabledLevels = newEnabledLevels;
+        final int levelBit = levelMask(effectiveLevel);
+        enabledLevels.updateAndGet(currentMask -> {
+            if (enabled) {
+                return currentMask | levelBit;
+            }
+            return currentMask & ~levelBit;
+        });
     }
 
     /**
@@ -169,8 +178,9 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      */
     public SeverityNumber[] getEnabledLevels() {
         List<SeverityNumber> enabled = new ArrayList<>(SeverityNumber.values().length);
+        int enabledMaskSnapshot = enabledLevels.get();
         for (SeverityNumber level : SeverityNumber.values()) {
-            if ((enabledLevels & levelMask(level)) != 0) {
+            if ((enabledMaskSnapshot & levelMask(level)) != 0) {
                 enabled.add(level);
             }
         }
@@ -184,8 +194,9 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      */
     public SeverityNumber[] getDisabledLevels() {
         List<SeverityNumber> disabled = new ArrayList<>(SeverityNumber.values().length);
+        int enabledMaskSnapshot = enabledLevels.get();
         for (SeverityNumber level : SeverityNumber.values()) {
-            if ((enabledLevels & levelMask(level)) == 0) {
+            if ((enabledMaskSnapshot & levelMask(level)) == 0) {
                 disabled.add(level);
             }
         }
@@ -216,20 +227,38 @@ public abstract class AbstractMessageHandler implements MessageHandler {
         }
     }
 
+    /**
+     * Dispatches a throwable when error-level handling is enabled.
+     * <p>
+     * If {@code throwable} is {@code null}, the call is treated as a no-op and
+     * returns immediately.
+     *
+     * @param throwable throwable to dispatch
+     */
     public void log(final @Nonnull Throwable throwable) {
+        if (throwable == null) {
+            return;
+        }
         if (isEnabled(SeverityNumber.ERROR)) {
-            Objects.requireNonNull(throwable, MessageHandlerResourceBundle.get("nullThrowableProvided"));
             String throwableMessage = throwable.getMessage() != null ? throwable.getMessage() : throwable.toString();
             handleExceptionInternal(throwableMessage, throwable);
         }
     }
 
+    /**
+     * Dispatches a throwable with contextual message when error-level handling is enabled.
+     * <p>
+     * If either {@code message} or {@code throwable} is {@code null}, the call is treated
+     * as a no-op and returns immediately.
+     *
+     * @param message contextual message to pair with the throwable
+     * @param throwable throwable to dispatch
+     */
     public void log(final @Nonnull String message, final @Nonnull Throwable throwable) {
+        if (message == null || throwable == null) {
+            return;
+        }
         if (isEnabled(SeverityNumber.ERROR)) {
-            if (message == null) {
-                return;
-            }
-            Objects.requireNonNull(throwable, MessageHandlerResourceBundle.get("nullThrowableProvided"));
             handleExceptionInternal(message, throwable);
         }
     }
@@ -502,8 +531,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * {@inheritDoc}
      * <p>
      * Silently ignores the call when exception handling is disabled.
-     *
-     * @throws NullPointerException if {@code throwable} is {@code null}
+     * If {@code throwable} is {@code null}, the call is treated as a no-op.
      */
     @Override
     public void exception(final @Nonnull Throwable throwable) {
@@ -514,8 +542,8 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * {@inheritDoc}
      * <p>
      * Silently ignores the call when exception handling is disabled.
-     *
-     * @throws NullPointerException if either {@code message} or {@code throwable} is {@code null}
+     * If either {@code message} or {@code throwable} is {@code null}, the call is treated
+     * as a no-op.
      */
     public void exception(final @Nonnull String message, final @Nonnull Throwable throwable) {
         log(message, throwable);

@@ -272,14 +272,15 @@ class ConsoleMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null exception is provided")
-    void shouldThrowAnExceptionIfANullExceptionIsProvided() {
+    @DisplayName("Should ignore a null exception")
+    void shouldIgnoreANullException() {
         // Given
         ConsoleMessageHandler sut = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
         // When
         Exception exception = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.exception(exception));
+        assertDoesNotThrow(() -> sut.exception(exception));
+        verifyNoInteractions(err);
     }
 
     @Test

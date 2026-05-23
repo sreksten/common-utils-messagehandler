@@ -37,6 +37,9 @@ import java.util.function.Consumer;
  */
 public class FileMessageHandler extends AbstractOutputMessageHandler {
 
+    private static final int LINE_SEPARATOR_BYTES_LENGTH =
+            System.lineSeparator().getBytes(StandardCharsets.UTF_8).length;
+
     private PrintWriter writer;
     private final Path filePath;
     private final Object writeLock = new Object();
@@ -238,6 +241,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
         this.reopenOnExternalRotation = reopenOnExternalRotation;
         try {
             this.writer = openWriter(filePath);
+            this.bytesWritten = resolveCurrentFileSize(filePath);
         } catch (IOException e) {
             throw new IllegalArgumentException("Unable to open log file for writing: " + filePath, e);
         }
@@ -303,7 +307,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
                 reopenIfNeeded();
                 writer.println(message);
                 bytesWritten += message.getBytes(StandardCharsets.UTF_8).length
-                        + System.lineSeparator().length();
+                        + LINE_SEPARATOR_BYTES_LENGTH;
                 checkWriteError();
                 rotateIfNeeded();
             }
@@ -318,7 +322,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
         try {
             writer.close();
             writer = openWriter(filePath);
-            bytesWritten = 0;
+            bytesWritten = resolveCurrentFileSize(filePath);
         } catch (IOException ignored) {
             // Recovery failed; fall through to notification
         }
@@ -349,7 +353,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
             try {
                 writer.close();
                 writer = openWriter(filePath);
-                bytesWritten = 0;
+                bytesWritten = resolveCurrentFileSize(filePath);
             } catch (IOException e) {
                 errorConsumer.accept(MessageHandlerResourceBundle.get("fileReopenError"));
             }
@@ -374,11 +378,18 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
             writer.close();
             Files.move(filePath, dest);
             writer = openWriter(filePath);
-            bytesWritten = 0;
+            bytesWritten = resolveCurrentFileSize(filePath);
             rotationPolicy.onRotated();
         } catch (IOException e) {
             errorConsumer.accept(MessageHandlerResourceBundle.get("fileRotationError"));
         }
+    }
+
+    private static long resolveCurrentFileSize(final Path filePath) throws IOException {
+        if (!Files.exists(filePath)) {
+            return 0L;
+        }
+        return Files.size(filePath);
     }
 
     private static Path prepareFilePath(final String filename) {

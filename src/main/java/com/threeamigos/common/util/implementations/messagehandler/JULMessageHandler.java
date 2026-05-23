@@ -113,7 +113,9 @@ public class JULMessageHandler extends AbstractMessageHandler {
                 logger.log(Level.FINEST, rendered);
                 break;
             default:
-                logger.log(Level.INFO, "Unknown severity level: " + level + ". Logging as INFO. " + rendered);
+                logger.log(
+                        Level.INFO,
+                        MessageHandlerResourceBundle.format("unknownSeverityFallback", level, rendered));
                 break;
         }
     }

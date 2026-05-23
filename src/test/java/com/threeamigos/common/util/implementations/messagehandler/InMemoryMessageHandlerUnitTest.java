@@ -234,14 +234,16 @@ class InMemoryMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("Should throw an exception if a null exception is provided")
-    void shouldThrowAnExceptionIfANullExceptionIsProvided() {
+    @DisplayName("Should ignore a null exception")
+    void shouldIgnoreANullException() {
         // Given
         InMemoryMessageHandler sut = new InMemoryMessageHandler();
         // When
         Exception exception = null;
         // Then
-        assertThrows(NullPointerException.class, () -> sut.exception(exception));
+        assertDoesNotThrow(() -> sut.exception(exception));
+        assertEquals(0, sut.getAllMessages().size(), "Null exception should not be stored");
+        assertEquals(0, sut.getAllThrowables().size(), "Null exception should not be stored");
     }
 
     @Test
