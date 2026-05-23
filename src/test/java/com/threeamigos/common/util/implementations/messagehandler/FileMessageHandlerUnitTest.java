@@ -22,6 +22,7 @@ import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
+import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -31,6 +32,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -256,6 +258,17 @@ class FileMessageHandlerUnitTest {
         }
     }
 
+    private static class FailingOpenLockChannelFileMessageHandler extends FileMessageHandler {
+        private FailingOpenLockChannelFileMessageHandler(String filename) {
+            super(FACTORY, DEFAULT_FORMATTER, filename, false, 0, false, new NoRotationPolicy(), false, true);
+        }
+
+        @Override
+        protected FileChannel openLockFileChannel(final Path lockFilePath) throws IOException {
+            throw new IOException("forced lock channel failure");
+        }
+    }
+
     @Test
     @DisplayName("Should reject null or empty path")
     void shouldRejectNullOrEmptyPath() {
@@ -366,6 +379,103 @@ class FileMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("Default constructor should keep inter-process locking disabled")
+    void defaultConstructorShouldKeepInterProcessLockingDisabled() throws Exception {
+        Path file = Files.createTempFile("fmh-default-no-ip-lock", ".log");
+        Files.deleteIfExists(file);
+
+        try (FileMessageHandler handler = new FileMessageHandler(file.toString())) {
+            handler.info("plain-write");
+            assertFalse(isInterProcessLockingEnabled(handler));
+            assertNull(getLockFilePath(handler));
+            assertNull(getLockGuard(handler));
+        }
+    }
+
+    @Test
+    @DisplayName("Inter-process locking constructor should create sidecar lock file")
+    void interProcessLockingConstructorShouldCreateSidecarLockFile() throws Exception {
+        Path file = Files.createTempFile("fmh-ip-lock-sidecar", ".log");
+        Files.deleteIfExists(file);
+
+        try (FileMessageHandler handler = new FileMessageHandler(file.toString(), true)) {
+            handler.info("locked-write");
+            assertTrue(isInterProcessLockingEnabled(handler));
+            Path lockFilePath = getLockFilePath(handler);
+            assertNotNull(lockFilePath);
+            assertTrue(Files.exists(lockFilePath), "Expected lock sidecar file to exist");
+        }
+    }
+
+    @Test
+    @DisplayName("Inter-process locking handlers should share same JVM lock guard for the same file")
+    void interProcessLockingHandlersShouldShareSameJvmLockGuardForSameFile() throws Exception {
+        Path file = Files.createTempFile("fmh-ip-lock-shared-guard", ".log");
+        Files.deleteIfExists(file);
+
+        try (FileMessageHandler first = new FileMessageHandler(file.toString(), true);
+             FileMessageHandler second = new FileMessageHandler(file.toString(), true)) {
+            ReentrantLock firstGuard = getLockGuard(first);
+            ReentrantLock secondGuard = getLockGuard(second);
+            assertNotNull(firstGuard);
+            assertSame(firstGuard, secondGuard);
+        }
+    }
+
+    @Test
+    @DisplayName("Inter-process locking should support concurrent writes from two handlers on same file")
+    void interProcessLockingShouldSupportConcurrentWritesFromTwoHandlersOnSameFile() throws Exception {
+        Path file = Files.createTempFile("fmh-ip-lock-concurrent", ".log");
+        Files.deleteIfExists(file);
+
+        final int perHandler = 400;
+        try (FileMessageHandler first = new FileMessageHandler(file.toString(), true);
+             FileMessageHandler second = new FileMessageHandler(file.toString(), true)) {
+            ExecutorService pool = Executors.newFixedThreadPool(2);
+            CountDownLatch start = new CountDownLatch(1);
+            Future<?> firstFuture = pool.submit(() -> {
+                start.await();
+                for (int i = 0; i < perHandler; i++) {
+                    first.info("first-" + i);
+                }
+                return null;
+            });
+            Future<?> secondFuture = pool.submit(() -> {
+                start.await();
+                for (int i = 0; i < perHandler; i++) {
+                    second.info("second-" + i);
+                }
+                return null;
+            });
+
+            start.countDown();
+            firstFuture.get(30, TimeUnit.SECONDS);
+            secondFuture.get(30, TimeUnit.SECONDS);
+            pool.shutdown();
+            assertTrue(pool.awaitTermination(10, TimeUnit.SECONDS));
+        }
+
+        long firstCount;
+        long secondCount;
+        try (Stream<String> lines = Files.lines(file)) {
+            List<String> all = new ArrayList<>();
+            lines.forEach(all::add);
+            firstCount = all.stream().filter(line -> line.contains("first-")).count();
+            secondCount = all.stream().filter(line -> line.contains("second-")).count();
+        }
+        assertEquals(perHandler, firstCount);
+        assertEquals(perHandler, secondCount);
+    }
+
+    @Test
+    @DisplayName("Inter-process locking constructor should fail when lock channel cannot be opened")
+    void interProcessLockingConstructorShouldFailWhenLockChannelCannotBeOpened() throws Exception {
+        Path file = Files.createTempFile("fmh-lock-channel-open-fail", ".log");
+        assertThrows(IllegalArgumentException.class,
+                () -> new FailingOpenLockChannelFileMessageHandler(file.toString()));
+    }
+
+    @Test
     @DisplayName("Rotation-policy constructors should reject null and require explicit NoRotationPolicy")
     void rotationPolicyConstructorsShouldRejectNullAndRequireExplicitNoRotationPolicy() throws Exception {
         Path file = Files.createTempFile("fmh-null-rotation-policy", ".log");
@@ -380,6 +490,8 @@ class FileMessageHandlerUnitTest {
                 new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString(), true, 16, null));
         assertThrows(NullPointerException.class, () ->
                 new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString(), false, 0, false, null, true));
+        assertThrows(NullPointerException.class, () ->
+                new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString(), false, 0, false, null, true, true));
     }
 
     @Test
@@ -1037,5 +1149,23 @@ class FileMessageHandlerUnitTest {
                     .filter(path -> path.getFileName().toString().startsWith(baseName + "."))
                     .count();
         }
+    }
+
+    private static boolean isInterProcessLockingEnabled(final FileMessageHandler handler) throws Exception {
+        Field interProcessLockingField = FileMessageHandler.class.getDeclaredField("interProcessLocking");
+        interProcessLockingField.setAccessible(true);
+        return (Boolean) interProcessLockingField.get(handler);
+    }
+
+    private static Path getLockFilePath(final FileMessageHandler handler) throws Exception {
+        Field lockFilePathField = FileMessageHandler.class.getDeclaredField("lockFilePath");
+        lockFilePathField.setAccessible(true);
+        return (Path) lockFilePathField.get(handler);
+    }
+
+    private static ReentrantLock getLockGuard(final FileMessageHandler handler) throws Exception {
+        Field lockGuardField = FileMessageHandler.class.getDeclaredField("lockGuard");
+        lockGuardField.setAccessible(true);
+        return (ReentrantLock) lockGuardField.get(handler);
     }
 }

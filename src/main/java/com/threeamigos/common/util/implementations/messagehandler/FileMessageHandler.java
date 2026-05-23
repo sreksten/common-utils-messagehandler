@@ -16,10 +16,16 @@ import jakarta.annotation.Nonnull;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.Objects;
 import java.util.function.Consumer;
 
@@ -42,12 +48,17 @@ import java.util.function.Consumer;
  *   <li><strong>Close-on-write-error</strong>: when enabled, asynchronous mode schedules
  *       at most one close request thread, preventing thread proliferation under persistent
  *       write failures.</li>
+ *   <li><strong>Inter-process file locking</strong>: opt-in file locking can be enabled for
+ *       multi-process or multi-handler scenarios writing to the same file path. Locking uses a
+ *       sidecar lock file ({@code .lck}) and Java 8 {@link FileChannel}/{@link FileLock} APIs.</li>
  * </ul>
  */
 public class FileMessageHandler extends AbstractOutputMessageHandler {
 
     private static final int LINE_SEPARATOR_BYTES_LENGTH =
             System.lineSeparator().getBytes(StandardCharsets.UTF_8).length;
+    private static final String LOCK_FILE_SUFFIX = ".lck";
+    private static final ConcurrentMap<Path, ReentrantLock> LOCK_GUARDS = new ConcurrentHashMap<Path, ReentrantLock>();
     /**
      * Default maximum file size (in bytes) used by no-policy constructors before size-based
      * rotation archives the current log file and starts a new one.
@@ -59,6 +70,10 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
     private final Object writeLock = new Object();
     private final RotationPolicy rotationPolicy;
     private final boolean reopenOnExternalRotation;
+    private final boolean interProcessLocking;
+    private final Path lockFilePath;
+    private final ReentrantLock lockGuard;
+    private FileChannel lockFileChannel;
     private long bytesWritten = 0;
     private volatile Consumer<String> errorConsumer = System.err::println;
     private volatile boolean closeOnWriteError = false;
@@ -83,7 +98,28 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      */
     public FileMessageHandler(final @Nonnull String filename) {
         this(new LogRecordFactoryImpl(), new ConsoleLogRecordFormatter(), filename, false, 0, false,
-                defaultSizeRotationPolicy(), true);
+                defaultSizeRotationPolicy(), true, false);
+    }
+
+    /**
+     * Creates a synchronous {@code FileMessageHandler} that writes to the given file on the
+     * calling thread, with optional inter-process locking.
+     * <p>
+     * Parent directories are created automatically if they do not exist. Appends to the file if it
+     * already exists.
+     * <p>
+     * Uses a default {@link SizeRotationPolicy} with threshold
+     * {@value #DEFAULT_SIZE_ROTATION_MAX_BYTES} bytes. To disable rotation, use a constructor
+     * that accepts a {@link RotationPolicy} and pass {@link NoRotationPolicy}.
+     *
+     * @param filename path to the log file; must not be {@code null} or blank
+     * @param interProcessLocking {@code true} to enable sidecar-file locking across JVM processes
+     * @throws IllegalArgumentException if the path is null, blank, points to a directory,
+     *                                  is not writable, or cannot be created
+     */
+    public FileMessageHandler(final @Nonnull String filename, final boolean interProcessLocking) {
+        this(new LogRecordFactoryImpl(), new ConsoleLogRecordFormatter(), filename, false, 0, false,
+                defaultSizeRotationPolicy(), true, interProcessLocking);
     }
 
     /**
@@ -103,7 +139,31 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      */
     public FileMessageHandler(final @Nonnull String filename, final @Nonnull LogRecordFormatter formatter) {
         this(new LogRecordFactoryImpl(), formatter, filename, false, 0, false,
-                defaultSizeRotationPolicy(), true);
+                defaultSizeRotationPolicy(), true, false);
+    }
+
+    /**
+     * Creates a synchronous {@code FileMessageHandler} that writes to the given file on the
+     * calling thread, with optional inter-process locking.
+     * <p>
+     * Parent directories are created automatically if they do not exist. Appends to the file if it
+     * already exists.
+     * <p>
+     * Uses a default {@link SizeRotationPolicy} with threshold
+     * {@value #DEFAULT_SIZE_ROTATION_MAX_BYTES} bytes. To disable rotation, use a constructor
+     * that accepts a {@link RotationPolicy} and pass {@link NoRotationPolicy}.
+     *
+     * @param filename path to the log file; must not be {@code null} or blank
+     * @param formatter formatter to use for log records; must not be {@code null}
+     * @param interProcessLocking {@code true} to enable sidecar-file locking across JVM processes
+     * @throws IllegalArgumentException if the path is null, blank, points to a directory,
+     *                                  is not writable, or cannot be created
+     */
+    public FileMessageHandler(final @Nonnull String filename,
+                              final @Nonnull LogRecordFormatter formatter,
+                              final boolean interProcessLocking) {
+        this(new LogRecordFactoryImpl(), formatter, filename, false, 0, false,
+                defaultSizeRotationPolicy(), true, interProcessLocking);
     }
 
     /**
@@ -120,7 +180,8 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      *                                  is not writable, or cannot be created
      */
     public FileMessageHandler(final @Nonnull String filename, final RotationPolicy rotationPolicy) {
-        this(new LogRecordFactoryImpl(), new ConsoleLogRecordFormatter(), filename, false, 0, false, rotationPolicy, true);
+        this(new LogRecordFactoryImpl(), new ConsoleLogRecordFormatter(), filename, false, 0, false,
+                rotationPolicy, true, false);
     }
 
     /**
@@ -138,7 +199,8 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      *                                  is not writable, or cannot be created
      */
     public FileMessageHandler(final @Nonnull String filename, final @Nonnull LogRecordFormatter formatter, final RotationPolicy rotationPolicy) {
-        this(new LogRecordFactoryImpl(), formatter, filename, false, 0, false, rotationPolicy, true);
+        this(new LogRecordFactoryImpl(), formatter, filename, false, 0, false,
+                rotationPolicy, true, false);
     }
 
     /**
@@ -158,7 +220,8 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
     public FileMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
                               final @Nonnull LogRecordFormatter logRecordFormatter,
                               final @Nonnull String filename) {
-        this(logRecordFactory, logRecordFormatter, filename, false, 0, false, defaultSizeRotationPolicy(), false);
+        this(logRecordFactory, logRecordFormatter, filename, false, 0, false,
+                defaultSizeRotationPolicy(), false, false);
     }
 
     /**
@@ -184,7 +247,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
                               final @Nonnull String filename,
                               final boolean async, final int queueCapacity) {
         this(logRecordFactory, logRecordFormatter, filename, async, queueCapacity, true,
-                defaultSizeRotationPolicy(), false);
+                defaultSizeRotationPolicy(), false, false);
     }
 
     /**
@@ -211,7 +274,35 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
                               final boolean async, final int queueCapacity,
                               final boolean registerShutdownHook) {
         this(logRecordFactory, logRecordFormatter, filename, async, queueCapacity, registerShutdownHook,
-                defaultSizeRotationPolicy(), false);
+                defaultSizeRotationPolicy(), false, false);
+    }
+
+    /**
+     * Creates a {@code FileMessageHandler} with optional asynchronous dispatch and optional
+     * inter-process locking.
+     * <p>
+     * Parent directories are created automatically if they do not exist. Appends to the file if it
+     * already exists.
+     * <p>
+     * Uses a default {@link SizeRotationPolicy} with threshold
+     * {@value #DEFAULT_SIZE_ROTATION_MAX_BYTES} bytes.
+     *
+     * @param filename             path to the log file; must not be {@code null} or blank
+     * @param async                {@code true} to dispatch writes via a background worker thread
+     * @param queueCapacity        maximum number of queued write tasks when async; {@code 0} or negative means unbounded
+     * @param registerShutdownHook {@code true} to register a JVM shutdown hook that flushes and
+     *                             closes the file when the JVM exits
+     * @param interProcessLocking  {@code true} to enable sidecar-file locking across JVM processes
+     * @throws IllegalArgumentException if the path is invalid or the file cannot be opened for writing
+     */
+    public FileMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
+                              final @Nonnull LogRecordFormatter logRecordFormatter,
+                              final @Nonnull String filename,
+                              final boolean async, final int queueCapacity,
+                              final boolean registerShutdownHook,
+                              final boolean interProcessLocking) {
+        this(logRecordFactory, logRecordFormatter, filename, async, queueCapacity, registerShutdownHook,
+                defaultSizeRotationPolicy(), false, interProcessLocking);
     }
 
     // -------------------------------------------------------------------------
@@ -231,7 +322,8 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
                               final @Nonnull LogRecordFormatter logRecordFormatter,
                               final @Nonnull String filename,
                               final RotationPolicy rotationPolicy) {
-        this(logRecordFactory, logRecordFormatter, filename, false, 0, false, rotationPolicy, false);
+        this(logRecordFactory, logRecordFormatter, filename, false, 0, false,
+                rotationPolicy, false, false);
     }
 
     /**
@@ -253,7 +345,8 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
                               final @Nonnull String filename,
                               final boolean async, final int queueCapacity,
                               final RotationPolicy rotationPolicy) {
-        this(logRecordFactory, logRecordFormatter, filename, async, queueCapacity, true, rotationPolicy, false);
+        this(logRecordFactory, logRecordFormatter, filename, async, queueCapacity, true,
+                rotationPolicy, false, false);
     }
 
     /**
@@ -277,24 +370,73 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
                               final boolean async, final int queueCapacity,
                               final boolean registerShutdownHook, final RotationPolicy rotationPolicy,
                               final boolean reopenOnExternalRotation) {
+        this(logRecordFactory, logRecordFormatter, filename, async, queueCapacity, registerShutdownHook,
+                rotationPolicy, reopenOnExternalRotation, false);
+    }
+
+    /**
+     * Creates a {@code FileMessageHandler} with full control over all options, including optional
+     * inter-process file locking.
+     * <p>
+     * When inter-process locking is enabled, each write acquires an exclusive lock on a sidecar
+     * file in the same directory as the log file (for example {@code app.log.lck} for
+     * {@code app.log}).
+     *
+     * @param filename                 path to the log file; must not be {@code null} or blank
+     * @param async                    {@code true} to dispatch writes via a background worker thread
+     * @param queueCapacity            maximum number of queued write tasks when async; {@code 0} or negative means unbounded
+     * @param registerShutdownHook     {@code true} to register a JVM shutdown hook
+     * @param rotationPolicy           policy that decides when and how to rotate the file; must
+     *                                 not be {@code null}. Pass {@link NoRotationPolicy} for
+     *                                 explicit no-rotation.
+     * @param reopenOnExternalRotation {@code true} to silently re-create the log file if it has
+     *                                 been deleted or moved by an external tool (e.g. {@code logrotate})
+     * @param interProcessLocking      {@code true} to enable sidecar-file locking across JVM processes
+     * @throws NullPointerException if {@code rotationPolicy} is {@code null}
+     * @throws IllegalArgumentException if the path is invalid or the file cannot be opened for writing
+     */
+    public FileMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
+                              final @Nonnull LogRecordFormatter logRecordFormatter,
+                              final @Nonnull String filename,
+                              final boolean async, final int queueCapacity,
+                              final boolean registerShutdownHook, final RotationPolicy rotationPolicy,
+                              final boolean reopenOnExternalRotation,
+                              final boolean interProcessLocking) {
         this(logRecordFactory, logRecordFormatter,
                 prepareFilePath(filename), async, queueCapacity, registerShutdownHook,
-                rotationPolicy, reopenOnExternalRotation);
+                rotationPolicy, reopenOnExternalRotation, interProcessLocking);
     }
 
     private FileMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
                                final @Nonnull LogRecordFormatter logRecordFormatter,
                                final @Nonnull Path filePath, final boolean async, final int queueCapacity,
                                final boolean registerShutdownHook, final RotationPolicy rotationPolicy,
-                               final boolean reopenOnExternalRotation) {
+                               final boolean reopenOnExternalRotation,
+                               final boolean interProcessLocking) {
         super(logRecordFactory, logRecordFormatter);
         this.filePath = filePath;
         this.rotationPolicy = Objects.requireNonNull(rotationPolicy, "rotationPolicy must not be null");
         this.reopenOnExternalRotation = reopenOnExternalRotation;
+        this.interProcessLocking = interProcessLocking;
+        if (interProcessLocking) {
+            this.lockFilePath = resolveLockFilePath(filePath);
+            this.lockGuard = LOCK_GUARDS.computeIfAbsent(this.lockFilePath, ignored -> new ReentrantLock());
+        } else {
+            this.lockFilePath = null;
+            this.lockGuard = null;
+        }
+        PrintWriter openedWriter = null;
         try {
-            this.writer = openWriter(filePath);
+            openedWriter = openWriter(filePath);
+            this.writer = openedWriter;
+            if (interProcessLocking) {
+                this.lockFileChannel = openLockFileChannel(this.lockFilePath);
+            }
             this.bytesWritten = resolveCurrentFileSize(filePath);
         } catch (IOException e) {
+            if (openedWriter != null) {
+                openedWriter.close();
+            }
             throw new IllegalArgumentException("Unable to open log file for writing: " + filePath, e);
         }
         initializeOutputDispatch(async, queueCapacity, registerShutdownHook,
@@ -357,16 +499,20 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
     // -------------------------------------------------------------------------
 
     private void writeMessage(String message) {
-        dispatch(() -> {
+        dispatch(() -> withInterProcessFileLock(() -> {
             synchronized (writeLock) {
                 reopenIfNeeded();
                 writer.println(message);
+                if (interProcessLocking) {
+                    // Ensure bytes are pushed before releasing the inter-process lock.
+                    writer.flush();
+                }
                 bytesWritten += message.getBytes(StandardCharsets.UTF_8).length
                         + LINE_SEPARATOR_BYTES_LENGTH;
                 checkWriteError();
                 rotateIfNeeded();
             }
-        });
+        }));
     }
 
     private void checkWriteError() {
@@ -434,6 +580,40 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
         }
     }
 
+    /**
+     * Executes the provided write operation while holding the optional inter-process lock.
+     * <p>
+     * Locking is cooperative: it is effective only when all participating writers use this same
+     * locking mode and lock-file path.
+     */
+    private void withInterProcessFileLock(final Runnable writeOperation) {
+        if (!interProcessLocking) {
+            writeOperation.run();
+            return;
+        }
+
+        lockGuard.lock();
+        try (FileLock ignored = acquireInterProcessFileLock()) {
+            writeOperation.run();
+        } catch (OverlappingFileLockException | IOException e) {
+            errorConsumer.accept(MessageHandlerResourceBundle.get("fileLockError"));
+            requestCloseOnErrorIfEnabled(closeOnWriteError, "FileMessageHandler-close-on-lock-error");
+        } finally {
+            lockGuard.unlock();
+        }
+    }
+
+    private FileLock acquireInterProcessFileLock() throws IOException {
+        ensureLockChannelOpen();
+        return lockFileChannel.lock();
+    }
+
+    private void ensureLockChannelOpen() throws IOException {
+        if (lockFileChannel == null || !lockFileChannel.isOpen()) {
+            lockFileChannel = openLockFileChannel(lockFilePath);
+        }
+    }
+
     private static long resolveCurrentFileSize(final Path filePath) throws IOException {
         if (!Files.exists(filePath)) {
             return 0L;
@@ -443,6 +623,13 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
 
     private static RotationPolicy defaultSizeRotationPolicy() {
         return new SizeRotationPolicy(DEFAULT_SIZE_ROTATION_MAX_BYTES);
+    }
+
+    private static Path resolveLockFilePath(final Path filePath) {
+        Path absolute = filePath.toAbsolutePath().normalize();
+        String lockFileName = absolute.getFileName().toString() + LOCK_FILE_SUFFIX;
+        Path parent = absolute.getParent();
+        return parent != null ? parent.resolve(lockFileName) : absolute.resolveSibling(lockFileName);
     }
 
     private static Path prepareFilePath(final String filename) {
@@ -488,6 +675,17 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
     }
 
     /**
+     * Opens (or creates) the sidecar lock file channel used for inter-process locking.
+     *
+     * @param lockFilePath lock file path (e.g. {@code app.log.lck})
+     * @return an open writable channel for the lock file
+     * @throws IOException if the lock file cannot be opened
+     */
+    protected FileChannel openLockFileChannel(final Path lockFilePath) throws IOException {
+        return FileChannel.open(lockFilePath, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+    }
+
+    /**
      * Flushes any buffered output to the underlying file.
      * <p>
      * The flush is submitted via {@link #dispatch(Runnable)}, so in asynchronous mode it is
@@ -507,6 +705,18 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
         synchronized (writeLock) {
             writer.flush();
             writer.close();
+            closeLockChannelQuietly();
+        }
+    }
+
+    private void closeLockChannelQuietly() {
+        if (lockFileChannel == null) {
+            return;
+        }
+        try {
+            lockFileChannel.close();
+        } catch (IOException ignored) {
+            // No-op: channel is closing during shutdown path.
         }
     }
 }

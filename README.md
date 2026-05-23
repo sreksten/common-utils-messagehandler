@@ -231,6 +231,8 @@ This package supports three rotation-policy options: size-based, daily, and an e
 policy.
 Constructors that accept a `RotationPolicy` expect a non-null value; use `new NoRotationPolicy()`
 when you want to disable rotation.
+By default, inter-process locking is disabled. You can opt in when multiple JVMs may write to the
+same file.
 
 ### Size-based rotation
 
@@ -290,6 +292,24 @@ public class NoRotationExample {
     }
 }
 ```
+
+### Inter-process file locking (opt-in)
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler;
+
+public class LockedFileLoggingExample {
+    public static void main(String[] args) {
+        FileMessageHandler handler = new FileMessageHandler("logs/app.log", true);
+        handler.info("Serialized across JVMs using app.log.lck");
+        handler.close();
+    }
+}
+```
+
+When enabled, `FileMessageHandler` acquires an exclusive lock on a sidecar file
+(`app.log.lck`) for each write operation. This is a cooperative lock: all writers must use the
+same locking strategy to guarantee serialization.
 
 ## `SwingMessageHandler`: standalone desktop apps
 
@@ -1233,6 +1253,8 @@ Note: CDI must be enabled for the deployment (add `beans.xml` to `WEB-INF` or `M
 14. `FileMessageHandler` constructors without an explicit `RotationPolicy` use default size-based
     rotation (`FileMessageHandler.DEFAULT_SIZE_ROTATION_MAX_BYTES` = 10 MB). Use
     `new NoRotationPolicy()` to disable rotation explicitly.
+15. `FileMessageHandler` inter-process locking is opt-in (`new FileMessageHandler(path, true)` or
+    full constructor with `interProcessLocking=true`) and uses a sidecar `.lck` file.
 
 ## Java compatibility
 
