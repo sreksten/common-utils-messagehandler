@@ -321,8 +321,13 @@ public class JaegerMessageHandler extends AbstractOutputMessageHandler {
         dispatch(() -> {
             try {
                 dispatcher.dispatchLogRecord(logRecord, getLogRecordFormatter());
+                recordOutputSuccess();
             } catch (IOException e) {
+                recordOutputFailure();
                 handleDispatchFailure(e);
+            } catch (RuntimeException e) {
+                recordOutputFailure();
+                throw e;
             }
         });
     }

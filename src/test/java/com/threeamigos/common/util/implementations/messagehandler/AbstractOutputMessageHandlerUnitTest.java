@@ -50,6 +50,18 @@ class AbstractOutputMessageHandlerUnitTest {
             dispatch(runnable);
         }
 
+        private void markSuccess() {
+            recordOutputSuccess();
+        }
+
+        private void markFailure() {
+            recordOutputFailure();
+        }
+
+        private HandlerHealthMetrics healthMetrics() {
+            return getHandlerHealthMetrics();
+        }
+
         @Override
         public void handleMessage(@Nonnull SeverityNumber level, @Nonnull String message) {
         }
@@ -228,5 +240,41 @@ class AbstractOutputMessageHandlerUnitTest {
         assertTrue(firstExecuted.get(), "First queued task should be executed");
         assertTrue(secondExecuted.get(), "Second queued task should be executed");
         assertTrue(queue.isEmpty(), "Queue should be fully drained");
+    }
+
+    @Test
+    @DisplayName("health metrics should track success, failure, recovery and closed state")
+    void healthMetricsShouldTrackSuccessFailureRecoveryAndClosedState() {
+        ProbeOutputMessageHandler handler = new ProbeOutputMessageHandler(false, 0);
+        assertTrue(handler.isHealthy());
+
+        handler.markSuccess();
+        AbstractOutputMessageHandler.HandlerHealthMetrics afterSuccess = handler.healthMetrics();
+        assertEquals(1L, afterSuccess.getSuccessfulOperations());
+        assertEquals(0L, afterSuccess.getFailedOperations());
+        assertEquals(0L, afterSuccess.getConsecutiveFailures());
+        assertTrue(afterSuccess.getLastSuccessTimestampMillis() > 0L);
+        assertTrue(afterSuccess.isHealthy());
+
+        handler.markFailure();
+        AbstractOutputMessageHandler.HandlerHealthMetrics afterFailure = handler.healthMetrics();
+        assertEquals(1L, afterFailure.getSuccessfulOperations());
+        assertEquals(1L, afterFailure.getFailedOperations());
+        assertEquals(2L, afterFailure.getTotalOperations());
+        assertEquals(1L, afterFailure.getConsecutiveFailures());
+        assertTrue(afterFailure.getLastFailureTimestampMillis() > 0L);
+        assertFalse(afterFailure.isHealthy());
+
+        handler.markSuccess();
+        AbstractOutputMessageHandler.HandlerHealthMetrics afterRecovery = handler.healthMetrics();
+        assertEquals(2L, afterRecovery.getSuccessfulOperations());
+        assertEquals(1L, afterRecovery.getFailedOperations());
+        assertEquals(0L, afterRecovery.getConsecutiveFailures());
+        assertTrue(afterRecovery.isHealthy());
+
+        handler.close();
+        AbstractOutputMessageHandler.HandlerHealthMetrics afterClose = handler.healthMetrics();
+        assertTrue(afterClose.isClosed());
+        assertFalse(handler.isHealthy());
     }
 }

@@ -84,24 +84,36 @@ public class ConsoleMessageHandler extends AbstractOutputMessageHandler {
         LogRecord logRecord = createLogRecord(level, message);
         PrintStream stream = level.compareTo(SeverityNumber.ERROR) >= 0 ? System.err : System.out;
         Object printLock = level.compareTo(SeverityNumber.ERROR) >= 0 ? ERR_PRINT_LOCK : OUT_PRINT_LOCK;
-        print(stream, logRecordFormatter.format(logRecord), printLock);
+        print(stream, getLogRecordFormatter().format(logRecord), printLock);
     }
 
     @Override
     protected void handleExceptionInternal(@Nonnull String message, @Nonnull Throwable throwable) {
         LogRecord logRecord = createLogRecord(message, throwable);
-        String formatted = logRecordFormatter.format(logRecord);
+        String formatted = getLogRecordFormatter().format(logRecord);
         dispatch(() -> {
-            synchronized (ERR_PRINT_LOCK) {
-                System.err.println(formatted);
+            try {
+                synchronized (ERR_PRINT_LOCK) {
+                    System.err.println(formatted);
+                }
+                recordOutputSuccess();
+            } catch (RuntimeException ex) {
+                recordOutputFailure();
+                throw ex;
             }
         });
     }
 
     private void print(PrintStream stream, String formatted, Object printLock) {
         Runnable task = () -> {
-            synchronized (printLock) {
-                stream.println(formatted);
+            try {
+                synchronized (printLock) {
+                    stream.println(formatted);
+                }
+                recordOutputSuccess();
+            } catch (RuntimeException ex) {
+                recordOutputFailure();
+                throw ex;
             }
         };
         dispatch(task);

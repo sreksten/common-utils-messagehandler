@@ -577,6 +577,24 @@ class ConsoleMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("Health metrics should track successful console writes")
+    void healthMetricsShouldTrackSuccessfulConsoleWrites() {
+        ConsoleMessageHandler handler = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);
+        try {
+            handler.info("health-info");
+            handler.error("health-error");
+
+            AbstractOutputMessageHandler.HandlerHealthMetrics metrics = handler.getHandlerHealthMetrics();
+            assertEquals(2L, metrics.getSuccessfulOperations());
+            assertEquals(0L, metrics.getFailedOperations());
+            assertEquals(2L, metrics.getTotalOperations());
+            assertTrue(metrics.isHealthy());
+        } finally {
+            handler.close();
+        }
+    }
+
+    @Test
     @DisplayName("Close on synchronous handler should be a no-op")
     void closeOnSynchronousHandlerShouldBeNoOp() {
         ConsoleMessageHandler handler = new ConsoleMessageHandler(FACTORY, DEFAULT_FORMATTER);

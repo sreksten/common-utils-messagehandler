@@ -24,6 +24,8 @@ These handlers can accept a simple `String` or a `Supplier<String>`, which can b
 
 Bridges for Log4J, SLF4J, and JUL are also provided, together with OTLP/HTTP handlers
 for Jaeger- and Grafana-compatible backends.
+The same package also exposes an OTel-like tracing model (`TracerProvider`, `Tracer`, `Span`) and
+W3C Trace Context helpers (`TraceContextValidator`) for `traceparent`/`tracestate` ingestion and propagation.
 
 # Primer
 
@@ -180,6 +182,13 @@ levels: `enable` and `disable` both accept a collection or a varargs list of `Se
 `setXXXEnabled` or `setXXXDisabled` will enable or disable a whole range of SeverityNumbers (e.g., `setInfoEnabled(true)`
 will enable from `INFO` to `INFO4`).
 
+Granularity notes:
+- `setInfoEnabled(...)`, `setWarnEnabled(...)`, `setErrorEnabled(...)`, `setFatalEnabled(...)`,
+  `setDebugEnabled(...)`, and `setTraceEnabled(...)` are group toggles for the related numbered variants.
+- For per-variant control, use `setEnabled(SeverityNumber, boolean)`, `enable(...)`, and `disable(...)`.
+- In `CompositeMessageHandler`, level mutation behavior is defined by `LevelControlMode`
+  (`COMPOSITE_ONLY`, `PROPAGATE_TO_DELEGATES`, `DELEGATE_ONLY`).
+
 ```java
 import com.threeamigos.common.util.implementations.messagehandler.AbstractMessageHandler;
 import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
@@ -310,6 +319,54 @@ public class LockedFileLoggingExample {
 When enabled, `FileMessageHandler` acquires an exclusive lock on a sidecar file
 (`app.log.lck`) for each write operation. This is a cooperative lock: all writers must use the
 same locking strategy to guarantee serialization.
+
+## Output handler health metrics
+
+All handlers based on `AbstractOutputMessageHandler` expose runtime health counters:
+- `getHandlerHealthMetrics()`
+- `isHealthy()`
+
+This applies to:
+- `ConsoleMessageHandler`
+- `FileMessageHandler`
+- `JaegerMessageHandler`
+- `GrafanaMessageHandler`
+
+`getHandlerHealthMetrics()` returns an immutable snapshot with:
+- successful/failed/total output operations
+- consecutive failure count
+- last success/failure timestamps (epoch millis)
+- async mode flag and pending queue size
+- closed flag and derived health flag
+
+Async backpressure behavior for these handlers:
+- `async=true` uses one background worker and a queue.
+- With a bounded queue (`queueCapacity > 0`), a full queue triggers synchronous execution on
+  the caller thread (`queue full -> sync fallback`), so messages are not silently dropped.
+- `queueCapacity <= 0` creates an unbounded queue.
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.AbstractOutputMessageHandler;
+
+public class HandlerHealthExample {
+    public static void main(String[] args) {
+        ConsoleMessageHandler handler = new ConsoleMessageHandler();
+        try {
+            handler.info("startup complete");
+
+            AbstractOutputMessageHandler.HandlerHealthMetrics metrics =
+                    handler.getHandlerHealthMetrics();
+
+            System.out.println("successful=" + metrics.getSuccessfulOperations());
+            System.out.println("failed=" + metrics.getFailedOperations());
+            System.out.println("healthy=" + handler.isHealthy());
+        } finally {
+            handler.close();
+        }
+    }
+}
+```
 
 ## `SwingMessageHandler`: standalone desktop apps
 
@@ -543,6 +600,8 @@ public class CustomFormatterExample {
 
 This part of the package tries to produce an output compliant with [OpenTelemetry](https://opentelemetry.io/) and helps
 deal with systems composed by one or more parts (for example, a web application interacting with many microservices). 
+For distributed ingress/egress, it also supports W3C Trace Context (`traceparent`, `tracestate`)
+through `TraceContextValidator` (see the HTTP ingress section below).
 
 In such an environment, one server could start a user request, but it could have to delegate something to
 another server or microservice. In this case, logs could be produced in more than one server. Usually, all those logs
@@ -776,6 +835,22 @@ public class TracerQuickStart {
     }
 }
 ```
+
+### Validation mode: `OTEL_ERROR_HANDLER_LENIENT`
+
+OTel attribute validation uses `OpenTelemetryAttributeValidator` with two modes:
+- strict mode (default): invalid input throws `IllegalArgumentException`
+- lenient mode: invalid input is reported and processing continues with safe fallbacks where possible
+
+Set the environment variable before starting the JVM:
+
+```bash
+export OTEL_ERROR_HANDLER_LENIENT=true
+```
+
+The environment value is resolved once during class initialization. A runtime override is also
+available through `OpenTelemetryAttributeValidator.setLenientModeOverride(...)` and
+`OpenTelemetryAttributeValidator.clearLenientModeOverride()`.
 
 ## `OTelTags` and the Known Values subpackage
 
@@ -1271,6 +1346,9 @@ Note: CDI must be enabled for the deployment (add `beans.xml` to `WEB-INF` or `M
    - `FileMessageHandler`
    - `JaegerMessageHandler`
    - `GrafanaMessageHandler`
+   In bounded async mode, queue saturation applies backpressure: when the queue is full, the write
+   is executed synchronously on the caller thread (`queue full -> sync fallback`). With
+   `queueCapacity <= 0`, the queue is unbounded.
    For `ConsoleMessageHandler`, `FileMessageHandler`, `JaegerMessageHandler`, and
    `GrafanaMessageHandler`, async convenience constructors (without an explicit
    `registerShutdownHook` argument) register a JVM shutdown hook by default.
@@ -1292,6 +1370,18 @@ Note: CDI must be enabled for the deployment (add `beans.xml` to `WEB-INF` or `M
     `FileMessageHandler` default to `ConsoleLogRecordFormatter` (human-readable text).
 17. For server deployments that ingest console/file logs, enforce formatter selection centrally
     (bootstrap/factory), keep a stable JSON schema, and verify it with parser or golden-output tests.
+18. Output handlers (`ConsoleMessageHandler`, `FileMessageHandler`, `JaegerMessageHandler`,
+    `GrafanaMessageHandler`) expose health metrics via `getHandlerHealthMetrics()` and a
+    quick health status via `isHealthy()`.
+
+Default output format by handler:
+
+| Handler | Default formatter / payload | Default output style |
+|---|---|---|
+| `ConsoleMessageHandler` | `ConsoleLogRecordFormatter` | Human-readable text |
+| `FileMessageHandler` | `ConsoleLogRecordFormatter` | Human-readable text |
+| `JaegerMessageHandler` | `ExportLogsServiceRequestLogRecordFormatter` | OTLP `ExportLogsServiceRequest` JSON |
+| `GrafanaMessageHandler` | `ExportLogsServiceRequestLogRecordFormatter` (OTLP endpoints) / Loki push payload (Loki endpoints) | JSON |
 
 ## Java compatibility
 

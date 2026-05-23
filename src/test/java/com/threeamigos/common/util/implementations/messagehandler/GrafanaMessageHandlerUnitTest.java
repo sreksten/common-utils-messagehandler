@@ -23,6 +23,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -43,10 +44,14 @@ class GrafanaMessageHandlerUnitTest {
                 false, 0, false);
 
         sut.info("hello");
+        AbstractOutputMessageHandler.HandlerHealthMetrics metrics = sut.getHandlerHealthMetrics();
         sut.close();
 
         assertEquals(1, dispatcher.payloads.size());
         assertEquals("{\"msg\":\"hello\"}", dispatcher.payloads.get(0));
+        assertEquals(1L, metrics.getSuccessfulOperations());
+        assertEquals(0L, metrics.getFailedOperations());
+        assertTrue(metrics.isHealthy());
     }
 
     @Test
@@ -81,11 +86,16 @@ class GrafanaMessageHandlerUnitTest {
         sut.setErrorConsumer(errors::add);
 
         sut.info("x");
+        AbstractOutputMessageHandler.HandlerHealthMetrics metrics = sut.getHandlerHealthMetrics();
         sut.close();
 
         assertEquals(1, errors.size());
         assertTrue(errors.get(0).contains("Failed to dispatch log record to Grafana endpoint"));
         assertTrue(errors.get(0).contains("network down"));
+        assertEquals(0L, metrics.getSuccessfulOperations());
+        assertEquals(1L, metrics.getFailedOperations());
+        assertEquals(1L, metrics.getConsecutiveFailures());
+        assertFalse(metrics.isHealthy());
     }
 
     @Test

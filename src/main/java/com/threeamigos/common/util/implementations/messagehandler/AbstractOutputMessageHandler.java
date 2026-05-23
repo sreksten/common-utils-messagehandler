@@ -11,6 +11,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Base class for output-oriented handlers that optionally dispatch write operations asynchronously.
@@ -65,8 +66,91 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
     private Thread shutdownHook;
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final AtomicBoolean asyncCloseOnErrorScheduled = new AtomicBoolean(false);
+    private final AtomicLong successfulOutputOperations = new AtomicLong(0L);
+    private final AtomicLong failedOutputOperations = new AtomicLong(0L);
+    private final AtomicLong consecutiveOutputFailures = new AtomicLong(0L);
+    private final AtomicLong lastSuccessEpochMillis = new AtomicLong(0L);
+    private final AtomicLong lastFailureEpochMillis = new AtomicLong(0L);
     private final Object dispatchLock = new Object();
     protected volatile LogRecordFormatter logRecordFormatter;
+
+    /**
+     * Immutable snapshot of output-handler health counters.
+     */
+    public static final class HandlerHealthMetrics {
+        private final long successfulOperations;
+        private final long failedOperations;
+        private final long totalOperations;
+        private final long consecutiveFailures;
+        private final long lastSuccessTimestampMillis;
+        private final long lastFailureTimestampMillis;
+        private final boolean async;
+        private final int pendingQueueSize;
+        private final boolean closed;
+        private final boolean healthy;
+
+        private HandlerHealthMetrics(final long successfulOperations,
+                                     final long failedOperations,
+                                     final long totalOperations,
+                                     final long consecutiveFailures,
+                                     final long lastSuccessTimestampMillis,
+                                     final long lastFailureTimestampMillis,
+                                     final boolean async,
+                                     final int pendingQueueSize,
+                                     final boolean closed,
+                                     final boolean healthy) {
+            this.successfulOperations = successfulOperations;
+            this.failedOperations = failedOperations;
+            this.totalOperations = totalOperations;
+            this.consecutiveFailures = consecutiveFailures;
+            this.lastSuccessTimestampMillis = lastSuccessTimestampMillis;
+            this.lastFailureTimestampMillis = lastFailureTimestampMillis;
+            this.async = async;
+            this.pendingQueueSize = pendingQueueSize;
+            this.closed = closed;
+            this.healthy = healthy;
+        }
+
+        public long getSuccessfulOperations() {
+            return successfulOperations;
+        }
+
+        public long getFailedOperations() {
+            return failedOperations;
+        }
+
+        public long getTotalOperations() {
+            return totalOperations;
+        }
+
+        public long getConsecutiveFailures() {
+            return consecutiveFailures;
+        }
+
+        public long getLastSuccessTimestampMillis() {
+            return lastSuccessTimestampMillis;
+        }
+
+        public long getLastFailureTimestampMillis() {
+            return lastFailureTimestampMillis;
+        }
+
+        public boolean isAsync() {
+            return async;
+        }
+
+        public int getPendingQueueSize() {
+            return pendingQueueSize;
+        }
+
+        public boolean isClosed() {
+            return closed;
+        }
+
+        public boolean isHealthy() {
+            return healthy;
+        }
+    }
 
     public AbstractOutputMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
                                         final @Nonnull LogRecordFormatter logRecordFormatter) {
@@ -253,6 +337,62 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
      */
     protected final boolean isAsync() {
         return async;
+    }
+
+    /**
+     * Records one successful output operation.
+     * <p>
+     * A success clears the consecutive-failure streak and updates {@code lastSuccessTimestampMillis}.
+     * Subclasses should invoke this exactly once per successful sink operation.
+     */
+    protected final void recordOutputSuccess() {
+        successfulOutputOperations.incrementAndGet();
+        consecutiveOutputFailures.set(0L);
+        lastSuccessEpochMillis.set(System.currentTimeMillis());
+    }
+
+    /**
+     * Records one failed output operation.
+     * <p>
+     * A failure increases the consecutive-failure streak and updates {@code lastFailureTimestampMillis}.
+     * Subclasses should invoke this exactly once per failed sink operation.
+     */
+    protected final void recordOutputFailure() {
+        failedOutputOperations.incrementAndGet();
+        consecutiveOutputFailures.incrementAndGet();
+        lastFailureEpochMillis.set(System.currentTimeMillis());
+    }
+
+    /**
+     * Returns {@code true} when the handler is open and has no consecutive sink failures.
+     */
+    public final boolean isHealthy() {
+        return !closed.get() && consecutiveOutputFailures.get() == 0L;
+    }
+
+    /**
+     * Returns an immutable snapshot of handler-health counters.
+     */
+    public final HandlerHealthMetrics getHandlerHealthMetrics() {
+        long successful = successfulOutputOperations.get();
+        long failed = failedOutputOperations.get();
+        long consecutiveFailures = consecutiveOutputFailures.get();
+        long total = successful + failed;
+        boolean closedNow = closed.get();
+        boolean healthyNow = !closedNow && consecutiveFailures == 0L;
+        int pendingQueue = queue == null ? 0 : queue.size();
+        return new HandlerHealthMetrics(
+                successful,
+                failed,
+                total,
+                consecutiveFailures,
+                lastSuccessEpochMillis.get(),
+                lastFailureEpochMillis.get(),
+                async,
+                pendingQueue,
+                closedNow,
+                healthyNow
+        );
     }
 
     /**

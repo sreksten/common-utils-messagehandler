@@ -985,6 +985,34 @@ class FileMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("health metrics should track successful file writes")
+    void healthMetricsShouldTrackSuccessfulFileWrites() throws Exception {
+        Path file = Files.createTempFile("fmh-health-success", ".log");
+        try (FileMessageHandler handler = new FileMessageHandler(FACTORY, DEFAULT_FORMATTER, file.toString())) {
+            handler.info("ok");
+            AbstractOutputMessageHandler.HandlerHealthMetrics metrics = handler.getHandlerHealthMetrics();
+            assertEquals(1L, metrics.getSuccessfulOperations());
+            assertEquals(0L, metrics.getFailedOperations());
+            assertEquals(0L, metrics.getConsecutiveFailures());
+            assertTrue(metrics.isHealthy());
+        }
+    }
+
+    @Test
+    @DisplayName("health metrics should track failed file writes")
+    void healthMetricsShouldTrackFailedFileWrites() throws Exception {
+        Path file = Files.createTempFile("fmh-health-failure", ".log");
+        try (FileMessageHandler handler = new ErrorCheckWriterFileMessageHandler(file.toString())) {
+            handler.info("trigger");
+            AbstractOutputMessageHandler.HandlerHealthMetrics metrics = handler.getHandlerHealthMetrics();
+            assertEquals(0L, metrics.getSuccessfulOperations());
+            assertEquals(1L, metrics.getFailedOperations());
+            assertEquals(1L, metrics.getConsecutiveFailures());
+            assertFalse(metrics.isHealthy());
+        }
+    }
+
+    @Test
     @DisplayName("checkWriteError: IOException during recovery should still notify errorConsumer")
     void checkWriteErrorRecoveryFailsNotifiesConsumer() throws Exception {
         Path file = Files.createTempFile("fmh-recovery-fail", ".log");

@@ -41,10 +41,14 @@ class JaegerMessageHandlerUnitTest {
                 false, 0, false);
 
         sut.info("hello");
+        AbstractOutputMessageHandler.HandlerHealthMetrics metrics = sut.getHandlerHealthMetrics();
         sut.close();
 
         assertEquals(1, dispatcher.payloads.size());
         assertEquals("{\"msg\":\"hello\"}", dispatcher.payloads.get(0));
+        assertEquals(1L, metrics.getSuccessfulOperations());
+        assertEquals(0L, metrics.getFailedOperations());
+        assertTrue(metrics.isHealthy());
     }
 
     @Test
@@ -108,11 +112,16 @@ class JaegerMessageHandlerUnitTest {
         sut.setErrorConsumer(errors::add);
 
         sut.info("x");
+        AbstractOutputMessageHandler.HandlerHealthMetrics metrics = sut.getHandlerHealthMetrics();
         sut.close();
 
         assertEquals(1, errors.size());
         assertTrue(errors.get(0).contains("Failed to dispatch log record to Jaeger endpoint"));
         assertTrue(errors.get(0).contains("network down"));
+        assertEquals(0L, metrics.getSuccessfulOperations());
+        assertEquals(1L, metrics.getFailedOperations());
+        assertEquals(1L, metrics.getConsecutiveFailures());
+        assertFalse(metrics.isHealthy());
     }
 
     @Test

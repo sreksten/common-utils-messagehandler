@@ -493,13 +493,13 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
     @Override
     public void handleMessage(@Nonnull SeverityNumber level, @Nonnull String message) {
         LogRecord logRecord = createLogRecord(level, message);
-        writeMessage(logRecordFormatter.format(logRecord));
+        writeMessage(getLogRecordFormatter().format(logRecord));
     }
 
     @Override
     protected void handleExceptionInternal(@Nonnull String message, @Nonnull Throwable throwable) {
         LogRecord logRecord = createLogRecord(message, throwable);
-        writeMessage(logRecordFormatter.format(logRecord));
+        writeMessage(getLogRecordFormatter().format(logRecord));
     }
 
     // -------------------------------------------------------------------------
@@ -507,25 +507,44 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
     // -------------------------------------------------------------------------
 
     private void writeMessage(String message) {
-        dispatch(() -> withInterProcessFileLock(() -> {
-            synchronized (writeLock) {
-                reopenIfNeeded();
-                writer.println(message);
-                if (interProcessLocking) {
-                    // Ensure bytes are pushed before releasing the inter-process lock.
-                    writer.flush();
-                }
-                bytesWritten += message.getBytes(StandardCharsets.UTF_8).length
-                        + LINE_SEPARATOR_BYTES_LENGTH;
-                checkWriteError();
-                rotateIfNeeded();
+        dispatch(() -> {
+            final boolean[] failed = new boolean[]{false};
+            try {
+                withInterProcessFileLock(() -> {
+                    synchronized (writeLock) {
+                        if (!reopenIfNeeded()) {
+                            failed[0] = true;
+                        }
+                        writer.println(message);
+                        if (interProcessLocking) {
+                            // Ensure bytes are pushed before releasing the inter-process lock.
+                            writer.flush();
+                        }
+                        bytesWritten += message.getBytes(StandardCharsets.UTF_8).length
+                                + LINE_SEPARATOR_BYTES_LENGTH;
+                        if (!checkWriteError()) {
+                            failed[0] = true;
+                        }
+                        if (!rotateIfNeeded()) {
+                            failed[0] = true;
+                        }
+                    }
+                }, failed);
+            } catch (RuntimeException ex) {
+                recordOutputFailure();
+                throw ex;
             }
-        }));
+            if (failed[0]) {
+                recordOutputFailure();
+            } else {
+                recordOutputSuccess();
+            }
+        });
     }
 
-    private void checkWriteError() {
+    private boolean checkWriteError() {
         if (!writer.checkError()) {
-            return;
+            return true;
         }
         // Layer 1: attempt recovery by reopening the writer
         try {
@@ -539,6 +558,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
         errorConsumer.accept(MessageHandlerResourceBundle.get("fileWriteError"));
         // Layer 3: optionally close
         requestCloseOnErrorIfEnabled(closeOnWriteError, "FileMessageHandler-close-on-error");
+        return false;
     }
 
     /**
@@ -548,9 +568,9 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      * {@code true}. If the file has been moved or deleted by an external rotator, a new empty
      * file is created at the original path and the writer is replaced.
      */
-    private void reopenIfNeeded() {
+    private boolean reopenIfNeeded() {
         if (!reopenOnExternalRotation) {
-            return;
+            return true;
         }
         if (!Files.exists(filePath)) {
             try {
@@ -559,8 +579,10 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
                 bytesWritten = resolveCurrentFileSize(filePath);
             } catch (IOException e) {
                 errorConsumer.accept(MessageHandlerResourceBundle.get("fileReopenError"));
+                return false;
             }
         }
+        return true;
     }
 
     /**
@@ -571,9 +593,9 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      * a new file is opened at the original path, and {@link RotationPolicy#onRotated()} is called
      * to let the policy reset its state.
      */
-    private void rotateIfNeeded() {
+    private boolean rotateIfNeeded() {
         if (!rotationPolicy.shouldRotate(filePath, bytesWritten)) {
-            return;
+            return true;
         }
         Path dest = rotationPolicy.rotatedFilePath(filePath);
         try {
@@ -585,7 +607,9 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
             rotationPolicy.onRotated();
         } catch (IOException e) {
             errorConsumer.accept(MessageHandlerResourceBundle.get("fileRotationError"));
+            return false;
         }
+        return true;
     }
 
     /**
@@ -594,7 +618,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      * Locking is cooperative: it is effective only when all participating writers use this same
      * locking mode and lock-file path.
      */
-    private void withInterProcessFileLock(final Runnable writeOperation) {
+    private void withInterProcessFileLock(final Runnable writeOperation, final boolean[] failed) {
         if (!interProcessLocking) {
             writeOperation.run();
             return;
@@ -604,6 +628,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
         try (FileLock ignored = acquireInterProcessFileLock()) {
             writeOperation.run();
         } catch (OverlappingFileLockException | IOException e) {
+            failed[0] = true;
             errorConsumer.accept(MessageHandlerResourceBundle.get("fileLockError"));
             requestCloseOnErrorIfEnabled(closeOnWriteError, "FileMessageHandler-close-on-lock-error");
         } finally {
