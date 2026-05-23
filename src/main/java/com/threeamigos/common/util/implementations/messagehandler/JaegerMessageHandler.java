@@ -46,6 +46,9 @@ import java.util.function.Consumer;
  *   <li><strong>Asynchronous</strong>: calls enqueue work and a single daemon worker performs dispatch.</li>
  * </ul>
  * Queue overflow falls back to caller-thread execution (same behavior as other output handlers).
+ * Async convenience constructors (without an explicit {@code registerShutdownHook} argument)
+ * enable shutdown-hook registration by default. When using constructors where
+ * {@code registerShutdownHook=false}, callers must invoke {@link #close()} during shutdown.
  *
  * <h2>Failure handling</h2>
  * <p>
@@ -94,6 +97,77 @@ public class JaegerMessageHandler extends AbstractOutputMessageHandler {
     }
 
     /**
+     * Creates a handler with optional asynchronous dispatch.
+     * <p>
+     * Convenience default: when {@code async} is {@code true}, a JVM shutdown hook is
+     * registered automatically to close the handler and flush queued dispatch tasks.
+     *
+     * @param endpointUrl OTLP HTTP endpoint (for example {@code http://localhost:4318/v1/logs})
+     * @param async whether to use background dispatch
+     * @param queueCapacity async queue capacity (0 or negative means unbounded)
+     */
+    public JaegerMessageHandler(final @Nonnull String endpointUrl,
+                                final boolean async,
+                                final int queueCapacity) {
+        this(new LogRecordFactoryImpl(),
+                new ExportLogsServiceRequestLogRecordFormatter(),
+                new JaegerLogRecordDispatcher(endpointUrl),
+                async, queueCapacity, true);
+    }
+
+    /**
+     * Creates a handler with optional asynchronous dispatch and optional Basic authentication.
+     * <p>
+     * Convenience default: when {@code async} is {@code true}, a JVM shutdown hook is
+     * registered automatically to close the handler and flush queued dispatch tasks.
+     *
+     * @param endpointUrl OTLP HTTP endpoint
+     * @param username basic-auth username, nullable
+     * @param password basic-auth password, nullable
+     * @param async whether to use background dispatch
+     * @param queueCapacity async queue capacity (0 or negative means unbounded)
+     */
+    public JaegerMessageHandler(final @Nonnull String endpointUrl,
+                                final @Nullable String username,
+                                final @Nullable String password,
+                                final boolean async,
+                                final int queueCapacity) {
+        this(new LogRecordFactoryImpl(),
+                new ExportLogsServiceRequestLogRecordFormatter(),
+                new JaegerLogRecordDispatcher(endpointUrl, username, password),
+                async, queueCapacity, true);
+    }
+
+    /**
+     * Creates a handler with full dispatcher configuration and optional asynchronous dispatch.
+     * <p>
+     * Convenience default: when {@code async} is {@code true}, a JVM shutdown hook is
+     * registered automatically to close the handler and flush queued dispatch tasks.
+     *
+     * @param endpointUrl OTLP HTTP endpoint
+     * @param username basic-auth username, nullable
+     * @param password basic-auth password, nullable
+     * @param bearerToken bearer token, nullable
+     * @param connectTimeoutMillis connect timeout in milliseconds
+     * @param readTimeoutMillis read timeout in milliseconds
+     * @param additionalHeaders optional additional headers
+     * @param async whether to use background dispatch
+     * @param queueCapacity async queue capacity (0 or negative means unbounded)
+     */
+    public JaegerMessageHandler(final @Nonnull String endpointUrl,
+                                final @Nullable String username,
+                                final @Nullable String password,
+                                final @Nullable String bearerToken,
+                                final int connectTimeoutMillis,
+                                final int readTimeoutMillis,
+                                final @Nullable Map<String, String> additionalHeaders,
+                                final boolean async,
+                                final int queueCapacity) {
+        this(endpointUrl, username, password, bearerToken, connectTimeoutMillis, readTimeoutMillis, additionalHeaders,
+                async, queueCapacity, true);
+    }
+
+    /**
      * Creates a handler with full dispatcher configuration and optional asynchronous dispatch.
      *
      * @param endpointUrl OTLP HTTP endpoint
@@ -105,7 +179,8 @@ public class JaegerMessageHandler extends AbstractOutputMessageHandler {
      * @param additionalHeaders optional additional headers
      * @param async whether to use background dispatch
      * @param queueCapacity async queue capacity (0 or negative means unbounded)
-     * @param registerShutdownHook whether to register a JVM shutdown hook that closes the handler
+     * @param registerShutdownHook whether to register a JVM shutdown hook that closes the handler;
+     *                             when {@code false}, callers should invoke {@link #close()} at shutdown
      */
     public JaegerMessageHandler(final @Nonnull String endpointUrl,
                                 final @Nullable String username,
@@ -126,13 +201,54 @@ public class JaegerMessageHandler extends AbstractOutputMessageHandler {
 
     /**
      * Creates a handler with explicit dependencies and optional asynchronous dispatch.
+     * <p>
+     * Convenience default: when {@code async} is {@code true}, a JVM shutdown hook is
+     * registered automatically to close the handler and flush queued dispatch tasks.
      *
      * @param logRecordFactory factory used to create log records from incoming message calls
      * @param logRecordFormatter formatter used to encode each log record before dispatch
      * @param dispatcher dispatcher responsible for HTTP transport
      * @param async whether to use background dispatch
      * @param queueCapacity async queue capacity (0 or negative means unbounded)
-     * @param registerShutdownHook whether to register a JVM shutdown hook that closes the handler
+     */
+    public JaegerMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
+                                final @Nonnull LogRecordFormatter logRecordFormatter,
+                                final @Nonnull JaegerLogRecordDispatcher dispatcher,
+                                final boolean async,
+                                final int queueCapacity) {
+        this(logRecordFactory, logRecordFormatter, (LogRecordDispatcher) dispatcher, async, queueCapacity, true);
+    }
+
+    /**
+     * Creates a handler with explicit dependencies and optional asynchronous dispatch.
+     * <p>
+     * Convenience default: when {@code async} is {@code true}, a JVM shutdown hook is
+     * registered automatically to close the handler and flush queued dispatch tasks.
+     *
+     * @param logRecordFactory factory used to create log records from incoming message calls
+     * @param logRecordFormatter formatter used to encode each log record before dispatch
+     * @param dispatcher dispatcher responsible for HTTP transport
+     * @param async whether to use background dispatch
+     * @param queueCapacity async queue capacity (0 or negative means unbounded)
+     */
+    public JaegerMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
+                                final @Nonnull LogRecordFormatter logRecordFormatter,
+                                final @Nonnull LogRecordDispatcher dispatcher,
+                                final boolean async,
+                                final int queueCapacity) {
+        this(logRecordFactory, logRecordFormatter, dispatcher, async, queueCapacity, true);
+    }
+
+    /**
+     * Creates a handler with explicit dependencies and optional asynchronous dispatch.
+     *
+     * @param logRecordFactory factory used to create log records from incoming message calls
+     * @param logRecordFormatter formatter used to encode each log record before dispatch
+     * @param dispatcher dispatcher responsible for HTTP transport
+     * @param async whether to use background dispatch
+     * @param queueCapacity async queue capacity (0 or negative means unbounded)
+     * @param registerShutdownHook whether to register a JVM shutdown hook that closes the handler;
+     *                             when {@code false}, callers should invoke {@link #close()} at shutdown
      */
     public JaegerMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
                                 final @Nonnull LogRecordFormatter logRecordFormatter,
@@ -143,6 +259,17 @@ public class JaegerMessageHandler extends AbstractOutputMessageHandler {
         this(logRecordFactory, logRecordFormatter, (LogRecordDispatcher) dispatcher, async, queueCapacity, registerShutdownHook);
     }
 
+    /**
+     * Creates a handler with explicit dependencies and optional asynchronous dispatch.
+     *
+     * @param logRecordFactory factory used to create log records from incoming message calls
+     * @param logRecordFormatter formatter used to encode each log record before dispatch
+     * @param dispatcher dispatcher responsible for HTTP transport
+     * @param async whether to use background dispatch
+     * @param queueCapacity async queue capacity (0 or negative means unbounded)
+     * @param registerShutdownHook whether to register a JVM shutdown hook that closes the handler;
+     *                             when {@code false}, callers should invoke {@link #close()} at shutdown
+     */
     public JaegerMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
                                 final @Nonnull LogRecordFormatter logRecordFormatter,
                                 final @Nonnull LogRecordDispatcher dispatcher,

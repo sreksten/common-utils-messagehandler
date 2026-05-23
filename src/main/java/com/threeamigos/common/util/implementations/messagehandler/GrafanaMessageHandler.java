@@ -28,6 +28,10 @@ import java.util.function.Consumer;
  * Optional close-on-dispatch-error behavior can be enabled through
  * {@link #setCloseOnDispatchError(boolean)}. In async mode, close scheduling is one-shot, so
  * repeated failures do not create unbounded close threads.
+ * <p>
+ * Async convenience constructors (without an explicit {@code registerShutdownHook} argument)
+ * enable shutdown-hook registration by default. When using constructors where
+ * {@code registerShutdownHook=false}, callers must invoke {@link #close()} during shutdown.
  */
 public class GrafanaMessageHandler extends AbstractOutputMessageHandler {
 
@@ -51,6 +55,92 @@ public class GrafanaMessageHandler extends AbstractOutputMessageHandler {
                 false, 0, false);
     }
 
+    /**
+     * Creates a handler with optional asynchronous dispatch.
+     * <p>
+     * Convenience default: when {@code async} is {@code true}, a JVM shutdown hook is
+     * registered automatically to close the handler and flush queued dispatch tasks.
+     *
+     * @param endpointUrl OTLP HTTP endpoint
+     * @param async whether to use background dispatch
+     * @param queueCapacity async queue capacity (0 or negative means unbounded)
+     */
+    public GrafanaMessageHandler(final @Nonnull String endpointUrl,
+                                 final boolean async,
+                                 final int queueCapacity) {
+        this(new LogRecordFactoryImpl(),
+                new ExportLogsServiceRequestLogRecordFormatter(),
+                new GrafanaLogRecordDispatcher(endpointUrl),
+                async, queueCapacity, true);
+    }
+
+    /**
+     * Creates a handler with optional asynchronous dispatch and optional Basic authentication.
+     * <p>
+     * Convenience default: when {@code async} is {@code true}, a JVM shutdown hook is
+     * registered automatically to close the handler and flush queued dispatch tasks.
+     *
+     * @param endpointUrl OTLP HTTP endpoint
+     * @param username basic-auth username, nullable
+     * @param password basic-auth password, nullable
+     * @param async whether to use background dispatch
+     * @param queueCapacity async queue capacity (0 or negative means unbounded)
+     */
+    public GrafanaMessageHandler(final @Nonnull String endpointUrl,
+                                 final @Nullable String username,
+                                 final @Nullable String password,
+                                 final boolean async,
+                                 final int queueCapacity) {
+        this(new LogRecordFactoryImpl(),
+                new ExportLogsServiceRequestLogRecordFormatter(),
+                new GrafanaLogRecordDispatcher(endpointUrl, username, password),
+                async, queueCapacity, true);
+    }
+
+    /**
+     * Creates a handler with full dispatcher configuration and optional asynchronous dispatch.
+     * <p>
+     * Convenience default: when {@code async} is {@code true}, a JVM shutdown hook is
+     * registered automatically to close the handler and flush queued dispatch tasks.
+     *
+     * @param endpointUrl OTLP HTTP endpoint
+     * @param username basic-auth username, nullable
+     * @param password basic-auth password, nullable
+     * @param bearerToken bearer token, nullable
+     * @param connectTimeoutMillis connect timeout in milliseconds
+     * @param readTimeoutMillis read timeout in milliseconds
+     * @param additionalHeaders optional additional headers
+     * @param async whether to use background dispatch
+     * @param queueCapacity async queue capacity (0 or negative means unbounded)
+     */
+    public GrafanaMessageHandler(final @Nonnull String endpointUrl,
+                                 final @Nullable String username,
+                                 final @Nullable String password,
+                                 final @Nullable String bearerToken,
+                                 final int connectTimeoutMillis,
+                                 final int readTimeoutMillis,
+                                 final @Nullable Map<String, String> additionalHeaders,
+                                 final boolean async,
+                                 final int queueCapacity) {
+        this(endpointUrl, username, password, bearerToken, connectTimeoutMillis, readTimeoutMillis, additionalHeaders,
+                async, queueCapacity, true);
+    }
+
+    /**
+     * Creates a handler with full dispatcher configuration and optional asynchronous dispatch.
+     *
+     * @param endpointUrl OTLP HTTP endpoint
+     * @param username basic-auth username, nullable
+     * @param password basic-auth password, nullable
+     * @param bearerToken bearer token, nullable
+     * @param connectTimeoutMillis connect timeout in milliseconds
+     * @param readTimeoutMillis read timeout in milliseconds
+     * @param additionalHeaders optional additional headers
+     * @param async whether to use background dispatch
+     * @param queueCapacity async queue capacity (0 or negative means unbounded)
+     * @param registerShutdownHook whether to register a JVM shutdown hook that closes the handler;
+     *                             when {@code false}, callers should invoke {@link #close()} at shutdown
+     */
     public GrafanaMessageHandler(final @Nonnull String endpointUrl,
                                  final @Nullable String username,
                                  final @Nullable String password,
@@ -68,6 +158,17 @@ public class GrafanaMessageHandler extends AbstractOutputMessageHandler {
                 async, queueCapacity, registerShutdownHook);
     }
 
+    /**
+     * Creates a handler with explicit dependencies and optional asynchronous dispatch.
+     *
+     * @param logRecordFactory factory used to create log records from incoming message calls
+     * @param logRecordFormatter formatter used to encode each log record before dispatch
+     * @param dispatcher dispatcher responsible for HTTP transport
+     * @param async whether to use background dispatch
+     * @param queueCapacity async queue capacity (0 or negative means unbounded)
+     * @param registerShutdownHook whether to register a JVM shutdown hook that closes the handler;
+     *                             when {@code false}, callers should invoke {@link #close()} at shutdown
+     */
     public GrafanaMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
                                  final @Nonnull LogRecordFormatter logRecordFormatter,
                                  final @Nonnull GrafanaLogRecordDispatcher dispatcher,
@@ -77,6 +178,57 @@ public class GrafanaMessageHandler extends AbstractOutputMessageHandler {
         this(logRecordFactory, logRecordFormatter, (LogRecordDispatcher) dispatcher, async, queueCapacity, registerShutdownHook);
     }
 
+    /**
+     * Creates a handler with explicit dependencies and optional asynchronous dispatch.
+     * <p>
+     * Convenience default: when {@code async} is {@code true}, a JVM shutdown hook is
+     * registered automatically to close the handler and flush queued dispatch tasks.
+     *
+     * @param logRecordFactory factory used to create log records from incoming message calls
+     * @param logRecordFormatter formatter used to encode each log record before dispatch
+     * @param dispatcher dispatcher responsible for HTTP transport
+     * @param async whether to use background dispatch
+     * @param queueCapacity async queue capacity (0 or negative means unbounded)
+     */
+    public GrafanaMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
+                                 final @Nonnull LogRecordFormatter logRecordFormatter,
+                                 final @Nonnull GrafanaLogRecordDispatcher dispatcher,
+                                 final boolean async,
+                                 final int queueCapacity) {
+        this(logRecordFactory, logRecordFormatter, (LogRecordDispatcher) dispatcher, async, queueCapacity, true);
+    }
+
+    /**
+     * Creates a handler with explicit dependencies and optional asynchronous dispatch.
+     * <p>
+     * Convenience default: when {@code async} is {@code true}, a JVM shutdown hook is
+     * registered automatically to close the handler and flush queued dispatch tasks.
+     *
+     * @param logRecordFactory factory used to create log records from incoming message calls
+     * @param logRecordFormatter formatter used to encode each log record before dispatch
+     * @param dispatcher dispatcher responsible for HTTP transport
+     * @param async whether to use background dispatch
+     * @param queueCapacity async queue capacity (0 or negative means unbounded)
+     */
+    public GrafanaMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
+                                 final @Nonnull LogRecordFormatter logRecordFormatter,
+                                 final @Nonnull LogRecordDispatcher dispatcher,
+                                 final boolean async,
+                                 final int queueCapacity) {
+        this(logRecordFactory, logRecordFormatter, dispatcher, async, queueCapacity, true);
+    }
+
+    /**
+     * Creates a handler with explicit dependencies and optional asynchronous dispatch.
+     *
+     * @param logRecordFactory factory used to create log records from incoming message calls
+     * @param logRecordFormatter formatter used to encode each log record before dispatch
+     * @param dispatcher dispatcher responsible for HTTP transport
+     * @param async whether to use background dispatch
+     * @param queueCapacity async queue capacity (0 or negative means unbounded)
+     * @param registerShutdownHook whether to register a JVM shutdown hook that closes the handler;
+     *                             when {@code false}, callers should invoke {@link #close()} at shutdown
+     */
     public GrafanaMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
                                  final @Nonnull LogRecordFormatter logRecordFormatter,
                                  final @Nonnull LogRecordDispatcher dispatcher,

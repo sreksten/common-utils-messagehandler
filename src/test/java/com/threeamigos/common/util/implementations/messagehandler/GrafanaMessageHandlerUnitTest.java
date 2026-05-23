@@ -23,6 +23,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -85,6 +86,17 @@ class GrafanaMessageHandlerUnitTest {
         assertEquals(1, errors.size());
         assertTrue(errors.get(0).contains("Failed to dispatch log record to Grafana endpoint"));
         assertTrue(errors.get(0).contains("network down"));
+    }
+
+    @Test
+    @DisplayName("async convenience constructor should register shutdown hook by default")
+    void asyncConvenienceConstructorShouldRegisterShutdownHookByDefault() throws Exception {
+        GrafanaMessageHandler handler = new GrafanaMessageHandler("http://localhost:4318/v1/logs", true, 10);
+        try {
+            assertNotNull(getShutdownHook(handler));
+        } finally {
+            handler.close();
+        }
     }
 
     @Test
@@ -247,6 +259,12 @@ class GrafanaMessageHandlerUnitTest {
             }
         }
         throw new NoSuchFieldException(fieldName);
+    }
+
+    private static Thread getShutdownHook(final GrafanaMessageHandler handler) throws Exception {
+        Field shutdownHookField = AbstractOutputMessageHandler.class.getDeclaredField("shutdownHook");
+        shutdownHookField.setAccessible(true);
+        return (Thread) shutdownHookField.get(handler);
     }
 
     private static final class CapturingDispatcher extends GrafanaLogRecordDispatcher {

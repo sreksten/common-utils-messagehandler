@@ -21,6 +21,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -80,6 +81,17 @@ class JaegerMessageHandlerUnitTest {
             sut.close();
         }
         assertEquals(2, dispatcher.payloads.size());
+    }
+
+    @Test
+    @DisplayName("async convenience constructor should register shutdown hook by default")
+    void asyncConvenienceConstructorShouldRegisterShutdownHookByDefault() throws Exception {
+        JaegerMessageHandler handler = new JaegerMessageHandler("http://localhost:4318/v1/logs", true, 10);
+        try {
+            assertNotNull(getShutdownHook(handler));
+        } finally {
+            handler.close();
+        }
     }
 
     @Test
@@ -264,6 +276,12 @@ class JaegerMessageHandlerUnitTest {
             }
         }
         throw new NoSuchFieldException(fieldName);
+    }
+
+    private static Thread getShutdownHook(final JaegerMessageHandler handler) throws Exception {
+        Field shutdownHookField = AbstractOutputMessageHandler.class.getDeclaredField("shutdownHook");
+        shutdownHookField.setAccessible(true);
+        return (Thread) shutdownHookField.get(handler);
     }
 
     private static void waitUntilClosed(final JaegerMessageHandler handler, final long timeoutMillis) throws Exception {

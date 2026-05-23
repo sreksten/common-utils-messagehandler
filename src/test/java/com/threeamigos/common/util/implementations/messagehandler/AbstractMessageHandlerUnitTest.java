@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
+import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordFactoryImpl;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 import jakarta.annotation.Nonnull;
 import org.junit.jupiter.api.DisplayName;
@@ -17,6 +18,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -213,6 +215,24 @@ class AbstractMessageHandlerUnitTest {
     void tracerFieldShouldBeVolatileForCrossThreadVisibility() throws Exception {
         Field tracerField = AbstractMessageHandler.class.getDeclaredField("tracer");
         assertTrue(Modifier.isVolatile(tracerField.getModifiers()));
+    }
+
+    @Test
+    @DisplayName("fallback log record factory should be final, non-static and instance scoped")
+    void fallbackLogRecordFactoryShouldBeFinalNonStaticAndInstanceScoped() throws Exception {
+        Field defaultFactoryField = AbstractMessageHandler.class.getDeclaredField("defaultLogRecordFactory");
+        assertTrue(Modifier.isFinal(defaultFactoryField.getModifiers()));
+        assertFalse(Modifier.isStatic(defaultFactoryField.getModifiers()));
+        defaultFactoryField.setAccessible(true);
+
+        ProbeMessageHandler first = new ProbeMessageHandler();
+        ProbeMessageHandler second = new ProbeMessageHandler();
+        Object firstFactory = defaultFactoryField.get(first);
+        Object secondFactory = defaultFactoryField.get(second);
+
+        assertTrue(firstFactory instanceof LogRecordFactoryImpl);
+        assertTrue(secondFactory instanceof LogRecordFactoryImpl);
+        assertNotSame(firstFactory, secondFactory);
     }
 
     @Test

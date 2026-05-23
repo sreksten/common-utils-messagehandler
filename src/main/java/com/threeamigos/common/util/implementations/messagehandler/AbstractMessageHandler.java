@@ -37,11 +37,14 @@ import java.util.function.Supplier;
  * methods. For example, to enable WARN2 messages, call <code>enable(SeverityNumber.WARN2)</code>. To disable INFO3
  * messages, call <code>disable(SeverityNumber.INFO3)</code>.
  * <p>
+ * When no tracer is bound, each handler instance uses its own fallback
+ * {@link LogRecordFactoryImpl}. There is no shared static fallback factory across handlers.
+ * <p>
  * @author Stefano Reksten
  */
 public abstract class AbstractMessageHandler implements MessageHandler {
 
-    private static final LogRecordFactory DEFAULT_LOG_RECORD_FACTORY = new LogRecordFactoryImpl();
+    private final LogRecordFactory defaultLogRecordFactory = new LogRecordFactoryImpl();
 
     /**
      * Bound internally by otel package code through reflection to keep tracer linkage
@@ -80,12 +83,18 @@ public abstract class AbstractMessageHandler implements MessageHandler {
         return resolveLogRecordFactory().create(message, throwable);
     }
 
+    /**
+     * Resolves the log-record factory to use for the current call.
+     * <p>
+     * If a tracer is bound, uses the tracer-provided factory. Otherwise falls back to this
+     * handler instance's own default factory.
+     */
     private LogRecordFactory resolveLogRecordFactory() {
         Tracer boundTracer = tracer;
         if (boundTracer != null) {
             return boundTracer.getLogRecordFactory();
         }
-        return DEFAULT_LOG_RECORD_FACTORY;
+        return defaultLogRecordFactory;
     }
 
     private static final int DEFAULT_ENABLED_LEVELS_MASK =

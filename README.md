@@ -1193,8 +1193,11 @@ Note: CDI must be enabled for the deployment (add `beans.xml` to `WEB-INF` or `M
    - `FileMessageHandler`
    - `JaegerMessageHandler`
    - `GrafanaMessageHandler`
-   For `ConsoleMessageHandler` and `FileMessageHandler`, async convenience constructors
-   (without an explicit `registerShutdownHook` argument) register a JVM shutdown hook by default.
+   For `ConsoleMessageHandler`, `FileMessageHandler`, `JaegerMessageHandler`, and
+   `GrafanaMessageHandler`, async convenience constructors (without an explicit
+   `registerShutdownHook` argument) register a JVM shutdown hook by default.
+   If you choose a constructor with `registerShutdownHook=false`, call `close()` explicitly
+   during application shutdown.
 9. Other handlers are synchronous unless they implement their own threading model.
 10. `GrafanaMessageHandler` exports logs only; configure `TracerProvider#setDefaultSpanDispatcher(...)`
     (for example with `GrafanaSpanDispatcher`) to export spans/traces.
