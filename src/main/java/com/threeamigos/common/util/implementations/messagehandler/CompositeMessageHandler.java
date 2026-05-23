@@ -212,6 +212,8 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
     /**
      * Enables or disables all {@code INFO*} levels on this composite.
      * <p>
+     * Composite-level state is updated as one atomic grouped operation.
+     * <p>
      * In {@link LevelControlMode#PROPAGATE_TO_DELEGATES}, changes are also forwarded to
      * level-aware delegates.
      *
@@ -220,10 +222,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
     @Override
     public void setInfoEnabled(final boolean infoEnabled) {
         assertLevelMutatorAllowed("setInfoEnabled");
-        super.setEnabled(SeverityNumber.INFO, infoEnabled);
-        super.setEnabled(SeverityNumber.INFO2, infoEnabled);
-        super.setEnabled(SeverityNumber.INFO3, infoEnabled);
-        super.setEnabled(SeverityNumber.INFO4, infoEnabled);
+        super.setInfoEnabled(infoEnabled);
         if (levelControlMode == LevelControlMode.PROPAGATE_TO_DELEGATES) {
             forEachLevelAwareDelegate(delegate -> delegate.setInfoEnabled(infoEnabled));
         }
@@ -231,6 +230,8 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
 
     /**
      * Enables or disables all {@code WARN*} levels on this composite.
+     * <p>
+     * Composite-level state is updated as one atomic grouped operation.
      * <p>
      * In {@link LevelControlMode#PROPAGATE_TO_DELEGATES}, changes are also forwarded to
      * level-aware delegates.
@@ -240,10 +241,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
     @Override
     public void setWarnEnabled(final boolean warnEnabled) {
         assertLevelMutatorAllowed("setWarnEnabled");
-        super.setEnabled(SeverityNumber.WARN, warnEnabled);
-        super.setEnabled(SeverityNumber.WARN2, warnEnabled);
-        super.setEnabled(SeverityNumber.WARN3, warnEnabled);
-        super.setEnabled(SeverityNumber.WARN4, warnEnabled);
+        super.setWarnEnabled(warnEnabled);
         if (levelControlMode == LevelControlMode.PROPAGATE_TO_DELEGATES) {
             forEachLevelAwareDelegate(delegate -> delegate.setWarnEnabled(warnEnabled));
         }
@@ -251,6 +249,8 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
 
     /**
      * Enables or disables all {@code ERROR*} levels on this composite.
+     * <p>
+     * Composite-level state is updated as one atomic grouped operation.
      * <p>
      * In {@link LevelControlMode#PROPAGATE_TO_DELEGATES}, changes are also forwarded to
      * level-aware delegates.
@@ -260,10 +260,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
     @Override
     public void setErrorEnabled(final boolean errorEnabled) {
         assertLevelMutatorAllowed("setErrorEnabled");
-        super.setEnabled(SeverityNumber.ERROR, errorEnabled);
-        super.setEnabled(SeverityNumber.ERROR2, errorEnabled);
-        super.setEnabled(SeverityNumber.ERROR3, errorEnabled);
-        super.setEnabled(SeverityNumber.ERROR4, errorEnabled);
+        super.setErrorEnabled(errorEnabled);
         if (levelControlMode == LevelControlMode.PROPAGATE_TO_DELEGATES) {
             forEachLevelAwareDelegate(delegate -> delegate.setErrorEnabled(errorEnabled));
         }
@@ -271,6 +268,8 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
 
     /**
      * Enables or disables all {@code FATAL*} levels on this composite.
+     * <p>
+     * Composite-level state is updated as one atomic grouped operation.
      * <p>
      * In {@link LevelControlMode#PROPAGATE_TO_DELEGATES}, changes are also forwarded to
      * level-aware delegates.
@@ -280,10 +279,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
     @Override
     public void setFatalEnabled(final boolean fatalEnabled) {
         assertLevelMutatorAllowed("setFatalEnabled");
-        super.setEnabled(SeverityNumber.FATAL, fatalEnabled);
-        super.setEnabled(SeverityNumber.FATAL2, fatalEnabled);
-        super.setEnabled(SeverityNumber.FATAL3, fatalEnabled);
-        super.setEnabled(SeverityNumber.FATAL4, fatalEnabled);
+        super.setFatalEnabled(fatalEnabled);
         if (levelControlMode == LevelControlMode.PROPAGATE_TO_DELEGATES) {
             forEachLevelAwareDelegate(delegate -> delegate.setFatalEnabled(fatalEnabled));
         }
@@ -291,6 +287,8 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
 
     /**
      * Enables or disables all {@code DEBUG*} levels on this composite.
+     * <p>
+     * Composite-level state is updated as one atomic grouped operation.
      * <p>
      * In {@link LevelControlMode#PROPAGATE_TO_DELEGATES}, changes are also forwarded to
      * level-aware delegates.
@@ -300,10 +298,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
     @Override
     public void setDebugEnabled(final boolean debugEnabled) {
         assertLevelMutatorAllowed("setDebugEnabled");
-        super.setEnabled(SeverityNumber.DEBUG, debugEnabled);
-        super.setEnabled(SeverityNumber.DEBUG2, debugEnabled);
-        super.setEnabled(SeverityNumber.DEBUG3, debugEnabled);
-        super.setEnabled(SeverityNumber.DEBUG4, debugEnabled);
+        super.setDebugEnabled(debugEnabled);
         if (levelControlMode == LevelControlMode.PROPAGATE_TO_DELEGATES) {
             forEachLevelAwareDelegate(delegate -> delegate.setDebugEnabled(debugEnabled));
         }
@@ -311,6 +306,8 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
 
     /**
      * Enables or disables all {@code TRACE*} levels on this composite.
+     * <p>
+     * Composite-level state is updated as one atomic grouped operation.
      * <p>
      * In {@link LevelControlMode#PROPAGATE_TO_DELEGATES}, changes are also forwarded to
      * level-aware delegates.
@@ -320,10 +317,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
     @Override
     public void setTraceEnabled(final boolean traceEnabled) {
         assertLevelMutatorAllowed("setTraceEnabled");
-        super.setEnabled(SeverityNumber.TRACE, traceEnabled);
-        super.setEnabled(SeverityNumber.TRACE2, traceEnabled);
-        super.setEnabled(SeverityNumber.TRACE3, traceEnabled);
-        super.setEnabled(SeverityNumber.TRACE4, traceEnabled);
+        super.setTraceEnabled(traceEnabled);
         if (levelControlMode == LevelControlMode.PROPAGATE_TO_DELEGATES) {
             forEachLevelAwareDelegate(delegate -> delegate.setTraceEnabled(traceEnabled));
         }

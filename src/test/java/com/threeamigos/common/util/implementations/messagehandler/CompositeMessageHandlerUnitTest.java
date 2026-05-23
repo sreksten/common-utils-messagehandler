@@ -22,6 +22,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -361,6 +362,48 @@ class CompositeMessageHandlerUnitTest {
     }
 
     @Test
+    @Timeout(value = 30, unit = TimeUnit.SECONDS)
+    @DisplayName("PROPAGATE_TO_DELEGATES grouped setters should not expose partial INFO* state snapshots")
+    void propagateToDelegatesGroupedSettersShouldNotExposePartialInfoStateSnapshots() throws Exception {
+        CompositeMessageHandler sut = new CompositeMessageHandler(CompositeMessageHandler.LevelControlMode.PROPAGATE_TO_DELEGATES);
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicBoolean inconsistentInfoQuartetObserved = new AtomicBoolean(false);
+        final int toggleIterations = 200_000;
+
+        Thread writer = new Thread(() -> {
+            try {
+                start.await();
+                for (int i = 0; i < toggleIterations; i++) {
+                    sut.setInfoEnabled((i & 1) == 0);
+                }
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+        }, "composite-level-toggle-writer");
+
+        Thread reader = new Thread(() -> {
+            try {
+                start.await();
+                while (writer.isAlive() && !inconsistentInfoQuartetObserved.get()) {
+                    detectInconsistentInfoQuartetSnapshot(sut, inconsistentInfoQuartetObserved);
+                }
+                detectInconsistentInfoQuartetSnapshot(sut, inconsistentInfoQuartetObserved);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+        }, "composite-level-toggle-reader");
+
+        writer.start();
+        reader.start();
+        start.countDown();
+        writer.join();
+        reader.join();
+
+        assertFalse(inconsistentInfoQuartetObserved.get(),
+                "Observed partial INFO* group state; grouped setter updates must be atomic");
+    }
+
+    @Test
     @DisplayName("PROPAGATE_TO_DELEGATES mode should ignore non-level-aware delegates for level mutations")
     void propagateToDelegatesModeShouldIgnoreNonLevelAwareDelegatesForLevelMutations() {
         MessageHandler nonLevelAwareDelegate = mock(MessageHandler.class);
@@ -381,6 +424,27 @@ class CompositeMessageHandlerUnitTest {
         });
 
         verifyNoInteractions(nonLevelAwareDelegate);
+    }
+
+    private static void detectInconsistentInfoQuartetSnapshot(final CompositeMessageHandler sut,
+                                                              final AtomicBoolean inconsistentObserved) {
+        SeverityNumber[] enabled = sut.getEnabledLevels();
+        boolean info = containsLevel(enabled, SeverityNumber.INFO);
+        boolean info2 = containsLevel(enabled, SeverityNumber.INFO2);
+        boolean info3 = containsLevel(enabled, SeverityNumber.INFO3);
+        boolean info4 = containsLevel(enabled, SeverityNumber.INFO4);
+        if (!(info == info2 && info2 == info3 && info3 == info4)) {
+            inconsistentObserved.set(true);
+        }
+    }
+
+    private static boolean containsLevel(final SeverityNumber[] levels, final SeverityNumber level) {
+        for (SeverityNumber current : levels) {
+            if (current == level) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Test

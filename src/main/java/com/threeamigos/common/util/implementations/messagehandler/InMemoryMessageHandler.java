@@ -27,7 +27,6 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
 
     private final ArrayDeque<Holder> allMessages = new ArrayDeque<>();
     private final ReentrantLock lock = new ReentrantLock();
-    private String lastMessage;
 
     /**
      * Creates an {@code InMemoryMessageHandler} with a default maximum of 10&thinsp;000 entries per list.
@@ -85,7 +84,6 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
         try {
             String rendered = formatMessage(level, message);
             addWithLimit(allMessages, new Holder(level, rendered, null));
-            lastMessage = rendered;
         } finally {
             lock.unlock();
         }
@@ -98,7 +96,6 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
             String renderedMessage = formatExceptionMessage(message, throwable);
             String rendered = renderThrowableMessage(renderedMessage, throwable);
             addWithLimit(allMessages, new Holder(SeverityNumber.UNSPECIFIED, rendered, throwable));
-            lastMessage = rendered;
         } finally {
             lock.unlock();
         }
@@ -259,12 +256,18 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     }
 
     /**
-     * @return the last message handled by this instance, or {@code null} if no message has been handled yet
+     * Returns the most recent retained message.
+     * <p>
+     * This value is derived from the tail of the bounded {@code allMessages} deque, so it is always
+     * consistent with {@link #getAllMessages()} and affected by eviction.
+     *
+     * @return the last retained message, or {@code null} if no message has been handled yet
      */
     public @Nullable String getLastMessage() {
         lock.lock();
         try {
-            return lastMessage;
+            Holder last = allMessages.peekLast();
+            return last == null ? null : last.getMessage();
         } finally {
             lock.unlock();
         }
@@ -281,7 +284,6 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
         lock.lock();
         try {
             allMessages.clear();
-            lastMessage = null;
         } finally {
             lock.unlock();
         }
@@ -297,7 +299,7 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     public Snapshot snapshot() {
         lock.lock();
         try {
-            return new Snapshot(allMessages, lastMessage);
+            return new Snapshot(allMessages);
         } finally {
             lock.unlock();
         }
@@ -315,11 +317,9 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
      */
     public static final class Snapshot {
         private final List<Holder> allMessages;
-        private final String lastMessage;
 
-        private Snapshot(final Collection<Holder> allMessages, final String lastMessage) {
+        private Snapshot(final Collection<Holder> allMessages) {
             this.allMessages = new ArrayList<>(allMessages);
-            this.lastMessage = lastMessage;
         }
 
         /**
@@ -390,11 +390,14 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
         }
 
         /**
-         * @return the text of the last message handled across all levels, or {@code null}
+         * @return the text of the last retained message across all levels, or {@code null}
          *         if no message has been handled yet
          */
         public @Nullable String getLastMessage() {
-            return lastMessage;
+            if (allMessages.isEmpty()) {
+                return null;
+            }
+            return allMessages.get(allMessages.size() - 1).getMessage();
         }
     }
 

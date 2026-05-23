@@ -294,7 +294,30 @@ class InMemoryMessageHandlerUnitTest {
         assertEquals(2, handler.getAllMessages().size());
         assertEquals("two", handler.getAllMessages().get(0));
         assertEquals("three", handler.getAllMessages().get(1));
+        assertEquals("three", handler.getLastMessage());
+        assertEquals(handler.getAllMessages().get(handler.getAllMessages().size() - 1), handler.getLastMessage());
         assertEquals(2, handler.getMaxEntries());
+    }
+
+    @Test
+    @DisplayName("When last entry is an exception, getAllMessages should include it as the retained tail")
+    void whenLastEntryIsExceptionGetAllMessagesShouldIncludeItAsRetainedTail() {
+        InMemoryMessageHandler handler = new InMemoryMessageHandler(2);
+        RuntimeException boom = new RuntimeException("boom");
+
+        handler.info("one");
+        handler.warn("two");
+        handler.exception("prefix", boom);
+
+        assertEquals(2, handler.getAllMessages().size());
+        assertEquals("two", handler.getAllMessages().get(0));
+        assertEquals("prefix: boom", handler.getAllMessages().get(1));
+        assertEquals("prefix: boom", handler.getLastMessage());
+        assertEquals(handler.getAllMessages().get(handler.getAllMessages().size() - 1), handler.getLastMessage());
+        assertEquals(1, handler.getAllExceptionMessages().size());
+        assertEquals("prefix: boom", handler.getAllExceptionMessages().get(0));
+        assertEquals(1, handler.getAllThrowables().size());
+        assertEquals(boom, handler.getAllThrowables().get(0));
     }
 
     @Test
