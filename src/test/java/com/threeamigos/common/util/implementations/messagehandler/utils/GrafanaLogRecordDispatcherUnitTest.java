@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler.utils;
 
 import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordFactoryImpl;
+import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.ExportLogsServiceRequestLogRecordFormatter;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
@@ -60,7 +61,7 @@ class GrafanaLogRecordDispatcherUnitTest {
         assertNotNull(connection.requestProperties.get("User-Agent"));
         assertTrue(connection.writtenBody().contains("\"resourceLogs\""));
         assertTrue(connection.writtenBody().contains("\"body\":{\"stringValue\":\"hello grafana\"}"));
-        assertTrue(connection.disconnected);
+        assertFalse(connection.disconnected);
     }
 
     @Test
@@ -148,12 +149,38 @@ class GrafanaLogRecordDispatcherUnitTest {
     void dispatchFormattedShouldTreatStatusBelow200AsFailure() throws Exception {
         StubConnection connection = new StubConnection(199, null, "too-early");
         GrafanaLogRecordDispatcher dispatcher = dispatcherWithConnection(connection);
+        LogRecord record = new LogRecordFactoryImpl().create(SeverityNumber.INFO, "retry");
 
         GrafanaLogRecordDispatcher.DispatchResult result = dispatcher.dispatchFormatted("{\"x\":1}");
+        HttpDispatchStatusException thrown = assertThrows(
+                HttpDispatchStatusException.class,
+                () -> dispatcher.dispatchLogRecord(record, lr -> "{\"x\":1}")
+        );
 
         assertEquals(199, result.getStatusCode());
         assertFalse(result.isSuccessful());
         assertEquals("too-early", result.getResponseBody());
+        assertEquals(199, thrown.getStatusCode());
+        assertEquals("too-early", thrown.getResponseBody());
+    }
+
+    @Test
+    @DisplayName("dispatchLogRecords should send multiple records in one OTLP envelope when supported")
+    void dispatchLogRecordsShouldSendMultipleRecordsInOneEnvelopeWhenSupported() throws Exception {
+        StubConnection connection = new StubConnection(200, "ok", null);
+        GrafanaLogRecordDispatcher dispatcher = dispatcherWithConnection(connection);
+        LogRecordFactoryImpl factory = new LogRecordFactoryImpl();
+        List<LogRecord> records = Arrays.asList(
+                factory.create(SeverityNumber.INFO, "hello-1"),
+                factory.create(SeverityNumber.WARN, "hello-2")
+        );
+
+        dispatcher.dispatchLogRecords(records, new ExportLogsServiceRequestLogRecordFormatter());
+
+        String payload = connection.writtenBody();
+        assertTrue(payload.contains("hello-1"));
+        assertTrue(payload.contains("hello-2"));
+        assertEquals(1, connection.outputStreamCalls);
     }
 
     @Test
@@ -554,6 +581,7 @@ class GrafanaLogRecordDispatcherUnitTest {
         private final Map<String, String> requestProperties = new LinkedHashMap<String, String>();
         private String requestMethod;
         private boolean disconnected;
+        private int outputStreamCalls = 0;
 
         StubConnection(final int statusCode, final String inputBody, final String errorBody) throws Exception {
             super(new URL("http://placeholder"));
@@ -589,6 +617,7 @@ class GrafanaLogRecordDispatcherUnitTest {
 
         @Override
         public ByteArrayOutputStream getOutputStream() {
+            outputStreamCalls++;
             return outputStream;
         }
 

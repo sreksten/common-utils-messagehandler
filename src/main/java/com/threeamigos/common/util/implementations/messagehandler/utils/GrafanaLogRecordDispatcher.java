@@ -20,6 +20,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -92,12 +93,66 @@ public class GrafanaLogRecordDispatcher implements LogRecordDispatcher {
         return dispatchFormatted(payload);
     }
 
+    /**
+     * Dispatches one log record and fails on non-2xx responses.
+     *
+     * @param logRecord record to dispatch
+     * @param logRecordFormatter formatter used to build payloads when needed
+     * @throws IOException transport errors or non-success HTTP status
+     */
     @Override
     public void dispatchLogRecord(final @Nonnull LogRecord logRecord,
                                   final @Nonnull LogRecordFormatter logRecordFormatter) throws IOException {
-        dispatch(logRecord, logRecordFormatter);
+        DispatchResult result = dispatch(logRecord, logRecordFormatter);
+        throwIfNonSuccess(result);
     }
 
+    /**
+     * Dispatches multiple records, preferring one batched OTLP request when possible.
+     * <p>
+     * Batch fast-path is used when:
+     * <ul>
+     *   <li>formatter is {@link ExportLogsServiceRequestLogRecordFormatter}</li>
+     *   <li>endpoint mode is OTLP logs (not Loki push mode)</li>
+     * </ul>
+     * Otherwise records are dispatched sequentially with single-record semantics.
+     *
+     * @param logRecords records to dispatch
+     * @param logRecordFormatter formatter used to build payloads
+     * @throws IOException transport errors or non-success HTTP status
+     */
+    @Override
+    public void dispatchLogRecords(final @Nonnull List<LogRecord> logRecords,
+                                   final @Nonnull LogRecordFormatter logRecordFormatter) throws IOException {
+        Objects.requireNonNull(logRecords, "logRecords must not be null");
+        Objects.requireNonNull(logRecordFormatter, "logRecordFormatter must not be null");
+        List<LogRecord> sanitized = sanitizeLogRecords(logRecords);
+        if (sanitized.isEmpty()) {
+            return;
+        }
+        if (sanitized.size() == 1) {
+            dispatchLogRecord(sanitized.get(0), logRecordFormatter);
+            return;
+        }
+        if (!shouldUseLokiPushFormat()
+                && logRecordFormatter instanceof ExportLogsServiceRequestLogRecordFormatter) {
+            String payload = ((ExportLogsServiceRequestLogRecordFormatter) logRecordFormatter).formatBatch(sanitized);
+            DispatchResult result = dispatchFormatted(payload);
+            throwIfNonSuccess(result);
+            return;
+        }
+        for (LogRecord logRecord : sanitized) {
+            dispatchLogRecord(logRecord, logRecordFormatter);
+        }
+    }
+
+    /**
+     * Dispatches a pre-formatted JSON payload to the configured endpoint.
+     *
+     * @param formattedExportLogsServiceRequestJson payload body to post
+     * @return HTTP dispatch result
+     * @throws IOException network/transport errors
+     */
     public DispatchResult dispatchFormatted(final @Nonnull String formattedExportLogsServiceRequestJson) throws IOException {
         Objects.requireNonNull(formattedExportLogsServiceRequestJson, "formattedExportLogsServiceRequestJson must not be null");
 
@@ -108,6 +163,7 @@ public class GrafanaLogRecordDispatcher implements LogRecordDispatcher {
         connection.setReadTimeout(readTimeoutMillis);
         connection.setRequestProperty("Content-Type", APPLICATION_JSON);
         connection.setRequestProperty("Accept", APPLICATION_JSON);
+        connection.setRequestProperty("Connection", "keep-alive");
         connection.setRequestProperty("User-Agent", "common-utils-messagehandler/grafana-logrecord-dispatcher");
         applyAuthentication(connection);
         applyAdditionalHeaders(connection);
@@ -122,7 +178,7 @@ public class GrafanaLogRecordDispatcher implements LogRecordDispatcher {
             outputStream.flush();
 
             int statusCode = connection.getResponseCode();
-            if (statusCode >= 200 && statusCode < 400) {
+            if (statusCode >= 200 && statusCode < 300) {
                 inputStream = connection.getInputStream();
                 return new DispatchResult(statusCode, readStream(inputStream));
             }
@@ -132,18 +188,52 @@ public class GrafanaLogRecordDispatcher implements LogRecordDispatcher {
             closeQuietly(outputStream);
             closeQuietly(inputStream);
             closeQuietly(errorStream);
-            connection.disconnect();
         }
     }
 
+    /**
+     * Dispatches one record and throws when the endpoint response is non-2xx.
+     *
+     * @param logRecord record to dispatch
+     * @return successful dispatch result
+     * @throws IOException transport errors or non-success HTTP status
+     */
     public DispatchResult dispatchOrThrow(final @Nonnull LogRecord logRecord) throws IOException {
         DispatchResult result = dispatch(logRecord);
-        if (!result.isSuccessful()) {
-            throw new IOException("Dispatcher received non-success HTTP status "
-                    + result.getStatusCode() + " from endpoint " + endpoint
-                    + ", responseBody=" + result.getResponseBody());
-        }
+        throwIfNonSuccess(result);
         return result;
+    }
+
+    /**
+     * Throws an {@link IOException} when the provided result is null or non-success.
+     *
+     * @param result dispatch result to validate
+     * @throws IOException when result is null or status code is non-2xx
+     */
+    private void throwIfNonSuccess(final DispatchResult result) throws IOException {
+        if (result == null) {
+            throw new IOException("Dispatcher returned null dispatch result for endpoint " + endpoint);
+        }
+        if (!result.isSuccessful()) {
+            throw new HttpDispatchStatusException(endpoint.toString(), result.getStatusCode(), result.getResponseBody());
+        }
+    }
+
+    /**
+     * Returns a copy of input records without null entries.
+     *
+     * @param logRecords input records
+     * @return non-null records preserving input order
+     */
+    private static List<LogRecord> sanitizeLogRecords(final List<LogRecord> logRecords) {
+        List<LogRecord> sanitized = new ArrayList<LogRecord>(logRecords.size());
+        for (LogRecord logRecord : logRecords) {
+            if (logRecord == null) {
+                continue;
+            }
+            sanitized.add(logRecord);
+        }
+        return sanitized;
     }
 
     private boolean shouldUseLokiPushFormat() {

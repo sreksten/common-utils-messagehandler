@@ -19,6 +19,7 @@ import java.util.List;
  * {@code ExportLogsServiceRequest} envelope.
  * <p>
  * The inner log record object is produced by {@link RawJsonRecordFormatter}.
+ * For batch encoding, use {@link #formatBatch(List)}.
  *
  * @author Stefano Reksten
  */
@@ -38,6 +39,12 @@ public class ExportLogsServiceRequestLogRecordFormatter implements LogRecordForm
 
     private final RawJsonRecordFormatter rawJsonRecordFormatter = new RawJsonRecordFormatter(false);
 
+    /**
+     * Serializes one record as one OTLP ExportLogsServiceRequest envelope.
+     *
+     * @param logRecord record to serialize
+     * @return OTLP ExportLogsServiceRequest JSON containing one log record
+     */
     @Nonnull
     @Override
     public String format(@Nonnull final LogRecord logRecord) {
@@ -46,20 +53,63 @@ public class ExportLogsServiceRequestLogRecordFormatter implements LogRecordForm
             OpenTelemetryAttributeValidator.handleBundled("logRecordMustNotBeNull");
             safeLogRecord = new LogRecordImpl();
         }
-        StringBuilder sb = new StringBuilder("{\"").append(F_RESOURCE_LOGS).append("\":[{");
-        if (safeLogRecord.getResource() != null) {
-            appendResourceBlock(sb, safeLogRecord.getResource());
+        return formatBatch(Collections.singletonList(safeLogRecord));
+    }
+
+    /**
+     * Serializes multiple log records as a single OTLP ExportLogsServiceRequest envelope.
+     * <p>
+     * Each input record is encoded as one {@code resourceLogs[]} entry with one
+     * {@code scopeLogs[]} child containing one element in {@code logRecords[]}.
+     *
+     * @param logRecords records to serialize
+     * @return OTLP ExportLogsServiceRequest JSON
+     */
+    @Nonnull
+    public String formatBatch(@Nonnull final List<LogRecord> logRecords) {
+        if (logRecords == null) {
+            OpenTelemetryAttributeValidator.handleBundled("logRecordMustNotBeNull");
+            return "{\"" + F_RESOURCE_LOGS + "\":[]}";
+        }
+        StringBuilder sb = new StringBuilder(96 + (logRecords.size() * 256));
+        sb.append("{\"").append(F_RESOURCE_LOGS).append("\":[");
+        boolean firstResourceLog = true;
+        for (LogRecord logRecord : logRecords) {
+            LogRecord safeLogRecord = logRecord;
+            if (safeLogRecord == null) {
+                OpenTelemetryAttributeValidator.handleBundled("logRecordMustNotBeNull");
+                safeLogRecord = new LogRecordImpl();
+            }
+            if (!firstResourceLog) {
+                sb.append(',');
+            }
+            appendResourceLogEntry(sb, safeLogRecord);
+            firstResourceLog = false;
+        }
+        sb.append("]}");
+        return sb.toString();
+    }
+
+    /**
+     * Appends one {@code resourceLogs[]} element for the provided record.
+     *
+     * @param sb target JSON builder
+     * @param logRecord record to append
+     */
+    private void appendResourceLogEntry(final StringBuilder sb, final LogRecord logRecord) {
+        sb.append('{');
+        if (logRecord.getResource() != null) {
+            appendResourceBlock(sb, logRecord.getResource());
             sb.append(',');
         }
         sb.append("\"").append(F_SCOPE_LOGS).append("\":[{");
-        if (safeLogRecord.getInstrumentationScope() != null) {
-            appendScopeBlock(sb, safeLogRecord.getInstrumentationScope());
+        if (logRecord.getInstrumentationScope() != null) {
+            appendScopeBlock(sb, logRecord.getInstrumentationScope());
             sb.append(',');
         }
         sb.append("\"").append(F_LOG_RECORDS).append("\":[");
-        sb.append(rawJsonRecordFormatter.format(safeLogRecord));
-        sb.append("]}]}]}");
-        return sb.toString();
+        sb.append(rawJsonRecordFormatter.format(logRecord));
+        sb.append("]}]}");
     }
 
     private static void appendResourceBlock(final StringBuilder sb, final Resource resource) {

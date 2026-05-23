@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.messagehandler.utils;
 
 import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordFactoryImpl;
 import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordImpl;
+import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.ExportLogsServiceRequestLogRecordFormatter;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
@@ -61,7 +62,7 @@ class JaegerLogRecordDispatcherUnitTest {
         assertEquals("application/json", connection.requestProperties.get("Accept"));
         assertNotNull(connection.requestProperties.get("User-Agent"));
         assertTrue(connection.writtenBody().contains("\"body\":{\"stringValue\":\"hello jaeger\"}"));
-        assertTrue(connection.disconnected);
+        assertFalse(connection.disconnected);
     }
 
     @Test
@@ -149,7 +150,7 @@ class JaegerLogRecordDispatcherUnitTest {
     }
 
     @Test
-    @DisplayName("dispatchLogRecord should delegate formatter and dispatchFormatted should handle below-200 status")
+    @DisplayName("dispatchLogRecord should delegate formatter and throw on below-200 status")
     void dispatchLogRecordAndBelow200StatusShouldBeHandled() throws Exception {
         StubConnection delegatedConnection = new StubConnection(200, "ok", null);
         JaegerLogRecordDispatcher dispatcher = dispatcherWithConnection(delegatedConnection);
@@ -161,9 +162,34 @@ class JaegerLogRecordDispatcherUnitTest {
         StubConnection tooEarlyConnection = new StubConnection(199, null, "too-early");
         JaegerLogRecordDispatcher tooEarlyDispatcher = dispatcherWithConnection(tooEarlyConnection);
         JaegerLogRecordDispatcher.DispatchResult result = tooEarlyDispatcher.dispatchFormatted("{\"resourceLogs\":[]}");
+        HttpDispatchStatusException thrown = assertThrows(
+                HttpDispatchStatusException.class,
+                () -> tooEarlyDispatcher.dispatchLogRecord(record, lr -> "{\"resourceLogs\":[]}")
+        );
         assertEquals(199, result.getStatusCode());
         assertFalse(result.isSuccessful());
         assertEquals("too-early", result.getResponseBody());
+        assertEquals(199, thrown.getStatusCode());
+        assertEquals("too-early", thrown.getResponseBody());
+    }
+
+    @Test
+    @DisplayName("dispatchLogRecords should send multiple records in one OTLP envelope when supported")
+    void dispatchLogRecordsShouldSendMultipleRecordsInOneEnvelopeWhenSupported() throws Exception {
+        StubConnection connection = new StubConnection(200, "ok", null);
+        JaegerLogRecordDispatcher dispatcher = dispatcherWithConnection(connection);
+        LogRecordFactoryImpl factory = new LogRecordFactoryImpl();
+        List<LogRecord> records = Arrays.asList(
+                factory.create(SeverityNumber.INFO, "hello-1"),
+                factory.create(SeverityNumber.WARN, "hello-2")
+        );
+
+        dispatcher.dispatchLogRecords(records, new ExportLogsServiceRequestLogRecordFormatter());
+
+        String payload = connection.writtenBody();
+        assertTrue(payload.contains("hello-1"));
+        assertTrue(payload.contains("hello-2"));
+        assertEquals(1, connection.outputStreamCalls);
     }
 
     @Test
@@ -655,6 +681,7 @@ class JaegerLogRecordDispatcherUnitTest {
         private final Map<String, String> requestProperties = new LinkedHashMap<String, String>();
         private String requestMethod;
         private boolean disconnected;
+        private int outputStreamCalls = 0;
 
         StubConnection(final int statusCode, final String inputBody, final String errorBody) throws Exception {
             super(new URL("http://placeholder"));
@@ -690,6 +717,7 @@ class JaegerLogRecordDispatcherUnitTest {
 
         @Override
         public ByteArrayOutputStream getOutputStream() {
+            outputStreamCalls++;
             return outputStream;
         }
 

@@ -58,6 +58,22 @@ class AbstractOutputMessageHandlerUnitTest {
             recordOutputFailure();
         }
 
+        private void markDropped() {
+            recordDroppedOutput();
+        }
+
+        private void markRetryAttemptMetric() {
+            recordRetryAttempt();
+        }
+
+        private void markRetrySuccessMetric() {
+            recordRetrySuccess();
+        }
+
+        private void markRetryFailureMetric() {
+            recordRetryFailure();
+        }
+
         private HandlerHealthMetrics healthMetrics() {
             return getHandlerHealthMetrics();
         }
@@ -164,11 +180,13 @@ class AbstractOutputMessageHandlerUnitTest {
         syncHandler.close();
         assertThrows(IllegalStateException.class, () -> syncHandler.submit(() -> {
         }));
+        assertEquals(1L, syncHandler.healthMetrics().getDroppedOperations());
 
         ProbeOutputMessageHandler asyncHandler = new ProbeOutputMessageHandler(true, 100);
         asyncHandler.close();
         assertThrows(IllegalStateException.class, () -> asyncHandler.submit(() -> {
         }));
+        assertEquals(1L, asyncHandler.healthMetrics().getDroppedOperations());
     }
 
     @Test
@@ -276,5 +294,69 @@ class AbstractOutputMessageHandlerUnitTest {
         AbstractOutputMessageHandler.HandlerHealthMetrics afterClose = handler.healthMetrics();
         assertTrue(afterClose.isClosed());
         assertFalse(handler.isHealthy());
+    }
+
+    @Test
+    @DisplayName("saturation telemetry should track bounded queue pressure and sync fallback")
+    void saturationTelemetryShouldTrackBoundedQueuePressureAndSyncFallback() throws Exception {
+        ProbeOutputMessageHandler handler = new ProbeOutputMessageHandler(true, 1);
+        CountDownLatch blockingStarted = new CountDownLatch(1);
+        CountDownLatch releaseBlocking = new CountDownLatch(1);
+        AtomicBoolean fallbackExecutedOnCaller = new AtomicBoolean(false);
+        try {
+            handler.submit(() -> {
+                blockingStarted.countDown();
+                try {
+                    releaseBlocking.await(2, TimeUnit.SECONDS);
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+            assertTrue(blockingStarted.await(1, TimeUnit.SECONDS));
+
+            // This one should enter the queue.
+            handler.submit(() -> {
+            });
+            // Queue is full now (capacity=1 + one running task): this should run synchronously.
+            handler.submit(() -> fallbackExecutedOnCaller.set(true));
+
+            AbstractOutputMessageHandler.HandlerHealthMetrics metrics = handler.healthMetrics();
+            assertTrue(fallbackExecutedOnCaller.get());
+            assertTrue(metrics.isAsync());
+            assertTrue(metrics.isBoundedQueue());
+            assertEquals(1, metrics.getConfiguredQueueCapacity());
+            assertTrue(metrics.getDispatchAttempts() >= 3L);
+            assertTrue(metrics.getAsyncEnqueuedOperations() >= 1L);
+            assertTrue(metrics.getSynchronousFallbackOperations() >= 1L);
+            assertTrue(metrics.getQueueSaturationEvents() >= 1L);
+            assertTrue(metrics.getMaxObservedQueueSize() >= 1L);
+            assertTrue(metrics.getQueueSaturationRatio() > 0.0d);
+        } finally {
+            releaseBlocking.countDown();
+            handler.close();
+        }
+    }
+
+    @Test
+    @DisplayName("retry metrics should expose attempts, successes and failures")
+    void retryMetricsShouldExposeAttemptsSuccessesAndFailures() {
+        ProbeOutputMessageHandler handler = new ProbeOutputMessageHandler(false, 0);
+
+        handler.markRetryAttemptMetric();
+        handler.markRetryAttemptMetric();
+        handler.markRetrySuccessMetric();
+        handler.markRetryFailureMetric();
+        handler.markDropped();
+
+        AbstractOutputMessageHandler.HandlerHealthMetrics metrics = handler.healthMetrics();
+        assertEquals(2L, metrics.getRetryAttempts());
+        assertEquals(1L, metrics.getRetrySuccesses());
+        assertEquals(1L, metrics.getRetryFailures());
+        assertEquals(1L, metrics.getDroppedOperations());
+        assertFalse(metrics.isBoundedQueue());
+        assertEquals(0, metrics.getConfiguredQueueCapacity());
+        assertEquals(0.0d, metrics.getQueueSaturationRatio());
+
+        handler.close();
     }
 }

@@ -4,6 +4,7 @@ import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecord
 import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
 import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.ExportLogsServiceRequestLogRecordFormatter;
 import com.threeamigos.common.util.implementations.messagehandler.utils.GrafanaLogRecordDispatcher;
+import com.threeamigos.common.util.implementations.messagehandler.utils.HttpDispatchStatusException;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -127,7 +129,121 @@ class GrafanaMessageHandlerUnitTest {
 
         assertEquals(1, errors.size());
         assertTrue(errors.get(0).contains(IOException.class.getName()));
-        assertThrows(IllegalStateException.class, () -> sut.info("after-close"));
+        sut.info("after-close");
+
+        AbstractOutputMessageHandler.HandlerHealthMetrics metrics = sut.getHandlerHealthMetrics();
+        assertTrue(metrics.isClosed());
+        assertEquals(1L, metrics.getFailedOperations());
+        assertEquals(1L, metrics.getDroppedOperations());
+    }
+
+    @Test
+    @DisplayName("should retry transient IO failures and expose retry metrics")
+    void shouldRetryTransientIoFailuresAndExposeRetryMetrics() {
+        CapturingDispatcher dispatcher = new CapturingDispatcher();
+        dispatcher.failNextDispatches(1, new IOException("transient timeout"));
+
+        GrafanaMessageHandler sut = new GrafanaMessageHandler(
+                new LogRecordFactoryImpl(),
+                logRecord -> "{}",
+                dispatcher,
+                false, 0, false);
+        sut.setHttpRetryPolicy(2, 0L, 0L);
+
+        sut.info("x");
+        AbstractOutputMessageHandler.HandlerHealthMetrics metrics = sut.getHandlerHealthMetrics();
+        sut.close();
+
+        assertEquals(2, dispatcher.invocations.get());
+        assertEquals(1, dispatcher.payloads.size());
+        assertEquals(1L, metrics.getSuccessfulOperations());
+        assertEquals(0L, metrics.getFailedOperations());
+        assertEquals(1L, metrics.getRetryAttempts());
+        assertEquals(1L, metrics.getRetrySuccesses());
+        assertEquals(0L, metrics.getRetryFailures());
+    }
+
+    @Test
+    @DisplayName("failed records should be batched with next dispatch attempt")
+    void failedRecordsShouldBeBatchedWithNextDispatchAttempt() {
+        CapturingDispatcher dispatcher = new CapturingDispatcher();
+        dispatcher.failNextBatches(2, new IOException("temporarily unavailable"));
+        List<String> errors = new ArrayList<String>();
+
+        GrafanaMessageHandler sut = new GrafanaMessageHandler(
+                new LogRecordFactoryImpl(),
+                logRecord -> "{}",
+                dispatcher,
+                false, 0, false);
+        sut.setHttpRetryPolicy(1, 0L, 0L);
+        sut.setErrorConsumer(errors::add);
+
+        sut.info("first");
+        sut.info("second");
+
+        AbstractOutputMessageHandler.HandlerHealthMetrics metrics = sut.getHandlerHealthMetrics();
+        sut.close();
+
+        assertEquals(Arrays.asList(1, 1, 2), dispatcher.batchSizes);
+        assertEquals(1L, metrics.getFailedOperations());
+        assertEquals(1L, metrics.getSuccessfulOperations());
+        assertEquals(1L, metrics.getRetryAttempts());
+        assertEquals(0L, metrics.getRetrySuccesses());
+        assertEquals(1L, metrics.getRetryFailures());
+        assertEquals(1, errors.size());
+    }
+
+    @Test
+    @DisplayName("should not retry non-retryable HTTP status failures")
+    void shouldNotRetryNonRetryableHttpStatusFailures() {
+        CapturingDispatcher dispatcher = new CapturingDispatcher();
+        dispatcher.throwable = new HttpDispatchStatusException(
+                "http://localhost:4318/v1/logs",
+                400,
+                "bad-request");
+        List<String> errors = new ArrayList<String>();
+        GrafanaMessageHandler sut = new GrafanaMessageHandler(
+                new LogRecordFactoryImpl(),
+                logRecord -> "{}",
+                dispatcher,
+                false, 0, false);
+        sut.setHttpRetryPolicy(3, 0L, 0L);
+        sut.setErrorConsumer(errors::add);
+
+        sut.info("x");
+        AbstractOutputMessageHandler.HandlerHealthMetrics metrics = sut.getHandlerHealthMetrics();
+        sut.close();
+
+        assertEquals(1, dispatcher.invocations.get());
+        assertEquals(1, errors.size());
+        assertEquals(1L, metrics.getFailedOperations());
+        assertEquals(0L, metrics.getRetryAttempts());
+        assertEquals(0L, metrics.getRetrySuccesses());
+        assertEquals(0L, metrics.getRetryFailures());
+    }
+
+    @Test
+    @DisplayName("runtime dispatch failures should not propagate to caller and should update metrics")
+    void runtimeDispatchFailuresShouldNotPropagateAndShouldUpdateMetrics() {
+        CapturingDispatcher dispatcher = new CapturingDispatcher();
+        List<String> errors = new ArrayList<String>();
+        GrafanaMessageHandler sut = new GrafanaMessageHandler(
+                new LogRecordFactoryImpl(),
+                logRecord -> {
+                    throw new IllegalStateException("formatter crash");
+                },
+                dispatcher,
+                false, 0, false);
+        sut.setErrorConsumer(errors::add);
+
+        sut.info("x");
+        AbstractOutputMessageHandler.HandlerHealthMetrics metrics = sut.getHandlerHealthMetrics();
+        sut.close();
+
+        assertEquals(1L, metrics.getFailedOperations());
+        assertEquals(0L, metrics.getSuccessfulOperations());
+        assertEquals(1, errors.size());
+        assertTrue(errors.get(0).contains("formatter crash"));
     }
 
     @Test
@@ -146,7 +262,11 @@ class GrafanaMessageHandlerUnitTest {
 
         sut.info("first");
         waitUntilClosed(sut, 2_000);
-        assertThrows(IllegalStateException.class, () -> sut.info("second"));
+        sut.info("second");
+
+        AbstractOutputMessageHandler.HandlerHealthMetrics metrics = sut.getHandlerHealthMetrics();
+        assertTrue(metrics.isClosed());
+        assertTrue(metrics.getDroppedOperations() >= 1L);
     }
 
     @Test
@@ -161,11 +281,7 @@ class GrafanaMessageHandlerUnitTest {
 
         try {
             for (int i = 0; i < 300; i++) {
-                try {
-                    sut.info("trigger-" + i);
-                } catch (IllegalStateException ignored) {
-                    // Expected once the close thread completes.
-                }
+                sut.info("trigger-" + i);
             }
 
             long deadline = System.currentTimeMillis() + 5000;
@@ -249,12 +365,11 @@ class GrafanaMessageHandlerUnitTest {
     private static void waitUntilClosed(final GrafanaMessageHandler handler, final long timeoutMillis) throws Exception {
         long deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
         while (System.nanoTime() < deadlineNanos) {
-            try {
-                handler.info("probe");
-                Thread.sleep(10L);
-            } catch (IllegalStateException closed) {
+            if (handler.getHandlerHealthMetrics().isClosed()) {
                 return;
             }
+            handler.info("probe");
+            Thread.sleep(10L);
         }
         throw new AssertionError("handler did not close in expected time");
     }
@@ -279,20 +394,59 @@ class GrafanaMessageHandlerUnitTest {
 
     private static final class CapturingDispatcher extends GrafanaLogRecordDispatcher {
         private final List<String> payloads = new CopyOnWriteArrayList<String>();
+        private final List<Integer> batchSizes = new CopyOnWriteArrayList<Integer>();
+        private final AtomicInteger invocations = new AtomicInteger(0);
         private volatile IOException throwable;
+        private volatile int transientFailuresRemaining = 0;
+        private volatile IOException transientThrowable = new IOException("transient dispatch failure");
+        private volatile int batchesToFail = 0;
+        private volatile IOException batchFailure = new IOException("batch dispatch failure");
 
         private CapturingDispatcher() {
             super("http://localhost:4318/v1/logs");
         }
 
         @Override
-        public DispatchResult dispatch(final @Nonnull LogRecord logRecord,
-                                       final @Nonnull LogRecordFormatter logRecordFormatter) throws IOException {
+        public synchronized void dispatchLogRecord(final @Nonnull LogRecord logRecord,
+                                                   final @Nonnull LogRecordFormatter logRecordFormatter) throws IOException {
+            invocations.incrementAndGet();
             if (throwable != null) {
                 throw throwable;
             }
+            if (transientFailuresRemaining > 0) {
+                transientFailuresRemaining--;
+                throw transientThrowable == null ? new IOException("transient dispatch failure") : transientThrowable;
+            }
             payloads.add(logRecordFormatter.format(logRecord));
-            return null;
+        }
+
+        @Override
+        public synchronized void dispatchLogRecords(final @Nonnull List<LogRecord> logRecords,
+                                                    final @Nonnull LogRecordFormatter logRecordFormatter) throws IOException {
+            batchSizes.add(logRecords == null ? -1 : logRecords.size());
+            if (batchesToFail > 0) {
+                batchesToFail--;
+                throw batchFailure == null ? new IOException("batch dispatch failure") : batchFailure;
+            }
+            if (logRecords == null) {
+                return;
+            }
+            for (LogRecord logRecord : logRecords) {
+                if (logRecord == null) {
+                    continue;
+                }
+                dispatchLogRecord(logRecord, logRecordFormatter);
+            }
+        }
+
+        private synchronized void failNextDispatches(final int failures, final IOException failureToThrow) {
+            this.transientFailuresRemaining = failures;
+            this.transientThrowable = failureToThrow;
+        }
+
+        private synchronized void failNextBatches(final int failures, final IOException failureToThrow) {
+            this.batchesToFail = failures;
+            this.batchFailure = failureToThrow;
         }
     }
 

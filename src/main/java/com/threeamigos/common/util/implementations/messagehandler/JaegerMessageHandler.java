@@ -12,7 +12,6 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
 
-import java.io.IOException;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -63,7 +62,7 @@ import java.util.function.Consumer;
  * Use constructors that accept credentials to configure Basic or Bearer authentication on the underlying
  * {@link JaegerLogRecordDispatcher}. If both Basic and Bearer are set, Bearer is preferred by the dispatcher.
  */
-public class JaegerMessageHandler extends AbstractOutputMessageHandler {
+public class JaegerMessageHandler extends AbstractHTTPOutputMessageHandler {
 
     private final LogRecordDispatcher dispatcher;
     private volatile Consumer<String> errorConsumer = System.err::println;
@@ -307,34 +306,44 @@ public class JaegerMessageHandler extends AbstractOutputMessageHandler {
 
     @Override
     public void handleMessage(final @Nonnull SeverityNumber level, final @Nonnull String message) {
-        LogRecord logRecord = createLogRecord(level, message);
-        dispatchRecord(logRecord);
+        try {
+            LogRecord logRecord = createLogRecord(level, message);
+            dispatchRecord(logRecord);
+        } catch (RuntimeException runtimeException) {
+            recordAndReportHttpMessageFailure(
+                    runtimeException,
+                    errorConsumer,
+                    "jaegerDispatchError",
+                    closeOnDispatchError,
+                    "JaegerMessageHandler-close-on-error"
+            );
+        }
     }
 
     @Override
     protected void handleExceptionInternal(final @Nonnull String message, final @Nonnull Throwable throwable) {
-        LogRecord logRecord = createLogRecord(message, throwable);
-        dispatchRecord(logRecord);
+        try {
+            LogRecord logRecord = createLogRecord(message, throwable);
+            dispatchRecord(logRecord);
+        } catch (RuntimeException runtimeException) {
+            recordAndReportHttpMessageFailure(
+                    runtimeException,
+                    errorConsumer,
+                    "jaegerDispatchError",
+                    closeOnDispatchError,
+                    "JaegerMessageHandler-close-on-error"
+            );
+        }
     }
 
     private void dispatchRecord(final LogRecord logRecord) {
-        dispatch(() -> {
-            try {
-                dispatcher.dispatchLogRecord(logRecord, getLogRecordFormatter());
-                recordOutputSuccess();
-            } catch (IOException e) {
-                recordOutputFailure();
-                handleDispatchFailure(e);
-            } catch (RuntimeException e) {
-                recordOutputFailure();
-                throw e;
-            }
-        });
-    }
-
-    private void handleDispatchFailure(final IOException error) {
-        String details = error.getMessage() == null ? error.getClass().getName() : error.getMessage();
-        errorConsumer.accept(MessageHandlerResourceBundle.format("jaegerDispatchError", details));
-        requestCloseOnErrorIfEnabled(closeOnDispatchError, "JaegerMessageHandler-close-on-error");
+        dispatchHttpRecord(
+                logRecord,
+                (records, formatter) -> dispatcher.dispatchLogRecords(records, formatter),
+                errorConsumer,
+                "jaegerDispatchError",
+                closeOnDispatchError,
+                "JaegerMessageHandler-close-on-error"
+        );
     }
 }

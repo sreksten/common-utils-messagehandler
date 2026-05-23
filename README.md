@@ -338,6 +338,10 @@ This applies to:
 - last success/failure timestamps (epoch millis)
 - async mode flag and pending queue size
 - closed flag and derived health flag
+- dropped operation count (for example, dispatch attempts after close)
+- retry telemetry counters (attempts/successes/failures; available for retry-capable handlers)
+- saturation telemetry (dispatch attempts, enqueue count, sync fallback count, saturation events,
+  max observed queue size, configured queue capacity, bounded/unbounded flag, saturation ratio)
 
 Async backpressure behavior for these handlers:
 - `async=true` uses one background worker and a queue.
@@ -529,6 +533,58 @@ public class AdaptersExample {
     }
 }
 ```
+
+## Side note: MDC / ThreadContext (only for mixed logging stacks)
+
+Most users can ignore this section.
+
+If all logs go through `MessageHandler` implementations from this package, correlation is already
+handled by `TracerProvider` and the tracer-bound `LogRecordFactory`.
+
+Use backend thread-context (`MDC` for SLF4J, `ThreadContext` for Log4J) only when you intentionally
+mix:
+- handler-based logging from this package
+- direct logger calls (`org.slf4j.Logger`, `org.apache.logging.log4j.Logger`, etc.)
+
+At a request/task boundary, attach package correlation and mirror IDs into MDC/ThreadContext:
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanContext;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
+
+public class MixedLoggingExample {
+    private static final Logger LOGGER = LoggerFactory.getLogger(MixedLoggingExample.class);
+
+    public void handle(TracerProvider provider, Tracer tracer, SpanContext incomingContext) {
+        MessageHandler handler = tracer.getConsoleMessageHandler();
+        try (TracerProvider.CorrelationScope ignored =
+                     provider.attachCorrelation(incomingContext, tracer.getInstrumentationScope())) {
+            if (incomingContext != null && incomingContext.isValid()) {
+                MDC.put("traceId", incomingContext.getTraceId());
+                MDC.put("spanId", incomingContext.getSpanId());
+            }
+            try {
+                handler.info("message via MessageHandler");
+                LOGGER.info("direct SLF4J message");
+            } finally {
+                MDC.remove("traceId");
+                MDC.remove("spanId");
+            }
+        } finally {
+            handler.close();
+        }
+    }
+}
+```
+
+For async execution, continue using `provider.wrap(...)` or
+`provider.contextAwareExecutorService(...)` for this package correlation propagation.
+If worker threads also write direct SLF4J/Log4J logs, propagate MDC/ThreadContext there as well.
 
 ## Custom output format with `LogRecordFormatter`
 
@@ -971,6 +1027,15 @@ public class BackendLogExportExample {
 If you are exporting to a shared OpenTelemetry Collector instead of directly to backends,
 both handlers can target the same collector OTLP endpoint (commonly `http://localhost:4318/v1/logs`).
 
+Transport behavior for both handlers (`AbstractHTTPOutputMessageHandler`):
+- bounded retry/backoff is enabled by default (`maxRetries=1`, exponential backoff from `50 ms`, capped at `500 ms`);
+- retryable failures include I/O exceptions and HTTP `408`, `429`, and `5xx`;
+- failures are buffered and retried on subsequent emissions as a batch;
+- for OTLP log endpoints and `ExportLogsServiceRequestLogRecordFormatter`, buffered retries and the
+  current record are sent in one `ExportLogsServiceRequest` envelope;
+- for Jaeger `/v1/traces` transform mode and Grafana Loki push mode, records are retried but sent
+  with per-record backend semantics.
+
 Important:
 - `GrafanaMessageHandler` exports log records only (Loki push payload or OTLP logs payload depending on endpoint).
 - Calling `startSpan(...)` / `span.end()` does not export traces by itself.
@@ -1373,6 +1438,12 @@ Note: CDI must be enabled for the deployment (add `beans.xml` to `WEB-INF` or `M
 18. Output handlers (`ConsoleMessageHandler`, `FileMessageHandler`, `JaegerMessageHandler`,
     `GrafanaMessageHandler`) expose health metrics via `getHandlerHealthMetrics()` and a
     quick health status via `isHealthy()`.
+19. `JaegerMessageHandler` and `GrafanaMessageHandler` do not propagate dispatch/transport exceptions
+    back to logging callers; failures are reported through the configured error consumer and reflected
+    in handler health metrics.
+20. HTTP handlers keep a retry buffer: when dispatch fails, failed records are re-attempted on the
+    next emission and may be shipped together with the new record in one OTLP
+    `ExportLogsServiceRequest` envelope (endpoint/formatter dependent as documented above).
 
 Default output format by handler:
 

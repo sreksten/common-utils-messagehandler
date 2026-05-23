@@ -71,6 +71,16 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
     private final AtomicLong consecutiveOutputFailures = new AtomicLong(0L);
     private final AtomicLong lastSuccessEpochMillis = new AtomicLong(0L);
     private final AtomicLong lastFailureEpochMillis = new AtomicLong(0L);
+    private final AtomicLong droppedOutputOperations = new AtomicLong(0L);
+    private final AtomicLong retryAttempts = new AtomicLong(0L);
+    private final AtomicLong retrySuccesses = new AtomicLong(0L);
+    private final AtomicLong retryFailures = new AtomicLong(0L);
+    private final AtomicLong dispatchAttempts = new AtomicLong(0L);
+    private final AtomicLong asyncEnqueuedOperations = new AtomicLong(0L);
+    private final AtomicLong synchronousFallbackOperations = new AtomicLong(0L);
+    private final AtomicLong queueSaturationEvents = new AtomicLong(0L);
+    private final AtomicLong maxObservedQueueSize = new AtomicLong(0L);
+    private volatile int configuredQueueCapacity = 0;
     private final Object dispatchLock = new Object();
     protected volatile LogRecordFormatter logRecordFormatter;
 
@@ -88,6 +98,18 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
         private final int pendingQueueSize;
         private final boolean closed;
         private final boolean healthy;
+        private final long droppedOperations;
+        private final long retryAttempts;
+        private final long retrySuccesses;
+        private final long retryFailures;
+        private final long dispatchAttempts;
+        private final long asyncEnqueuedOperations;
+        private final long synchronousFallbackOperations;
+        private final long queueSaturationEvents;
+        private final long maxObservedQueueSize;
+        private final int configuredQueueCapacity;
+        private final boolean boundedQueue;
+        private final double queueSaturationRatio;
 
         private HandlerHealthMetrics(final long successfulOperations,
                                      final long failedOperations,
@@ -98,7 +120,19 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
                                      final boolean async,
                                      final int pendingQueueSize,
                                      final boolean closed,
-                                     final boolean healthy) {
+                                     final boolean healthy,
+                                     final long droppedOperations,
+                                     final long retryAttempts,
+                                     final long retrySuccesses,
+                                     final long retryFailures,
+                                     final long dispatchAttempts,
+                                     final long asyncEnqueuedOperations,
+                                     final long synchronousFallbackOperations,
+                                     final long queueSaturationEvents,
+                                     final long maxObservedQueueSize,
+                                     final int configuredQueueCapacity,
+                                     final boolean boundedQueue,
+                                     final double queueSaturationRatio) {
             this.successfulOperations = successfulOperations;
             this.failedOperations = failedOperations;
             this.totalOperations = totalOperations;
@@ -109,6 +143,18 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
             this.pendingQueueSize = pendingQueueSize;
             this.closed = closed;
             this.healthy = healthy;
+            this.droppedOperations = droppedOperations;
+            this.retryAttempts = retryAttempts;
+            this.retrySuccesses = retrySuccesses;
+            this.retryFailures = retryFailures;
+            this.dispatchAttempts = dispatchAttempts;
+            this.asyncEnqueuedOperations = asyncEnqueuedOperations;
+            this.synchronousFallbackOperations = synchronousFallbackOperations;
+            this.queueSaturationEvents = queueSaturationEvents;
+            this.maxObservedQueueSize = maxObservedQueueSize;
+            this.configuredQueueCapacity = configuredQueueCapacity;
+            this.boundedQueue = boundedQueue;
+            this.queueSaturationRatio = queueSaturationRatio;
         }
 
         public long getSuccessfulOperations() {
@@ -150,6 +196,54 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
         public boolean isHealthy() {
             return healthy;
         }
+
+        public long getDroppedOperations() {
+            return droppedOperations;
+        }
+
+        public long getRetryAttempts() {
+            return retryAttempts;
+        }
+
+        public long getRetrySuccesses() {
+            return retrySuccesses;
+        }
+
+        public long getRetryFailures() {
+            return retryFailures;
+        }
+
+        public long getDispatchAttempts() {
+            return dispatchAttempts;
+        }
+
+        public long getAsyncEnqueuedOperations() {
+            return asyncEnqueuedOperations;
+        }
+
+        public long getSynchronousFallbackOperations() {
+            return synchronousFallbackOperations;
+        }
+
+        public long getQueueSaturationEvents() {
+            return queueSaturationEvents;
+        }
+
+        public long getMaxObservedQueueSize() {
+            return maxObservedQueueSize;
+        }
+
+        public int getConfiguredQueueCapacity() {
+            return configuredQueueCapacity;
+        }
+
+        public boolean isBoundedQueue() {
+            return boundedQueue;
+        }
+
+        public double getQueueSaturationRatio() {
+            return queueSaturationRatio;
+        }
     }
 
     public AbstractOutputMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
@@ -187,6 +281,7 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
                                                   final boolean registerShutdownHook,
                                                   final String workerThreadName, final String shutdownHookName) {
         this.async = async;
+        this.configuredQueueCapacity = queueCapacity;
         if (async) {
             this.queue = queueCapacity > 0 ? new LinkedBlockingQueue<>(queueCapacity) : new LinkedBlockingQueue<>();
             this.worker = Executors.newSingleThreadExecutor(r -> {
@@ -226,8 +321,11 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
      * @throws IllegalStateException if the handler has been closed
      */
     protected final void dispatch(final Runnable task) {
+        Objects.requireNonNull(task, "task must not be null");
+        dispatchAttempts.incrementAndGet();
         if (!async) {
             if (closed.get()) {
+                recordDroppedOutput();
                 throw new IllegalStateException(MessageHandlerResourceBundle.get("handlerIsClosed"));
             }
             task.run();
@@ -235,11 +333,16 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
         }
         synchronized (dispatchLock) {
             if (closed.get()) {
+                recordDroppedOutput();
                 throw new IllegalStateException(MessageHandlerResourceBundle.get("handlerIsClosed"));
             }
             if (!queue.offer(task)) {
                 // queue full: run synchronously to avoid losing messages
+                recordQueueSaturation();
                 task.run();
+            } else {
+                asyncEnqueuedOperations.incrementAndGet();
+                updateMaxObservedQueueSize(queue.size());
             }
         }
     }
@@ -364,6 +467,39 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
     }
 
     /**
+     * Records one dropped output operation.
+     * <p>
+     * The base class increments this counter automatically when a new dispatch request arrives
+     * after the handler has been closed.
+     */
+    protected final void recordDroppedOutput() {
+        droppedOutputOperations.incrementAndGet();
+    }
+
+    /**
+     * Records one retry attempt.
+     * <p>
+     * Subclasses with retry logic should call this once per attempt.
+     */
+    protected final void recordRetryAttempt() {
+        retryAttempts.incrementAndGet();
+    }
+
+    /**
+     * Records one successful retry attempt.
+     */
+    protected final void recordRetrySuccess() {
+        retrySuccesses.incrementAndGet();
+    }
+
+    /**
+     * Records one failed retry attempt.
+     */
+    protected final void recordRetryFailure() {
+        retryFailures.incrementAndGet();
+    }
+
+    /**
      * Returns {@code true} when the handler is open and has no consecutive sink failures.
      */
     public final boolean isHealthy() {
@@ -381,6 +517,12 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
         boolean closedNow = closed.get();
         boolean healthyNow = !closedNow && consecutiveFailures == 0L;
         int pendingQueue = queue == null ? 0 : queue.size();
+        long dispatchAttemptsNow = dispatchAttempts.get();
+        long queueSaturationEventsNow = queueSaturationEvents.get();
+        boolean boundedQueue = async && configuredQueueCapacity > 0;
+        double saturationRatio = dispatchAttemptsNow == 0L
+                ? 0.0d
+                : (double) queueSaturationEventsNow / (double) dispatchAttemptsNow;
         return new HandlerHealthMetrics(
                 successful,
                 failed,
@@ -391,7 +533,19 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
                 async,
                 pendingQueue,
                 closedNow,
-                healthyNow
+                healthyNow,
+                droppedOutputOperations.get(),
+                retryAttempts.get(),
+                retrySuccesses.get(),
+                retryFailures.get(),
+                dispatchAttemptsNow,
+                asyncEnqueuedOperations.get(),
+                synchronousFallbackOperations.get(),
+                queueSaturationEventsNow,
+                maxObservedQueueSize.get(),
+                configuredQueueCapacity,
+                boundedQueue,
+                saturationRatio
         );
     }
 
@@ -418,6 +572,27 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
         if (asyncCloseOnErrorScheduled.compareAndSet(false, true)) {
             new Thread(this::close, closeThreadName).start();
         }
+    }
+
+    private void recordQueueSaturation() {
+        queueSaturationEvents.incrementAndGet();
+        synchronousFallbackOperations.incrementAndGet();
+        if (configuredQueueCapacity > 0) {
+            updateMaxObservedQueueSize(configuredQueueCapacity);
+        } else if (queue != null) {
+            updateMaxObservedQueueSize(queue.size());
+        }
+    }
+
+    private void updateMaxObservedQueueSize(final int observedSize) {
+        long candidate = observedSize < 0 ? 0L : observedSize;
+        long current;
+        do {
+            current = maxObservedQueueSize.get();
+            if (candidate <= current) {
+                return;
+            }
+        } while (!maxObservedQueueSize.compareAndSet(current, candidate));
     }
 
     private void drainQueueInCallerThread() {
