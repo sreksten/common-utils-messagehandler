@@ -37,6 +37,9 @@ import java.util.function.Consumer;
  * {@link ConsoleLogRecordFormatter}, which produces human-readable text output (not JSON).
  * To emit JSON lines, pass a custom formatter (for example
  * {@link com.threeamigos.common.util.implementations.messagehandler.otel.formatters.RawJsonRecordFormatter}).
+ * For server deployments where console/file logs are ingested by downstream systems, prefer
+ * creating handlers through a centralized bootstrap/factory so formatter and field schema remain
+ * uniform across modules and environments.
  * <p>
  * A size-based rotation policy is enabled by default for constructors that do not accept an
  * explicit {@link RotationPolicy}. The default threshold is

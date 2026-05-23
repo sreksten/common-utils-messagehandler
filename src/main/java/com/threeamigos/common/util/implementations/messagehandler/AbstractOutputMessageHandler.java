@@ -220,6 +220,9 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
      * <p>
      * The formatter is applied to every message before it is handed to the underlying output
      * (file, console, etc.).
+     * For server deployments that rely on machine-parsed console/file logs, prefer setting this
+     * once during application bootstrap (or via a centralized factory) and keep it stable across
+     * handlers to avoid schema drift.
      *
      * @param logRecordFormatter the non-null formatter to use
      * @throws NullPointerException if {@code formatter} is {@code null}

@@ -487,6 +487,34 @@ has greater effectiveness if you have instrumented your application properly wit
 emit JSON payloads (OTLP `ExportLogsServiceRequest` JSON; Grafana can also emit Loki push JSON
 when targeting a Loki push endpoint).
 
+For server deployments that ingest local console/file logs, formatter choice should be an
+application bootstrap policy, not an ad hoc per-call-site decision. A practical baseline is:
+centralized handler factory/bootstrap + fixed JSON formatter + schema/golden-output tests
+to keep fields stable across modules and environments.
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.RawJsonRecordFormatter;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
+
+public final class HandlerFactory {
+    private static final LogRecordFormatter JSON_FORMATTER = new RawJsonRecordFormatter();
+
+    private HandlerFactory() {
+    }
+
+    public static MessageHandler newConsoleHandler() {
+        return new ConsoleMessageHandler(JSON_FORMATTER);
+    }
+
+    public static MessageHandler newFileHandler(String path) {
+        return new FileMessageHandler(path, JSON_FORMATTER);
+    }
+}
+```
+
 A utility class is bundled that offers a static method to reduce a long class name by replacing the package name with
 an abbreviation (initial letters only): the `ClassNameReducer.reduce`. E.g., it could replace
 `com.threeamigos.common.utils.TestClass` with `c.t.c.u.TestClass`, a-la SpringBoot.
@@ -1262,6 +1290,8 @@ Note: CDI must be enabled for the deployment (add `beans.xml` to `WEB-INF` or `M
 16. `JaegerMessageHandler` and `GrafanaMessageHandler` use JSON payloads by default
     (`ExportLogsServiceRequestLogRecordFormatter`); `ConsoleMessageHandler` and
     `FileMessageHandler` default to `ConsoleLogRecordFormatter` (human-readable text).
+17. For server deployments that ingest console/file logs, enforce formatter selection centrally
+    (bootstrap/factory), keep a stable JSON schema, and verify it with parser or golden-output tests.
 
 ## Java compatibility
 
