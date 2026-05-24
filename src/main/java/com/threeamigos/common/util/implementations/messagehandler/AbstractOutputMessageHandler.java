@@ -61,6 +61,12 @@ import java.util.concurrent.atomic.AtomicReference;
  * exits, the caller thread performs one additional drain pass to capture tasks enqueued in the
  * window between the interrupt and the worker's own drain, then calls {@link #closeOutput()} to
  * release the underlying output resource.
+ * <p>
+ * <strong>Scope of the guarantee:</strong> this no-loss behaviour applies only to
+ * <em>async mode</em> and only to tasks already in the queue when {@code close()} is called.
+ * Tasks submitted concurrently with or after {@code close()} receive an
+ * {@link IllegalStateException} and are dropped. Synchronous handlers have no queue;
+ * {@code close()} immediately seals the handler and releases the output resource.
  *
  * <h3>Close-on-error helper for subclasses</h3>
  * <p>
@@ -1088,6 +1094,12 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
      *       in the worker's {@code finally} block, executing them on the calling thread.</li>
      *   <li>Calls {@link #closeOutput()} to release the underlying output resource.</li>
      * </ol>
+     * <p>
+     * <strong>Scope of the no-loss guarantee:</strong> applies to async mode only, and only for
+     * tasks already in the queue at the time {@code close()} is called. Tasks submitted
+     * concurrently with or after {@code close()} throw {@link IllegalStateException} and are
+     * dropped. Synchronous handlers have no queue; {@code close()} seals the handler and releases
+     * the output resource immediately without draining.
      */
     @Override
     public void close() {

@@ -3,8 +3,11 @@
 Part of the common-utils classes, that can help when writing standalone Java applications.
 
 This package is primarily intended for small standalone Java applications.
-Server/high-throughput deployments are supported, but should explicitly configure HTTP durability
-policy and dead-letter (DLQ) handling for Jaeger/Grafana handlers.
+HTTP handlers (Jaeger/Grafana/OTel Collector) ship with built-in retry/backoff, circuit breaker,
+opportunistic request batching, and a configurable worker pool (`setHttpWorkerPoolSize`).
+For server/high-throughput deployments, also configure a non-volatile durability store
+(`FileHttpDispatchDurabilityStore` or `RedisHttpDispatchDurabilityStore`) and a dead-letter
+consumer explicitly — the defaults (in-memory store, `System.err`) are not suitable for production.
 
 This subpackage addresses the following needs:
 
@@ -1591,6 +1594,11 @@ Note: CDI must be enabled for the deployment (add `beans.xml` to `WEB-INF` or `M
    `registerShutdownHook` argument) register a JVM shutdown hook by default.
    If you choose a constructor with `registerShutdownHook=false`, call `close()` explicitly
    during application shutdown.
+   **Message-loss guarantee (async mode only):** `close()` drains the queue in two passes
+   (worker `finally` drain + caller-thread drain) so tasks already in the queue when `close()` is
+   called are executed before the handler shuts down. Tasks submitted *concurrently with* or *after*
+   `close()` throw `IllegalStateException` and are dropped. Synchronous handlers have no queue;
+   `close()` simply seals the handler and releases the output resource immediately.
 10. Other handlers are synchronous unless they implement their own threading model.
 11. `GrafanaMessageHandler` exports logs only; configure `TracerProvider#setDefaultSpanDispatcher(...)`
     (for example with `GrafanaSpanDispatcher`) to export spans/traces.
