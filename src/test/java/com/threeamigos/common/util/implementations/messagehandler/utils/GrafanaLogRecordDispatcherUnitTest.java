@@ -8,9 +8,15 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Resource;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
+import com.threeamigos.common.util.implementations.messagehandler.transport.HttpUrlConnectionTransport;
+import com.threeamigos.common.util.interfaces.messagehandler.transport.HttpTransport;
+import com.threeamigos.common.util.interfaces.messagehandler.transport.HttpTransportResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -18,6 +24,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -37,11 +44,19 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.Mockito.when;
 
+@ExtendWith(MockitoExtension.class)
 @DisplayName("GrafanaLogRecordDispatcher unit tests")
 @Tag("unit")
 @Tag("messageHandler")
 class GrafanaLogRecordDispatcherUnitTest {
+
+    @Mock
+    private HttpTransport mockTransport;
 
     @Test
     @DisplayName("dispatch(LogRecord) should post formatted OTLP JSON and return response")
@@ -129,6 +144,23 @@ class GrafanaLogRecordDispatcherUnitTest {
         IOException thrown = assertThrows(IOException.class, () -> dispatcher.dispatchOrThrow(record));
         assertTrue(thrown.getMessage().contains("500"));
         assertTrue(thrown.getMessage().contains("boom"));
+        assertTrue(thrown instanceof HttpDispatchStatusException);
+        assertNotNull(((HttpDispatchStatusException) thrown).getEndpoint());
+    }
+
+    @Test
+    @DisplayName("HttpDispatchStatusException should handle null endpoint and null/empty responseBody")
+    void httpDispatchStatusExceptionShouldHandleNullValues() {
+        HttpDispatchStatusException nullEndpoint = new HttpDispatchStatusException(null, 503, "unavailable");
+        assertTrue(nullEndpoint.getMessage().contains("<unknown>"));
+        assertEquals(503, nullEndpoint.getStatusCode());
+
+        HttpDispatchStatusException nullBody = new HttpDispatchStatusException("http://host", 404, null);
+        assertFalse(nullBody.getMessage().contains("responseBody="));
+        assertEquals("", nullBody.getResponseBody());
+
+        HttpDispatchStatusException emptyBody = new HttpDispatchStatusException("http://host", 404, "  ");
+        assertFalse(emptyBody.getMessage().contains("responseBody="));
     }
 
     @Test
@@ -207,22 +239,6 @@ class GrafanaLogRecordDispatcherUnitTest {
     }
 
     @Test
-    @DisplayName("private helpers should cover null branches")
-    void privateHelpersShouldCoverNullBranches() throws Exception {
-        Method readStream = GrafanaLogRecordDispatcher.class.getDeclaredMethod("readStream", InputStream.class);
-        readStream.setAccessible(true);
-        assertEquals("", readStream.invoke(null, new Object[]{null}));
-
-        Method closeInput = GrafanaLogRecordDispatcher.class.getDeclaredMethod("closeQuietly", InputStream.class);
-        closeInput.setAccessible(true);
-        closeInput.invoke(null, new Object[]{null});
-
-        Method closeOutput = GrafanaLogRecordDispatcher.class.getDeclaredMethod("closeQuietly", java.io.OutputStream.class);
-        closeOutput.setAccessible(true);
-        closeOutput.invoke(null, new Object[]{null});
-    }
-
-    @Test
     @DisplayName("DispatchResult should report success only for 2xx statuses")
     void dispatchResultShouldReportSuccessRange() throws Exception {
         Constructor<?> constructor = GrafanaLogRecordDispatcher.DispatchResult.class
@@ -290,14 +306,14 @@ class GrafanaLogRecordDispatcherUnitTest {
         assertEquals("0", toUnsignedNanosString.invoke(null, Instant.ofEpochSecond(-1)));
 
         Method applyAuthentication = GrafanaLogRecordDispatcher.class
-                .getDeclaredMethod("applyAuthentication", HttpURLConnection.class);
+                .getDeclaredMethod("applyAuthentication", Map.class);
         applyAuthentication.setAccessible(true);
         GrafanaLogRecordDispatcher basicDispatcher = new GrafanaLogRecordDispatcher(
                 "http://localhost:4318/v1/logs", "alice", "secret");
         setField(basicDispatcher, "password", null);
-        StubConnection authConnection = new StubConnection(200, "ok", null);
-        applyAuthentication.invoke(basicDispatcher, authConnection);
-        assertFalse(authConnection.requestProperties.containsKey("Authorization"));
+        Map<String, String> authHeaders = new LinkedHashMap<String, String>();
+        applyAuthentication.invoke(basicDispatcher, authHeaders);
+        assertFalse(authHeaders.containsKey("Authorization"));
 
         Method toImmutableHeaders = GrafanaLogRecordDispatcher.class
                 .getDeclaredMethod("toImmutableHeaders", Map.class);
@@ -318,38 +334,129 @@ class GrafanaLogRecordDispatcherUnitTest {
         assertTrue(escaped.contains("\\t"));
         assertTrue(escaped.contains("\\u0001"));
 
-        Method readStream = GrafanaLogRecordDispatcher.class.getDeclaredMethod("readStream", InputStream.class);
-        readStream.setAccessible(true);
-        assertEquals("a\nb", readStream.invoke(null,
-                new ByteArrayInputStream("a\nb".getBytes(StandardCharsets.UTF_8))));
+        // Cover toLokiPushPayload with non-null traceId and spanId
+        String lokiPayloadWithTrace = (String) toLokiPushPayload.invoke(dispatcher,
+                logRecord(null, "INFO", "traceid01", "spanid01", null, null, Instant.now()));
+        assertTrue(lokiPayloadWithTrace.contains("\\\"trace_id\\\":\\\"traceid01\\\""));
+        assertTrue(lokiPayloadWithTrace.contains("\\\"span_id\\\":\\\"spanid01\\\""));
 
-        Method closeInput = GrafanaLogRecordDispatcher.class.getDeclaredMethod("closeQuietly", InputStream.class);
-        closeInput.setAccessible(true);
-        closeInput.invoke(null, new InputStream() {
-            @Override
-            public int read() {
-                return -1;
-            }
+        // Cover throwIfNonSuccess(null) path
+        Method throwIfNonSuccess = GrafanaLogRecordDispatcher.class.getDeclaredMethod(
+                "throwIfNonSuccess", GrafanaLogRecordDispatcher.DispatchResult.class);
+        throwIfNonSuccess.setAccessible(true);
+        replaceEndpoint(dispatcher, new URL("http://localhost:4318/v1/logs"));
+        InvocationTargetException nullResultEx = assertThrows(
+                InvocationTargetException.class,
+                () -> throwIfNonSuccess.invoke(dispatcher, new Object[]{null})
+        );
+        assertTrue(nullResultEx.getCause() instanceof IOException);
 
-            @Override
-            public void close() throws IOException {
-                throw new IOException("forced");
-            }
-        });
+        // Cover sanitizeLogRecords null-element skip
+        Method sanitizeLogRecords = GrafanaLogRecordDispatcher.class.getDeclaredMethod("sanitizeLogRecords", List.class);
+        sanitizeLogRecords.setAccessible(true);
+        LogRecordFactoryImpl sanitizeFactory = new LogRecordFactoryImpl();
+        List<LogRecord> listWithNull = Arrays.asList(
+                sanitizeFactory.create(SeverityNumber.INFO, "a"),
+                null,
+                sanitizeFactory.create(SeverityNumber.INFO, "b"));
+        @SuppressWarnings("unchecked")
+        List<LogRecord> sanitized = (List<LogRecord>) sanitizeLogRecords.invoke(null, listWithNull);
+        assertEquals(2, sanitized.size());
 
-        Method closeOutput = GrafanaLogRecordDispatcher.class.getDeclaredMethod("closeQuietly", java.io.OutputStream.class);
-        closeOutput.setAccessible(true);
-        closeOutput.invoke(null, new java.io.OutputStream() {
-            @Override
-            public void write(final int b) {
-                // no-op
-            }
+    }
 
-            @Override
-            public void close() throws IOException {
-                throw new IOException("forced");
-            }
-        });
+    @Test
+    @DisplayName("dispatchLogRecord should not throw when status is 2xx")
+    void dispatchLogRecordShouldSucceedWith200Status() throws Exception {
+        StubConnection connection = new StubConnection(200, "ok", null);
+        GrafanaLogRecordDispatcher dispatcher = dispatcherWithConnection(connection);
+        LogRecord record = new LogRecordFactoryImpl().create(SeverityNumber.INFO, "success");
+
+        dispatcher.dispatchLogRecord(record, new ExportLogsServiceRequestLogRecordFormatter());
+
+        assertFalse(connection.writtenBody().isEmpty());
+    }
+
+    @Test
+    @DisplayName("dispatchLogRecords should return early for empty list")
+    void dispatchLogRecordsShouldReturnEarlyForEmptyList() throws Exception {
+        StubConnection connection = new StubConnection(200, "ok", null);
+        GrafanaLogRecordDispatcher dispatcher = dispatcherWithConnection(connection);
+
+        dispatcher.dispatchLogRecords(Collections.<LogRecord>emptyList(),
+                new ExportLogsServiceRequestLogRecordFormatter());
+
+        assertEquals(0, connection.outputStreamCalls);
+    }
+
+    @Test
+    @DisplayName("dispatchLogRecords should dispatch single record via dispatchLogRecord")
+    void dispatchLogRecordsShouldDispatchSingleRecord() throws Exception {
+        StubConnection connection = new StubConnection(200, "ok", null);
+        GrafanaLogRecordDispatcher dispatcher = dispatcherWithConnection(connection);
+        LogRecord record = new LogRecordFactoryImpl().create(SeverityNumber.INFO, "only-one");
+
+        dispatcher.dispatchLogRecords(Collections.singletonList(record),
+                new ExportLogsServiceRequestLogRecordFormatter());
+
+        assertEquals(1, connection.outputStreamCalls);
+    }
+
+    @Test
+    @DisplayName("dispatchLogRecords with Loki endpoint should dispatch 2+ records sequentially")
+    void dispatchLogRecordsShouldDispatchSequentiallyForLokiEndpoint() throws Exception {
+        StubConnection connection = new StubConnection(204, "", null);
+        GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher(
+                "http://localhost:3100/loki/api/v1/push");
+        replaceEndpoint(dispatcher, urlFor(connection, "/loki/api/v1/push"));
+        LogRecordFactoryImpl factory = new LogRecordFactoryImpl();
+        List<LogRecord> records = Arrays.asList(
+                factory.create(SeverityNumber.INFO, "loki-seq-1"),
+                factory.create(SeverityNumber.WARN, "loki-seq-2"));
+
+        dispatcher.dispatchLogRecords(records, new ExportLogsServiceRequestLogRecordFormatter());
+
+        assertEquals(2, connection.outputStreamCalls);
+    }
+
+    @Test
+    @DisplayName("dispatchLogRecords should dispatch sequentially when formatter does not support batch")
+    void dispatchLogRecordsShouldDispatchSequentiallyForNonBatchFormatter() throws Exception {
+        StubConnection connection = new StubConnection(200, "ok", null);
+        GrafanaLogRecordDispatcher dispatcher = dispatcherWithConnection(connection);
+        LogRecordFactoryImpl factory = new LogRecordFactoryImpl();
+        List<LogRecord> records = Arrays.asList(
+                factory.create(SeverityNumber.INFO, "seq-1"),
+                factory.create(SeverityNumber.WARN, "seq-2"));
+
+        dispatcher.dispatchLogRecords(records, logRecord -> "{\"single\":true}");
+
+        assertEquals(2, connection.outputStreamCalls);
+    }
+
+    @Test
+    @DisplayName("8-arg constructor should use the provided HttpTransport for dispatch")
+    void eightArgConstructorShouldUseProvidedTransport() throws Exception {
+        when(mockTransport.post(any(URL.class), any(byte[].class), anyMap(), anyInt(), anyInt()))
+                .thenReturn(new HttpTransportResponse(200, "dispatched"));
+
+        GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher(
+                "http://localhost:4318/v1/logs", null, null, null, 1000, 1000, null, mockTransport);
+        GrafanaLogRecordDispatcher.DispatchResult result = dispatcher.dispatchFormatted("{\"resourceLogs\":[]}");
+
+        assertEquals(200, result.getStatusCode());
+        assertEquals("dispatched", result.getResponseBody());
+        assertTrue(result.isSuccessful());
+    }
+
+    @Test
+    @DisplayName("8-arg constructor with null transport should fall back to HttpUrlConnectionTransport")
+    void eightArgConstructorWithNullTransportShouldFallBackToDefault() throws Exception {
+        GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher(
+                "http://localhost:4318/v1/logs", null, null, null, 1000, 1000, null, null);
+        Field transportField = GrafanaLogRecordDispatcher.class.getDeclaredField("httpTransport");
+        transportField.setAccessible(true);
+        assertTrue(transportField.get(dispatcher) instanceof HttpUrlConnectionTransport);
     }
 
     private static GrafanaLogRecordDispatcher dispatcherWithConnection(final StubConnection connection) throws Exception {

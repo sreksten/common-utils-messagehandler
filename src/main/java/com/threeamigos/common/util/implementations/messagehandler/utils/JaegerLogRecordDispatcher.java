@@ -9,15 +9,13 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordDispa
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Resource;
 
+import com.threeamigos.common.util.implementations.messagehandler.transport.HttpUrlConnectionTransport;
+import com.threeamigos.common.util.interfaces.messagehandler.transport.HttpTransport;
+import com.threeamigos.common.util.interfaces.messagehandler.transport.HttpTransportResponse;
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -109,6 +107,7 @@ public class JaegerLogRecordDispatcher implements LogRecordDispatcher {
     private final int readTimeoutMillis;
     private final Map<String, String> additionalHeaders;
     private final ExportLogsServiceRequestLogRecordFormatter formatter;
+    private final HttpTransport httpTransport;
 
     /**
      * Creates a dispatcher with no authentication and default timeouts.
@@ -152,6 +151,34 @@ public class JaegerLogRecordDispatcher implements LogRecordDispatcher {
                                      final int connectTimeoutMillis,
                                      final int readTimeoutMillis,
                                      final @Nullable Map<String, String> additionalHeaders) {
+        this(endpointUrl, username, password, bearerToken, connectTimeoutMillis, readTimeoutMillis,
+                additionalHeaders, new HttpUrlConnectionTransport());
+    }
+
+    /**
+     * Creates a dispatcher with full configuration and a custom HTTP transport.
+     * <p>
+     * Use this constructor to provide an {@link HttpTransport} with connection-pooling
+     * support (for example {@code new ApacheHttpClientTransport()}).
+     *
+     * @param endpointUrl          full HTTP endpoint
+     * @param username             basic-auth username, nullable
+     * @param password             basic-auth password, nullable
+     * @param bearerToken          bearer token, nullable
+     * @param connectTimeoutMillis connect timeout in milliseconds, must be positive
+     * @param readTimeoutMillis    read timeout in milliseconds, must be positive
+     * @param additionalHeaders    optional extra headers
+     * @param httpTransport        transport to use for HTTP calls; defaults to
+     *                             {@link HttpUrlConnectionTransport} when {@code null}
+     */
+    public JaegerLogRecordDispatcher(final @Nonnull String endpointUrl,
+                                     final @Nullable String username,
+                                     final @Nullable String password,
+                                     final @Nullable String bearerToken,
+                                     final int connectTimeoutMillis,
+                                     final int readTimeoutMillis,
+                                     final @Nullable Map<String, String> additionalHeaders,
+                                     final @Nullable HttpTransport httpTransport) {
         this.endpoint = parseEndpoint(endpointUrl);
         this.username = normalizeNullable(username);
         this.password = normalizeNullable(password);
@@ -160,6 +187,7 @@ public class JaegerLogRecordDispatcher implements LogRecordDispatcher {
         this.readTimeoutMillis = requirePositive(readTimeoutMillis, "readTimeoutMillis");
         this.additionalHeaders = toImmutableHeaders(additionalHeaders);
         this.formatter = new ExportLogsServiceRequestLogRecordFormatter();
+        this.httpTransport = httpTransport != null ? httpTransport : new HttpUrlConnectionTransport();
         validateAuthConfiguration();
     }
 
@@ -261,40 +289,21 @@ public class JaegerLogRecordDispatcher implements LogRecordDispatcher {
      */
     public DispatchResult dispatchFormatted(final @Nonnull String formattedExportLogsServiceRequestJson) throws IOException {
         Objects.requireNonNull(formattedExportLogsServiceRequestJson, "formattedExportLogsServiceRequestJson must not be null");
-
-        HttpURLConnection connection = (HttpURLConnection) endpoint.openConnection();
-        connection.setRequestMethod("POST");
-        connection.setDoOutput(true);
-        connection.setConnectTimeout(connectTimeoutMillis);
-        connection.setReadTimeout(readTimeoutMillis);
-        connection.setRequestProperty("Content-Type", APPLICATION_JSON);
-        connection.setRequestProperty("Accept", APPLICATION_JSON);
-        connection.setRequestProperty("Connection", "keep-alive");
-        connection.setRequestProperty("User-Agent", "common-utils-messagehandler/jaeger-logrecord-dispatcher");
-        applyAuthentication(connection);
-        applyAdditionalHeaders(connection);
-
         byte[] payloadBytes = formattedExportLogsServiceRequestJson.getBytes(StandardCharsets.UTF_8);
-        OutputStream outputStream = null;
-        InputStream inputStream = null;
-        InputStream errorStream = null;
-        try {
-            outputStream = connection.getOutputStream();
-            outputStream.write(payloadBytes);
-            outputStream.flush();
+        HttpTransportResponse response = httpTransport.post(endpoint, payloadBytes, buildHeaders(),
+                connectTimeoutMillis, readTimeoutMillis);
+        return new DispatchResult(response.getStatusCode(), response.getBody());
+    }
 
-            int statusCode = connection.getResponseCode();
-            if (statusCode >= 200 && statusCode < 300) {
-                inputStream = connection.getInputStream();
-                return new DispatchResult(statusCode, readStream(inputStream));
-            }
-            errorStream = connection.getErrorStream();
-            return new DispatchResult(statusCode, readStream(errorStream));
-        } finally {
-            closeQuietly(outputStream);
-            closeQuietly(inputStream);
-            closeQuietly(errorStream);
-        }
+    private Map<String, String> buildHeaders() {
+        Map<String, String> headers = new LinkedHashMap<String, String>();
+        headers.put("Content-Type", APPLICATION_JSON);
+        headers.put("Accept", APPLICATION_JSON);
+        headers.put("Connection", "keep-alive");
+        headers.put("User-Agent", "common-utils-messagehandler/jaeger-logrecord-dispatcher");
+        applyAuthentication(headers);
+        applyAdditionalHeaders(headers);
+        return headers;
     }
 
     /**
@@ -539,19 +548,19 @@ public class JaegerLogRecordDispatcher implements LogRecordDispatcher {
         return escaped.toString();
     }
 
-    private void applyAuthentication(final HttpURLConnection connection) {
+    private void applyAuthentication(final Map<String, String> headers) {
         if (hasText(bearerToken)) {
-            connection.setRequestProperty("Authorization", "Bearer " + bearerToken);
+            headers.put("Authorization", "Bearer " + bearerToken);
             return;
         }
         if (hasText(username) && password != null) {
             String raw = username + ":" + password;
             String encoded = Base64.getEncoder().encodeToString(raw.getBytes(StandardCharsets.UTF_8));
-            connection.setRequestProperty("Authorization", "Basic " + encoded);
+            headers.put("Authorization", "Basic " + encoded);
         }
     }
 
-    private void applyAdditionalHeaders(final HttpURLConnection connection) {
+    private void applyAdditionalHeaders(final Map<String, String> headers) {
         for (Map.Entry<String, String> entry : additionalHeaders.entrySet()) {
             if (!hasText(entry.getKey())) {
                 continue;
@@ -559,7 +568,7 @@ public class JaegerLogRecordDispatcher implements LogRecordDispatcher {
             if (entry.getValue() == null) {
                 continue;
             }
-            connection.setRequestProperty(entry.getKey(), entry.getValue());
+            headers.put(entry.getKey(), entry.getValue());
         }
     }
 
@@ -608,44 +617,6 @@ public class JaegerLogRecordDispatcher implements LogRecordDispatcher {
 
     private static boolean hasText(final String value) {
         return value != null && !value.trim().isEmpty();
-    }
-
-    private static String readStream(final InputStream stream) throws IOException {
-        if (stream == null) {
-            return "";
-        }
-        BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
-        StringBuilder out = new StringBuilder();
-        String line;
-        while ((line = reader.readLine()) != null) {
-            if (out.length() > 0) {
-                out.append('\n');
-            }
-            out.append(line);
-        }
-        return out.toString();
-    }
-
-    private static void closeQuietly(final InputStream inputStream) {
-        if (inputStream == null) {
-            return;
-        }
-        try {
-            inputStream.close();
-        } catch (IOException ignored) {
-            // no-op
-        }
-    }
-
-    private static void closeQuietly(final OutputStream outputStream) {
-        if (outputStream == null) {
-            return;
-        }
-        try {
-            outputStream.close();
-        } catch (IOException ignored) {
-            // no-op
-        }
     }
 
     /**

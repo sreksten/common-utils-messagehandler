@@ -9,9 +9,15 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Resource;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
+import com.threeamigos.common.util.implementations.messagehandler.transport.HttpUrlConnectionTransport;
+import com.threeamigos.common.util.interfaces.messagehandler.transport.HttpTransport;
+import com.threeamigos.common.util.interfaces.messagehandler.transport.HttpTransportResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -20,6 +26,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -39,11 +46,19 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.Mockito.when;
 
+@ExtendWith(MockitoExtension.class)
 @DisplayName("JaegerLogRecordDispatcher unit tests")
 @Tag("unit")
 @Tag("messageHandler")
 class JaegerLogRecordDispatcherUnitTest {
+
+    @Mock
+    private HttpTransport mockTransport;
 
     @Test
     @DisplayName("dispatch(LogRecord) should post formatted OTLP JSON and return response")
@@ -216,22 +231,6 @@ class JaegerLogRecordDispatcherUnitTest {
     }
 
     @Test
-    @DisplayName("private helpers should cover null branches")
-    void privateHelpersShouldCoverNullBranches() throws Exception {
-        Method readStream = JaegerLogRecordDispatcher.class.getDeclaredMethod("readStream", InputStream.class);
-        readStream.setAccessible(true);
-        assertEquals("", readStream.invoke(null, new Object[]{null}));
-
-        Method closeInput = JaegerLogRecordDispatcher.class.getDeclaredMethod("closeQuietly", InputStream.class);
-        closeInput.setAccessible(true);
-        closeInput.invoke(null, new Object[]{null});
-
-        Method closeOutput = JaegerLogRecordDispatcher.class.getDeclaredMethod("closeQuietly", java.io.OutputStream.class);
-        closeOutput.setAccessible(true);
-        closeOutput.invoke(null, new Object[]{null});
-    }
-
-    @Test
     @DisplayName("private helpers should cover remaining branches")
     void privateHelpersShouldCoverRemainingBranches() throws Exception {
         JaegerLogRecordDispatcher dispatcher = new JaegerLogRecordDispatcher("http://localhost:4318/v1/traces");
@@ -365,25 +364,25 @@ class JaegerLogRecordDispatcherUnitTest {
         assertTrue(escaped.contains("\\u0001"));
 
         Method applyAuthentication = JaegerLogRecordDispatcher.class
-                .getDeclaredMethod("applyAuthentication", HttpURLConnection.class);
+                .getDeclaredMethod("applyAuthentication", Map.class);
         applyAuthentication.setAccessible(true);
 
-        StubConnection bearerConnection = new StubConnection(200, "ok", null);
+        Map<String, String> bearerHeaders = new LinkedHashMap<String, String>();
         JaegerLogRecordDispatcher bearerDispatcher = new JaegerLogRecordDispatcher(
                 "http://localhost:4318/v1/logs", null, null, "token-9", 1000, 1000, null);
-        applyAuthentication.invoke(bearerDispatcher, bearerConnection);
-        assertEquals("Bearer token-9", bearerConnection.requestProperties.get("Authorization"));
+        applyAuthentication.invoke(bearerDispatcher, bearerHeaders);
+        assertEquals("Bearer token-9", bearerHeaders.get("Authorization"));
 
-        StubConnection basicConnection = new StubConnection(200, "ok", null);
+        Map<String, String> basicHeaders = new LinkedHashMap<String, String>();
         JaegerLogRecordDispatcher basicDispatcher = new JaegerLogRecordDispatcher(
                 "http://localhost:4318/v1/logs", "alice", "secret");
-        applyAuthentication.invoke(basicDispatcher, basicConnection);
-        assertTrue(basicConnection.requestProperties.get("Authorization").startsWith("Basic "));
+        applyAuthentication.invoke(basicDispatcher, basicHeaders);
+        assertTrue(basicHeaders.get("Authorization").startsWith("Basic "));
 
-        StubConnection noAuthConnection = new StubConnection(200, "ok", null);
+        Map<String, String> noAuthHeaders = new LinkedHashMap<String, String>();
         setField(basicDispatcher, "password", null);
-        applyAuthentication.invoke(basicDispatcher, noAuthConnection);
-        assertFalse(noAuthConnection.requestProperties.containsKey("Authorization"));
+        applyAuthentication.invoke(basicDispatcher, noAuthHeaders);
+        assertFalse(noAuthHeaders.containsKey("Authorization"));
 
         Method toImmutableHeaders = JaegerLogRecordDispatcher.class
                 .getDeclaredMethod("toImmutableHeaders", Map.class);
@@ -396,38 +395,110 @@ class JaegerLogRecordDispatcherUnitTest {
         assertEquals("B", immutableHeaders.get("A"));
         assertThrows(UnsupportedOperationException.class, () -> immutableHeaders.put("C", "D"));
 
-        Method readStream = JaegerLogRecordDispatcher.class.getDeclaredMethod("readStream", InputStream.class);
-        readStream.setAccessible(true);
-        assertEquals("a\nb", readStream.invoke(null,
-                new ByteArrayInputStream("a\nb".getBytes(StandardCharsets.UTF_8))));
+        // Cover throwIfNonSuccess(null) path
+        Method throwIfNonSuccess = JaegerLogRecordDispatcher.class.getDeclaredMethod(
+                "throwIfNonSuccess", JaegerLogRecordDispatcher.DispatchResult.class);
+        throwIfNonSuccess.setAccessible(true);
+        replaceEndpoint(dispatcher, new URL("http://localhost:4318/v1/logs"));
+        InvocationTargetException nullResultEx = assertThrows(
+                InvocationTargetException.class,
+                () -> throwIfNonSuccess.invoke(dispatcher, new Object[]{null})
+        );
+        assertTrue(nullResultEx.getCause() instanceof IOException);
 
-        Method closeInput = JaegerLogRecordDispatcher.class.getDeclaredMethod("closeQuietly", InputStream.class);
-        closeInput.setAccessible(true);
-        closeInput.invoke(null, new InputStream() {
-            @Override
-            public int read() {
-                return -1;
-            }
+        // Cover sanitizeLogRecords null-element skip
+        Method sanitizeLogRecords = JaegerLogRecordDispatcher.class.getDeclaredMethod("sanitizeLogRecords", List.class);
+        sanitizeLogRecords.setAccessible(true);
+        LogRecordFactoryImpl sanitizeFactory = new LogRecordFactoryImpl();
+        List<LogRecord> listWithNull = Arrays.asList(
+                sanitizeFactory.create(SeverityNumber.INFO, "a"),
+                null,
+                sanitizeFactory.create(SeverityNumber.INFO, "b"));
+        @SuppressWarnings("unchecked")
+        List<LogRecord> sanitized = (List<LogRecord>) sanitizeLogRecords.invoke(null, listWithNull);
+        assertEquals(2, sanitized.size());
 
-            @Override
-            public void close() throws IOException {
-                throw new IOException("forced");
-            }
-        });
+    }
 
-        Method closeOutput = JaegerLogRecordDispatcher.class.getDeclaredMethod("closeQuietly", OutputStream.class);
-        closeOutput.setAccessible(true);
-        closeOutput.invoke(null, new OutputStream() {
-            @Override
-            public void write(final int b) {
-                // no-op
-            }
+    @Test
+    @DisplayName("dispatchLogRecords should return early for empty list")
+    void dispatchLogRecordsShouldReturnEarlyForEmptyList() throws Exception {
+        StubConnection connection = new StubConnection(200, "ok", null);
+        JaegerLogRecordDispatcher dispatcher = dispatcherWithConnection(connection);
 
-            @Override
-            public void close() throws IOException {
-                throw new IOException("forced");
-            }
-        });
+        dispatcher.dispatchLogRecords(Collections.<LogRecord>emptyList(),
+                new ExportLogsServiceRequestLogRecordFormatter());
+
+        assertEquals(0, connection.outputStreamCalls);
+    }
+
+    @Test
+    @DisplayName("dispatchLogRecords should dispatch single record via dispatchLogRecord path")
+    void dispatchLogRecordsShouldDispatchSingleRecord() throws Exception {
+        StubConnection connection = new StubConnection(200, "ok", null);
+        JaegerLogRecordDispatcher dispatcher = dispatcherWithConnection(connection);
+        LogRecord record = new LogRecordFactoryImpl().create(SeverityNumber.INFO, "only-one");
+
+        dispatcher.dispatchLogRecords(Collections.singletonList(record),
+                new ExportLogsServiceRequestLogRecordFormatter());
+
+        assertEquals(1, connection.outputStreamCalls);
+    }
+
+    @Test
+    @DisplayName("dispatchLogRecords with traces endpoint should dispatch 2+ records sequentially")
+    void dispatchLogRecordsShouldDispatchSequentiallyForTracesEndpoint() throws Exception {
+        StubConnection connection = new StubConnection(200, "ok", null);
+        JaegerLogRecordDispatcher dispatcher = new JaegerLogRecordDispatcher("http://localhost:4318/v1/traces");
+        replaceEndpoint(dispatcher, urlFor(connection, "/v1/traces"));
+        LogRecordFactoryImpl factory = new LogRecordFactoryImpl();
+        List<LogRecord> records = Arrays.asList(
+                factory.create(SeverityNumber.INFO, "trace-seq-1"),
+                factory.create(SeverityNumber.WARN, "trace-seq-2"));
+
+        dispatcher.dispatchLogRecords(records, new ExportLogsServiceRequestLogRecordFormatter());
+
+        assertEquals(2, connection.outputStreamCalls);
+    }
+
+    @Test
+    @DisplayName("dispatchLogRecords should dispatch sequentially when formatter does not support batch")
+    void dispatchLogRecordsShouldDispatchSequentiallyForNonBatchFormatter() throws Exception {
+        StubConnection connection = new StubConnection(200, "ok", null);
+        JaegerLogRecordDispatcher dispatcher = dispatcherWithConnection(connection);
+        LogRecordFactoryImpl factory = new LogRecordFactoryImpl();
+        List<LogRecord> records = Arrays.asList(
+                factory.create(SeverityNumber.INFO, "seq-1"),
+                factory.create(SeverityNumber.WARN, "seq-2"));
+
+        dispatcher.dispatchLogRecords(records, logRecord -> "{\"single\":true}");
+
+        assertEquals(2, connection.outputStreamCalls);
+    }
+
+    @Test
+    @DisplayName("8-arg constructor should use the provided HttpTransport for dispatch")
+    void eightArgConstructorShouldUseProvidedTransport() throws Exception {
+        when(mockTransport.post(any(URL.class), any(byte[].class), anyMap(), anyInt(), anyInt()))
+                .thenReturn(new HttpTransportResponse(200, "dispatched"));
+
+        JaegerLogRecordDispatcher dispatcher = new JaegerLogRecordDispatcher(
+                "http://localhost:4318/v1/logs", null, null, null, 1000, 1000, null, mockTransport);
+        JaegerLogRecordDispatcher.DispatchResult result = dispatcher.dispatchFormatted("{\"resourceLogs\":[]}");
+
+        assertEquals(200, result.getStatusCode());
+        assertEquals("dispatched", result.getResponseBody());
+        assertTrue(result.isSuccessful());
+    }
+
+    @Test
+    @DisplayName("8-arg constructor with null transport should fall back to HttpUrlConnectionTransport")
+    void eightArgConstructorWithNullTransportShouldFallBackToDefault() throws Exception {
+        JaegerLogRecordDispatcher dispatcher = new JaegerLogRecordDispatcher(
+                "http://localhost:4318/v1/logs", null, null, null, 1000, 1000, null, null);
+        Field transportField = JaegerLogRecordDispatcher.class.getDeclaredField("httpTransport");
+        transportField.setAccessible(true);
+        assertTrue(transportField.get(dispatcher) instanceof HttpUrlConnectionTransport);
     }
 
     @Test

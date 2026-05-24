@@ -66,6 +66,36 @@ class InnerErrorMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("consume(String) should ignore null message")
+    void consumeShouldIgnoreNullMessage() {
+        assertDoesNotThrow(() -> InnerErrorMessageHandler.consume((String) null));
+    }
+
+    @Test
+    @DisplayName("consume(Consumer, String) should ignore null message")
+    void consumeWithConsumerShouldIgnoreNullMessage() {
+        List<String> captured = new ArrayList<String>();
+        assertDoesNotThrow(() -> InnerErrorMessageHandler.consume(captured::add, null));
+        assertTrue(captured.isEmpty());
+    }
+
+    @Test
+    @DisplayName("consume(String) should write to System.err when no global consumer is configured")
+    void consumeShouldUseSystemErrWhenNoGlobalConsumerConfigured() throws Exception {
+        InnerErrorMessageHandler.resetGlobalConsumer();
+        ByteArrayOutputStream errContent = new ByteArrayOutputStream();
+        PrintStream originalErr = System.err;
+        try {
+            System.setErr(new PrintStream(errContent, true, StandardCharsets.UTF_8.name()));
+            assertDoesNotThrow(() -> InnerErrorMessageHandler.consume("no-consumer-msg"));
+            String output = errContent.toString(StandardCharsets.UTF_8.name());
+            assertTrue(output.contains("no-consumer-msg"));
+        } finally {
+            System.setErr(originalErr);
+        }
+    }
+
+    @Test
     @DisplayName("consume(String) should fallback to System.err when global consumer throws")
     void consumeShouldFallbackToSystemErrWhenGlobalConsumerThrows() throws Exception {
         ByteArrayOutputStream errContent = new ByteArrayOutputStream();

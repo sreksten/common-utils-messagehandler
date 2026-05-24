@@ -592,6 +592,34 @@ class ExportLogsServiceRequestLogRecordFormatterUnitTest {
         }
     }
 
+    @Test
+    @DisplayName("formatBatch should handle null list and return empty resourceLogs envelope in lenient mode")
+    void formatBatchShouldHandleNullListInLenientMode() {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(true);
+        String result = formatter.formatBatch(null);
+        assertTrue(result.contains("\"resourceLogs\":[]"));
+    }
+
+    @Test
+    @DisplayName("formatBatch should substitute LogRecordImpl for null elements in lenient mode")
+    void formatBatchShouldSubstituteForNullElementsInLenientMode() {
+        OpenTelemetryAttributeValidator.setLenientModeForTests(true);
+        List<LogRecord> records = Arrays.asList(
+                new LogRecordImpl(),
+                null,
+                new LogRecordImpl());
+        String result = formatter.formatBatch(records);
+        assertTrue(result.contains("\"resourceLogs\":["));
+        // All 3 entries should appear (null replaced with LogRecordImpl)
+        int count = 0;
+        int idx = 0;
+        while ((idx = result.indexOf("\"logRecords\"", idx)) != -1) {
+            count++;
+            idx++;
+        }
+        assertEquals(3, count);
+    }
+
     private static List<KeyValue> createAttributes(final String prefix, final int count) {
         List<KeyValue> attributes = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {

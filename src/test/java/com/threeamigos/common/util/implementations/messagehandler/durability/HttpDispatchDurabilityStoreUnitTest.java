@@ -66,4 +66,11 @@ class HttpDispatchDurabilityStoreUnitTest {
             Files.deleteIfExists(tempFile);
         }
     }
+
+    @Test
+    @DisplayName("getPolicyName should return the simple class name of the implementation")
+    void getPolicyNameShouldReturnSimpleClassName() {
+        InMemoryHttpDispatchDurabilityStore store = new InMemoryHttpDispatchDurabilityStore();
+        assertEquals("InMemoryHttpDispatchDurabilityStore", store.getPolicyName());
+    }
 }
