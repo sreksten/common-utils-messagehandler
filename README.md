@@ -1617,5 +1617,59 @@ mvn -q verify
 mvn -DskipTests -Djacoco.skip=true install
 ```
 
+#### Load-profile evidence report
+
+The integration test `LoadProfileEvidenceReportIntegrationTest` runs a repeatable load profile
+(`sustained`, `burst`, `outage-recovery`) and writes a Markdown report with measured results.
+
+Default report path:
+- `target/load-profile-report.md`
+
+Report contents include:
+- scenario throughput (`attempted msg/s`);
+- caller-side latency (avg/max);
+- queue saturation and overflow counters;
+- rate-limit/sampling counters;
+- retry counters;
+- dispatcher success/failure totals.
+
+```bash
+# Generate default report at target/load-profile-report.md
+mvn -q -Dtest=LoadProfileEvidenceReportIntegrationTest test
+
+# Optional: custom report output path
+mvn -q -Dtest=LoadProfileEvidenceReportIntegrationTest \
+  -Dmessagehandler.load.report.path=target/custom-load-report.md test
+```
+
+#### Server operational envelope (baseline)
+
+This section publishes an initial server envelope/SLO baseline from the latest generated report:
+- report: `target/load-profile-report.md`
+- generated at: `2026-05-24T01:28:44.631973Z`
+- environment: Java `21.0.2`, `Mac OS X 26.5`
+- test backend: synthetic in-test dispatcher (no external network dependency)
+- test config: queue policy `DROP_OLDEST`, queue capacity `256`, retry `2` (`1..8 ms`),
+  rate limit `200000/s` (burst `200000`), sampling `1.0` for all severities
+
+Published limits for this exact profile:
+- sustained throughput: **up to 800,000 attempted msg/s**
+- burst throughput (1.5s profile): **up to 700,000 attempted msg/s**
+- outage/recovery throughput (2.5s profile, first 1.0s outage): **up to 600,000 attempted msg/s**
+- queue-drain SLO after producer stop: **<= 50 ms**
+- retry-overhead SLO during outage profile (`retryAttempts / dispatchAttempts`): **<= 0.01%**
+- caller-side max latency SLO in this profile: **<= 60 ms**
+
+Observed latest-run values (for reference):
+- sustained: `842879.62 msg/s`, drain `22 ms`, max caller latency `20.35 ms`
+- burst: `753274.50 msg/s`, drain `25 ms`, max caller latency `3.63 ms`
+- outage-recovery: `640851.96 msg/s`, drain `25 ms`, max caller latency `47.94 ms`,
+  retry overhead `80 / 1602360 = 0.00499%`
+
+Expected behavior outside envelope:
+- overflow shedding increases (`queueOverflowDropOldestOperations` rises);
+- rate limiting can shed messages (`rateLimitedOperations` rises);
+- retry counters rise during transport-outage windows.
+
 The project enforces 100% JaCoCo code coverage (`INSTRUCTION`, `BRANCH`, `LINE`) as part of
 `mvn verify`. All tests use JUnit 5, Mockito, and Hamcrest.
