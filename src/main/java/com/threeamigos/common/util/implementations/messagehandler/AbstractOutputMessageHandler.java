@@ -2,9 +2,11 @@ package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 import jakarta.annotation.Nonnull;
 
 import java.util.Objects;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -35,11 +37,20 @@ import java.util.concurrent.atomic.AtomicLong;
  * JVM exit is required, pass {@code registerShutdownHook=true} to
  * {@link #initializeOutputDispatch}, which registers a shutdown hook that calls {@link #close()}.
  *
- * <h3>Backpressure</h3>
+ * <h3>Overload Controls</h3>
  * <p>
- * When the worker queue is full (bounded capacity only), {@link #dispatch(Runnable)} falls back to
- * executing the task synchronously on the calling thread rather than dropping it. This provides
- * backpressure without silent message loss.
+ * This class supports optional overload controls for high-throughput environments:
+ * <ul>
+ *   <li>configurable queue-overflow handling policy;</li>
+ *   <li>token-bucket rate limiting;</li>
+ *   <li>severity-aware probabilistic sampling.</li>
+ * </ul>
+ * Defaults preserve backward compatibility:
+ * <ul>
+ *   <li>overflow policy: {@link QueueOverflowPolicy#CALLER_RUNS}</li>
+ *   <li>rate limiting: disabled</li>
+ *   <li>sampling: 100% for every severity bucket</li>
+ * </ul>
  *
  * <h3>Graceful shutdown and drain-in-finally</h3>
  * <p>
@@ -60,6 +71,31 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public abstract class AbstractOutputMessageHandler extends AbstractMessageHandler implements AutoCloseable {
 
+    /**
+     * Queue behavior when asynchronous dispatch is enabled and the bounded queue is full.
+     */
+    public enum QueueOverflowPolicy {
+        /**
+         * Executes the task synchronously on the caller thread.
+         * This is the legacy default behavior.
+         */
+        CALLER_RUNS,
+        /**
+         * Drops the incoming task that triggered the overflow.
+         */
+        DROP_NEWEST,
+        /**
+         * Drops one oldest queued task (if any) and enqueues the incoming task.
+         * If no queued task can be dropped, the incoming task is dropped.
+         */
+        DROP_OLDEST,
+        /**
+         * Waits up to {@code queueOverflowBlockTimeoutMillis} for queue space; if no slot is
+         * available in time, drops the incoming task.
+         */
+        BLOCK_WITH_TIMEOUT
+    }
+
     private volatile boolean async;
     private BlockingQueue<Runnable> queue;
     private ExecutorService worker;
@@ -79,8 +115,27 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
     private final AtomicLong asyncEnqueuedOperations = new AtomicLong(0L);
     private final AtomicLong synchronousFallbackOperations = new AtomicLong(0L);
     private final AtomicLong queueSaturationEvents = new AtomicLong(0L);
+    private final AtomicLong queueOverflowDropNewestOperations = new AtomicLong(0L);
+    private final AtomicLong queueOverflowDropOldestOperations = new AtomicLong(0L);
+    private final AtomicLong queueOverflowBlockTimeoutOperations = new AtomicLong(0L);
+    private final AtomicLong rateLimitedOperations = new AtomicLong(0L);
+    private final AtomicLong sampledOutOperations = new AtomicLong(0L);
     private final AtomicLong maxObservedQueueSize = new AtomicLong(0L);
     private volatile int configuredQueueCapacity = 0;
+    private volatile QueueOverflowPolicy queueOverflowPolicy = QueueOverflowPolicy.CALLER_RUNS;
+    private volatile long queueOverflowBlockTimeoutMillis = 25L;
+    private final Object rateLimitLock = new Object();
+    private volatile long rateLimitPermitsPerSecond = 0L;
+    private volatile long rateLimitBurstCapacity = 0L;
+    private volatile double rateLimitAvailableTokens = 0.0d;
+    private volatile long rateLimitLastRefillNanos = 0L;
+    private volatile SeverityNumber rateLimitBypassSeverity = SeverityNumber.ERROR;
+    private volatile double traceSamplingRate = 1.0d;
+    private volatile double debugSamplingRate = 1.0d;
+    private volatile double infoSamplingRate = 1.0d;
+    private volatile double warnSamplingRate = 1.0d;
+    private volatile double errorSamplingRate = 1.0d;
+    private volatile double fatalSamplingRate = 1.0d;
     private final Object dispatchLock = new Object();
     protected volatile LogRecordFormatter logRecordFormatter;
 
@@ -110,6 +165,16 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
         private final int configuredQueueCapacity;
         private final boolean boundedQueue;
         private final double queueSaturationRatio;
+        private final QueueOverflowPolicy queueOverflowPolicy;
+        private final long queueOverflowBlockTimeoutMillis;
+        private final long queueOverflowDropNewestOperations;
+        private final long queueOverflowDropOldestOperations;
+        private final long queueOverflowBlockTimeoutOperations;
+        private final long rateLimitedOperations;
+        private final long sampledOutOperations;
+        private final long rateLimitPermitsPerSecond;
+        private final long rateLimitBurstCapacity;
+        private final SeverityNumber rateLimitBypassSeverity;
 
         private HandlerHealthMetrics(final long successfulOperations,
                                      final long failedOperations,
@@ -132,7 +197,17 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
                                      final long maxObservedQueueSize,
                                      final int configuredQueueCapacity,
                                      final boolean boundedQueue,
-                                     final double queueSaturationRatio) {
+                                     final double queueSaturationRatio,
+                                     final QueueOverflowPolicy queueOverflowPolicy,
+                                     final long queueOverflowBlockTimeoutMillis,
+                                     final long queueOverflowDropNewestOperations,
+                                     final long queueOverflowDropOldestOperations,
+                                     final long queueOverflowBlockTimeoutOperations,
+                                     final long rateLimitedOperations,
+                                     final long sampledOutOperations,
+                                     final long rateLimitPermitsPerSecond,
+                                     final long rateLimitBurstCapacity,
+                                     final SeverityNumber rateLimitBypassSeverity) {
             this.successfulOperations = successfulOperations;
             this.failedOperations = failedOperations;
             this.totalOperations = totalOperations;
@@ -155,6 +230,16 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
             this.configuredQueueCapacity = configuredQueueCapacity;
             this.boundedQueue = boundedQueue;
             this.queueSaturationRatio = queueSaturationRatio;
+            this.queueOverflowPolicy = queueOverflowPolicy;
+            this.queueOverflowBlockTimeoutMillis = queueOverflowBlockTimeoutMillis;
+            this.queueOverflowDropNewestOperations = queueOverflowDropNewestOperations;
+            this.queueOverflowDropOldestOperations = queueOverflowDropOldestOperations;
+            this.queueOverflowBlockTimeoutOperations = queueOverflowBlockTimeoutOperations;
+            this.rateLimitedOperations = rateLimitedOperations;
+            this.sampledOutOperations = sampledOutOperations;
+            this.rateLimitPermitsPerSecond = rateLimitPermitsPerSecond;
+            this.rateLimitBurstCapacity = rateLimitBurstCapacity;
+            this.rateLimitBypassSeverity = rateLimitBypassSeverity;
         }
 
         public long getSuccessfulOperations() {
@@ -244,6 +329,46 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
         public double getQueueSaturationRatio() {
             return queueSaturationRatio;
         }
+
+        public QueueOverflowPolicy getQueueOverflowPolicy() {
+            return queueOverflowPolicy;
+        }
+
+        public long getQueueOverflowBlockTimeoutMillis() {
+            return queueOverflowBlockTimeoutMillis;
+        }
+
+        public long getQueueOverflowDropNewestOperations() {
+            return queueOverflowDropNewestOperations;
+        }
+
+        public long getQueueOverflowDropOldestOperations() {
+            return queueOverflowDropOldestOperations;
+        }
+
+        public long getQueueOverflowBlockTimeoutOperations() {
+            return queueOverflowBlockTimeoutOperations;
+        }
+
+        public long getRateLimitedOperations() {
+            return rateLimitedOperations;
+        }
+
+        public long getSampledOutOperations() {
+            return sampledOutOperations;
+        }
+
+        public long getRateLimitPermitsPerSecond() {
+            return rateLimitPermitsPerSecond;
+        }
+
+        public long getRateLimitBurstCapacity() {
+            return rateLimitBurstCapacity;
+        }
+
+        public SeverityNumber getRateLimitBypassSeverity() {
+            return rateLimitBypassSeverity;
+        }
     }
 
     public AbstractOutputMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
@@ -269,6 +394,8 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
      * </ul>
      * When {@code async} is {@code false}, calls to {@link #dispatch(Runnable)} execute the
      * task synchronously on the calling thread.
+     * In bounded async mode, queue-overflow behavior follows the active
+     * {@link #setQueueOverflowPolicy(QueueOverflowPolicy) queue overflow policy}.
      *
      * @param async                whether to enable asynchronous dispatch
      * @param queueCapacity        maximum number of queued tasks; {@code 0} or negative means unbounded
@@ -304,27 +431,150 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
     }
 
     /**
-     * Submits a write task for execution.
+     * Sets queue-overflow behavior when async mode is enabled and a bounded queue is full.
      * <p>
-     * When async mode is active, the closed-flag check and the queue offer are performed together
-     * under {@code dispatchLock}, which is also acquired by {@link #close()} before it drains the
-     * queue. This ensures that no task can slip into the queue after the final drain has run:
-     * either the task is offered before {@code close()} reaches the barrier (and will be drained),
-     * or it sees {@code closed=true} and throws.
-     * <p>
-     * If the queue is full, the task is executed synchronously on the calling thread so that no
-     * messages are silently dropped.
-     * <p>
-     * When async mode is inactive, the task runs synchronously on the calling thread.
-     * Runtime failures raised by the task are trapped and reported through
-     * {@link InnerErrorMessageHandler}; they are not propagated to logging callers.
+     * Default is {@link QueueOverflowPolicy#CALLER_RUNS}.
      *
-     * @param task the write operation to execute; must not be {@code null}
-     * @throws IllegalStateException if the handler has been closed
+     * @param queueOverflowPolicy overflow policy to apply
+     */
+    public final void setQueueOverflowPolicy(final @Nonnull QueueOverflowPolicy queueOverflowPolicy) {
+        this.queueOverflowPolicy = Objects.requireNonNull(queueOverflowPolicy, "queueOverflowPolicy must not be null");
+    }
+
+    /**
+     * Returns the currently configured queue-overflow policy.
+     */
+    public final QueueOverflowPolicy getQueueOverflowPolicy() {
+        return queueOverflowPolicy;
+    }
+
+    /**
+     * Sets max wait time used by {@link QueueOverflowPolicy#BLOCK_WITH_TIMEOUT}.
+     * <p>
+     * A value of {@code 0} means "do not wait"; in that mode, timeout policy behaves as immediate
+     * shed-on-overflow.
+     *
+     * @param queueOverflowBlockTimeoutMillis timeout in milliseconds (must be >= 0)
+     */
+    public final void setQueueOverflowBlockTimeoutMillis(final long queueOverflowBlockTimeoutMillis) {
+        if (queueOverflowBlockTimeoutMillis < 0L) {
+            throw new IllegalArgumentException("queueOverflowBlockTimeoutMillis must be >= 0");
+        }
+        this.queueOverflowBlockTimeoutMillis = queueOverflowBlockTimeoutMillis;
+    }
+
+    /**
+     * Enables/disables token-bucket rate limiting.
+     * <p>
+     * Set {@code permitsPerSecond <= 0} to disable rate limiting.
+     *
+     * @param permitsPerSecond steady-state permits per second (<=0 disables)
+     * @param burstCapacity max tokens retained in the bucket when rate limit is enabled (must be > 0)
+     */
+    public final void setRateLimitPolicy(final long permitsPerSecond, final long burstCapacity) {
+        if (permitsPerSecond <= 0L) {
+            synchronized (rateLimitLock) {
+                this.rateLimitPermitsPerSecond = 0L;
+                this.rateLimitBurstCapacity = 0L;
+                this.rateLimitAvailableTokens = 0.0d;
+                this.rateLimitLastRefillNanos = 0L;
+            }
+            return;
+        }
+        if (burstCapacity <= 0L) {
+            throw new IllegalArgumentException("burstCapacity must be > 0 when permitsPerSecond > 0");
+        }
+        synchronized (rateLimitLock) {
+            this.rateLimitPermitsPerSecond = permitsPerSecond;
+            this.rateLimitBurstCapacity = burstCapacity;
+            this.rateLimitAvailableTokens = burstCapacity;
+            this.rateLimitLastRefillNanos = System.nanoTime();
+        }
+    }
+
+    /**
+     * Sets the minimum severity that bypasses rate limiting.
+     * <p>
+     * Default: {@link SeverityNumber#ERROR}.
+     *
+     * @param minimumSeverity minimum severity that should bypass rate limiting
+     */
+    public final void setRateLimitBypassSeverity(final @Nonnull SeverityNumber minimumSeverity) {
+        this.rateLimitBypassSeverity = Objects.requireNonNull(minimumSeverity, "minimumSeverity must not be null");
+    }
+
+    /**
+     * Configures probabilistic sampling rates for severity buckets.
+     * <p>
+     * Each rate must be in range {@code [0.0, 1.0]} where {@code 1.0} keeps all records and
+     * {@code 0.0} drops all records for the bucket.
+     *
+     * @param traceRate sampling rate applied to TRACE* severities
+     * @param debugRate sampling rate applied to DEBUG* severities
+     * @param infoRate sampling rate applied to INFO* severities
+     * @param warnRate sampling rate applied to WARN* severities
+     * @param errorRate sampling rate applied to ERROR* severities
+     * @param fatalRate sampling rate applied to FATAL* severities
+     */
+    public final void setSeveritySamplingPolicy(final double traceRate,
+                                                final double debugRate,
+                                                final double infoRate,
+                                                final double warnRate,
+                                                final double errorRate,
+                                                final double fatalRate) {
+        validateSamplingRate("traceRate", traceRate);
+        validateSamplingRate("debugRate", debugRate);
+        validateSamplingRate("infoRate", infoRate);
+        validateSamplingRate("warnRate", warnRate);
+        validateSamplingRate("errorRate", errorRate);
+        validateSamplingRate("fatalRate", fatalRate);
+        this.traceSamplingRate = traceRate;
+        this.debugSamplingRate = debugRate;
+        this.infoSamplingRate = infoRate;
+        this.warnSamplingRate = warnRate;
+        this.errorSamplingRate = errorRate;
+        this.fatalSamplingRate = fatalRate;
+    }
+
+    private static void validateSamplingRate(final String name, final double samplingRate) {
+        if (Double.isNaN(samplingRate) || samplingRate < 0.0d || samplingRate > 1.0d) {
+            throw new IllegalArgumentException(name + " must be between 0.0 and 1.0");
+        }
+    }
+
+    /**
+     * Submits an internal task for execution without applying overload controls.
+     * <p>
+     * This variant is intended for control-plane tasks (for example flush/close sequencing) that
+     * should not be shed by sampling/rate-limit policy.
+     *
+     * @param task the operation to execute
      */
     protected final void dispatch(final Runnable task) {
+        dispatchInternal(task, null, false);
+    }
+
+    /**
+     * Submits a message/record task for execution with overload controls enabled.
+     *
+     * @param task operation to execute
+     * @param severityNumber severity associated with the record
+     */
+    protected final void dispatch(final Runnable task, final SeverityNumber severityNumber) {
+        dispatchInternal(task, severityNumber, true);
+    }
+
+    private void dispatchInternal(final Runnable task,
+                                  final SeverityNumber severityNumber,
+                                  final boolean applyOverloadControls) {
         Objects.requireNonNull(task, "task must not be null");
         dispatchAttempts.incrementAndGet();
+        if (applyOverloadControls && shouldDropBySampling(severityNumber)) {
+            return;
+        }
+        if (applyOverloadControls && shouldDropByRateLimit(severityNumber)) {
+            return;
+        }
         if (!async) {
             if (closed.get()) {
                 recordDroppedOutput();
@@ -339,13 +589,176 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
                 throw new IllegalStateException(MessageHandlerResourceBundle.get("handlerIsClosed"));
             }
             if (!queue.offer(task)) {
-                // queue full: run synchronously to avoid losing messages
-                recordQueueSaturation();
-                runTaskSafely(task, "queue-saturation synchronous fallback");
+                handleQueueOverflow(task);
             } else {
-                asyncEnqueuedOperations.incrementAndGet();
-                updateMaxObservedQueueSize(queue.size());
+                recordAsyncEnqueue();
             }
+        }
+    }
+
+    private boolean shouldDropBySampling(final SeverityNumber severityNumber) {
+        double effectiveSamplingRate = resolveSamplingRate(severityNumber);
+        if (effectiveSamplingRate >= 1.0d) {
+            return false;
+        }
+        if (effectiveSamplingRate <= 0.0d) {
+            sampledOutOperations.incrementAndGet();
+            recordDroppedOutput();
+            return true;
+        }
+        if (ThreadLocalRandom.current().nextDouble() <= effectiveSamplingRate) {
+            return false;
+        }
+        sampledOutOperations.incrementAndGet();
+        recordDroppedOutput();
+        return true;
+    }
+
+    private boolean shouldDropByRateLimit(final SeverityNumber severityNumber) {
+        if (isRateLimitBypassed(severityNumber)) {
+            return false;
+        }
+        if (tryConsumeRateLimitToken()) {
+            return false;
+        }
+        rateLimitedOperations.incrementAndGet();
+        recordDroppedOutput();
+        return true;
+    }
+
+    private boolean isRateLimitBypassed(final SeverityNumber severityNumber) {
+        SeverityNumber effectiveSeverity = normalizeSeverity(severityNumber);
+        SeverityNumber bypassSeverity = normalizeSeverity(rateLimitBypassSeverity);
+        return effectiveSeverity.getValue() >= bypassSeverity.getValue();
+    }
+
+    private static SeverityNumber normalizeSeverity(final SeverityNumber severityNumber) {
+        if (severityNumber == null || severityNumber == SeverityNumber.UNSPECIFIED) {
+            return SeverityNumber.INFO;
+        }
+        return severityNumber;
+    }
+
+    private double resolveSamplingRate(final SeverityNumber severityNumber) {
+        SeverityNumber effectiveSeverity = normalizeSeverity(severityNumber);
+        if (effectiveSeverity.isTrace()) {
+            return traceSamplingRate;
+        }
+        if (effectiveSeverity.isDebug()) {
+            return debugSamplingRate;
+        }
+        if (effectiveSeverity.isInfo()) {
+            return infoSamplingRate;
+        }
+        if (effectiveSeverity.isWarn()) {
+            return warnSamplingRate;
+        }
+        if (effectiveSeverity.isError()) {
+            return errorSamplingRate;
+        }
+        if (effectiveSeverity.isFatal()) {
+            return fatalSamplingRate;
+        }
+        return infoSamplingRate;
+    }
+
+    private boolean tryConsumeRateLimitToken() {
+        long permitsPerSecondSnapshot = rateLimitPermitsPerSecond;
+        if (permitsPerSecondSnapshot <= 0L) {
+            return true;
+        }
+        synchronized (rateLimitLock) {
+            long permitsPerSecond = rateLimitPermitsPerSecond;
+            long burstCapacity = rateLimitBurstCapacity;
+            if (permitsPerSecond <= 0L || burstCapacity <= 0L) {
+                return true;
+            }
+            long nowNanos = System.nanoTime();
+            if (rateLimitLastRefillNanos <= 0L) {
+                rateLimitLastRefillNanos = nowNanos;
+            } else {
+                long elapsedNanos = nowNanos - rateLimitLastRefillNanos;
+                if (elapsedNanos > 0L) {
+                    double permitsToAdd = ((double) elapsedNanos / 1_000_000_000.0d) * (double) permitsPerSecond;
+                    if (permitsToAdd > 0.0d) {
+                        rateLimitAvailableTokens = Math.min((double) burstCapacity, rateLimitAvailableTokens + permitsToAdd);
+                        rateLimitLastRefillNanos = nowNanos;
+                    }
+                }
+            }
+            if (rateLimitAvailableTokens >= 1.0d) {
+                rateLimitAvailableTokens -= 1.0d;
+                return true;
+            }
+            return false;
+        }
+    }
+
+    private void handleQueueOverflow(final Runnable task) {
+        recordQueueSaturation();
+        QueueOverflowPolicy overflowPolicy = queueOverflowPolicy;
+        if (overflowPolicy == QueueOverflowPolicy.DROP_NEWEST) {
+            recordDroppedNewestOverflow();
+            return;
+        }
+        if (overflowPolicy == QueueOverflowPolicy.DROP_OLDEST) {
+            handleDropOldestOverflow(task);
+            return;
+        }
+        if (overflowPolicy == QueueOverflowPolicy.BLOCK_WITH_TIMEOUT) {
+            handleBlockWithTimeoutOverflow(task);
+            return;
+        }
+        recordSynchronousFallback();
+        runTaskSafely(task, "queue-saturation synchronous fallback");
+    }
+
+    private void handleDropOldestOverflow(final Runnable task) {
+        Runnable droppedTask = queue.poll();
+        if (droppedTask == null) {
+            recordDroppedNewestOverflow();
+            return;
+        }
+        queueOverflowDropOldestOperations.incrementAndGet();
+        recordDroppedOutput();
+        if (queue.offer(task)) {
+            recordAsyncEnqueue();
+            return;
+        }
+        recordDroppedNewestOverflow();
+    }
+
+    private void handleBlockWithTimeoutOverflow(final Runnable task) {
+        boolean queued = false;
+        try {
+            queued = queue.offer(task, queueOverflowBlockTimeoutMillis, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException interruptedException) {
+            Thread.currentThread().interrupt();
+        }
+        if (queued) {
+            recordAsyncEnqueue();
+            return;
+        }
+        queueOverflowBlockTimeoutOperations.incrementAndGet();
+        recordDroppedNewestOverflow();
+    }
+
+    private void recordAsyncEnqueue() {
+        asyncEnqueuedOperations.incrementAndGet();
+        updateMaxObservedQueueSize(queue.size());
+    }
+
+    private void recordDroppedNewestOverflow() {
+        queueOverflowDropNewestOperations.incrementAndGet();
+        recordDroppedOutput();
+    }
+
+    private void recordSynchronousFallback() {
+        synchronousFallbackOperations.incrementAndGet();
+        if (configuredQueueCapacity > 0) {
+            updateMaxObservedQueueSize(configuredQueueCapacity);
+        } else if (queue != null) {
+            updateMaxObservedQueueSize(queue.size());
         }
     }
 
@@ -539,6 +952,11 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
         double saturationRatio = dispatchAttemptsNow == 0L
                 ? 0.0d
                 : (double) queueSaturationEventsNow / (double) dispatchAttemptsNow;
+        long rateLimitPermitsPerSecondNow = rateLimitPermitsPerSecond;
+        long rateLimitBurstCapacityNow = rateLimitBurstCapacity;
+        SeverityNumber rateLimitBypassSeverityNow = rateLimitBypassSeverity;
+        QueueOverflowPolicy queueOverflowPolicyNow = queueOverflowPolicy;
+        long queueOverflowBlockTimeoutMillisNow = queueOverflowBlockTimeoutMillis;
         return new HandlerHealthMetrics(
                 successful,
                 failed,
@@ -561,7 +979,17 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
                 maxObservedQueueSize.get(),
                 configuredQueueCapacity,
                 boundedQueue,
-                saturationRatio
+                saturationRatio,
+                queueOverflowPolicyNow,
+                queueOverflowBlockTimeoutMillisNow,
+                queueOverflowDropNewestOperations.get(),
+                queueOverflowDropOldestOperations.get(),
+                queueOverflowBlockTimeoutOperations.get(),
+                rateLimitedOperations.get(),
+                sampledOutOperations.get(),
+                rateLimitPermitsPerSecondNow,
+                rateLimitBurstCapacityNow,
+                rateLimitBypassSeverityNow
         );
     }
 
@@ -592,7 +1020,6 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
 
     private void recordQueueSaturation() {
         queueSaturationEvents.incrementAndGet();
-        synchronousFallbackOperations.incrementAndGet();
         if (configuredQueueCapacity > 0) {
             updateMaxObservedQueueSize(configuredQueueCapacity);
         } else if (queue != null) {

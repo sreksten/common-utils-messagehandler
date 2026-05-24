@@ -22,6 +22,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -50,6 +51,10 @@ class AbstractOutputMessageHandlerUnitTest {
 
         private void submit(final Runnable runnable) {
             dispatch(runnable);
+        }
+
+        private void submitWithSeverity(final SeverityNumber severityNumber, final Runnable runnable) {
+            dispatch(runnable, severityNumber);
         }
 
         private void markSuccess() {
@@ -368,6 +373,158 @@ class AbstractOutputMessageHandlerUnitTest {
             releaseBlocking.countDown();
             handler.close();
         }
+    }
+
+    @Test
+    @DisplayName("DROP_NEWEST overflow policy should shed incoming tasks when queue is full")
+    void dropNewestOverflowPolicyShouldShedIncomingTasksWhenQueueIsFull() throws Exception {
+        ProbeOutputMessageHandler handler = new ProbeOutputMessageHandler(true, 1);
+        handler.setQueueOverflowPolicy(AbstractOutputMessageHandler.QueueOverflowPolicy.DROP_NEWEST);
+        CountDownLatch blockingStarted = new CountDownLatch(1);
+        CountDownLatch releaseBlocking = new CountDownLatch(1);
+        CountDownLatch queuedExecuted = new CountDownLatch(1);
+        CountDownLatch droppedExecuted = new CountDownLatch(1);
+        try {
+            handler.submit(() -> {
+                blockingStarted.countDown();
+                try {
+                    releaseBlocking.await(2, TimeUnit.SECONDS);
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+            assertTrue(blockingStarted.await(1, TimeUnit.SECONDS));
+
+            handler.submit(queuedExecuted::countDown);
+            handler.submit(droppedExecuted::countDown);
+
+            releaseBlocking.countDown();
+            assertTrue(queuedExecuted.await(1, TimeUnit.SECONDS));
+            assertEquals(1L, droppedExecuted.getCount());
+
+            AbstractOutputMessageHandler.HandlerHealthMetrics metrics = handler.healthMetrics();
+            assertEquals(AbstractOutputMessageHandler.QueueOverflowPolicy.DROP_NEWEST, metrics.getQueueOverflowPolicy());
+            assertTrue(metrics.getQueueOverflowDropNewestOperations() >= 1L);
+            assertEquals(0L, metrics.getSynchronousFallbackOperations());
+            assertTrue(metrics.getDroppedOperations() >= 1L);
+        } finally {
+            releaseBlocking.countDown();
+            handler.close();
+        }
+    }
+
+    @Test
+    @DisplayName("DROP_OLDEST overflow policy should replace oldest queued task")
+    void dropOldestOverflowPolicyShouldReplaceOldestQueuedTask() throws Exception {
+        ProbeOutputMessageHandler handler = new ProbeOutputMessageHandler(true, 1);
+        handler.setQueueOverflowPolicy(AbstractOutputMessageHandler.QueueOverflowPolicy.DROP_OLDEST);
+        CountDownLatch blockingStarted = new CountDownLatch(1);
+        CountDownLatch releaseBlocking = new CountDownLatch(1);
+        CountDownLatch oldestQueuedExecuted = new CountDownLatch(1);
+        CountDownLatch newestQueuedExecuted = new CountDownLatch(1);
+        try {
+            handler.submit(() -> {
+                blockingStarted.countDown();
+                try {
+                    releaseBlocking.await(2, TimeUnit.SECONDS);
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+            assertTrue(blockingStarted.await(1, TimeUnit.SECONDS));
+
+            handler.submit(oldestQueuedExecuted::countDown);
+            handler.submit(newestQueuedExecuted::countDown);
+
+            releaseBlocking.countDown();
+            assertTrue(newestQueuedExecuted.await(1, TimeUnit.SECONDS));
+            assertEquals(1L, oldestQueuedExecuted.getCount());
+
+            AbstractOutputMessageHandler.HandlerHealthMetrics metrics = handler.healthMetrics();
+            assertEquals(AbstractOutputMessageHandler.QueueOverflowPolicy.DROP_OLDEST, metrics.getQueueOverflowPolicy());
+            assertTrue(metrics.getQueueOverflowDropOldestOperations() >= 1L);
+            assertTrue(metrics.getDroppedOperations() >= 1L);
+        } finally {
+            releaseBlocking.countDown();
+            handler.close();
+        }
+    }
+
+    @Test
+    @DisplayName("BLOCK_WITH_TIMEOUT overflow policy should drop when timeout expires")
+    void blockWithTimeoutOverflowPolicyShouldDropWhenTimeoutExpires() throws Exception {
+        ProbeOutputMessageHandler handler = new ProbeOutputMessageHandler(true, 1);
+        handler.setQueueOverflowPolicy(AbstractOutputMessageHandler.QueueOverflowPolicy.BLOCK_WITH_TIMEOUT);
+        handler.setQueueOverflowBlockTimeoutMillis(0L);
+        CountDownLatch blockingStarted = new CountDownLatch(1);
+        CountDownLatch releaseBlocking = new CountDownLatch(1);
+        CountDownLatch timedOutTaskExecuted = new CountDownLatch(1);
+        try {
+            handler.submit(() -> {
+                blockingStarted.countDown();
+                try {
+                    releaseBlocking.await(2, TimeUnit.SECONDS);
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+            assertTrue(blockingStarted.await(1, TimeUnit.SECONDS));
+
+            handler.submit(() -> {
+            });
+            handler.submit(timedOutTaskExecuted::countDown);
+
+            assertEquals(1L, timedOutTaskExecuted.getCount());
+            AbstractOutputMessageHandler.HandlerHealthMetrics metrics = handler.healthMetrics();
+            assertEquals(AbstractOutputMessageHandler.QueueOverflowPolicy.BLOCK_WITH_TIMEOUT, metrics.getQueueOverflowPolicy());
+            assertTrue(metrics.getQueueOverflowBlockTimeoutOperations() >= 1L);
+            assertTrue(metrics.getQueueOverflowDropNewestOperations() >= 1L);
+        } finally {
+            releaseBlocking.countDown();
+            handler.close();
+        }
+    }
+
+    @Test
+    @DisplayName("rate limiter should shed low severity records and bypass ERROR by default")
+    void rateLimiterShouldShedLowSeverityRecordsAndBypassErrorByDefault() {
+        ProbeOutputMessageHandler handler = new ProbeOutputMessageHandler(false, 0);
+        handler.setRateLimitPolicy(1L, 1L);
+        AtomicInteger executed = new AtomicInteger(0);
+
+        for (int i = 0; i < 50; i++) {
+            handler.submitWithSeverity(SeverityNumber.INFO, executed::incrementAndGet);
+        }
+        int executedAfterInfoFlood = executed.get();
+        handler.submitWithSeverity(SeverityNumber.ERROR, executed::incrementAndGet);
+
+        AbstractOutputMessageHandler.HandlerHealthMetrics metrics = handler.healthMetrics();
+        assertTrue(executedAfterInfoFlood < 50);
+        assertEquals(executedAfterInfoFlood + 1, executed.get());
+        assertTrue(metrics.getRateLimitedOperations() > 0L);
+        assertEquals(1L, metrics.getRateLimitPermitsPerSecond());
+        assertEquals(1L, metrics.getRateLimitBurstCapacity());
+        assertEquals(SeverityNumber.ERROR, metrics.getRateLimitBypassSeverity());
+
+        handler.close();
+    }
+
+    @Test
+    @DisplayName("sampling policy should drop severities configured with zero rate")
+    void samplingPolicyShouldDropSeveritiesConfiguredWithZeroRate() {
+        ProbeOutputMessageHandler handler = new ProbeOutputMessageHandler(false, 0);
+        handler.setSeveritySamplingPolicy(1.0d, 1.0d, 0.0d, 1.0d, 1.0d, 1.0d);
+        AtomicInteger executed = new AtomicInteger(0);
+
+        handler.submitWithSeverity(SeverityNumber.INFO, executed::incrementAndGet);
+        handler.submitWithSeverity(SeverityNumber.ERROR, executed::incrementAndGet);
+
+        AbstractOutputMessageHandler.HandlerHealthMetrics metrics = handler.healthMetrics();
+        assertEquals(1, executed.get());
+        assertTrue(metrics.getSampledOutOperations() >= 1L);
+        assertTrue(metrics.getDroppedOperations() >= 1L);
+
+        handler.close();
     }
 
     @Test

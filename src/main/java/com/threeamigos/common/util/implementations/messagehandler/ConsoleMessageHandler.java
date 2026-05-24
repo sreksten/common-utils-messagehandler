@@ -84,7 +84,7 @@ public class ConsoleMessageHandler extends AbstractOutputMessageHandler {
         LogRecord logRecord = createLogRecord(level, message);
         PrintStream stream = level.compareTo(SeverityNumber.ERROR) >= 0 ? System.err : System.out;
         Object printLock = level.compareTo(SeverityNumber.ERROR) >= 0 ? ERR_PRINT_LOCK : OUT_PRINT_LOCK;
-        print(stream, getLogRecordFormatter().format(logRecord), printLock);
+        print(stream, getLogRecordFormatter().format(logRecord), printLock, level);
     }
 
     @Override
@@ -101,10 +101,10 @@ public class ConsoleMessageHandler extends AbstractOutputMessageHandler {
                 recordOutputFailure();
                 throw ex;
             }
-        });
+        }, SeverityNumber.ERROR);
     }
 
-    private void print(PrintStream stream, String formatted, Object printLock) {
+    private void print(PrintStream stream, String formatted, Object printLock, SeverityNumber severityNumber) {
         Runnable task = () -> {
             try {
                 synchronized (printLock) {
@@ -116,6 +116,6 @@ public class ConsoleMessageHandler extends AbstractOutputMessageHandler {
                 throw ex;
             }
         };
-        dispatch(task);
+        dispatch(task, severityNumber);
     }
 }

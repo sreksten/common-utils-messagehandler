@@ -494,20 +494,20 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
     @Override
     public void handleMessage(@Nonnull SeverityNumber level, @Nonnull String message) {
         LogRecord logRecord = createLogRecord(level, message);
-        writeMessage(getLogRecordFormatter().format(logRecord));
+        writeMessage(getLogRecordFormatter().format(logRecord), level);
     }
 
     @Override
     protected void handleExceptionInternal(@Nonnull String message, @Nonnull Throwable throwable) {
         LogRecord logRecord = createLogRecord(message, throwable);
-        writeMessage(getLogRecordFormatter().format(logRecord));
+        writeMessage(getLogRecordFormatter().format(logRecord), SeverityNumber.ERROR);
     }
 
     // -------------------------------------------------------------------------
     // Internal helpers
     // -------------------------------------------------------------------------
 
-    private void writeMessage(String message) {
+    private void writeMessage(String message, SeverityNumber severityNumber) {
         dispatch(() -> {
             final boolean[] failed = new boolean[]{false};
             try {
@@ -540,7 +540,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
             } else {
                 recordOutputSuccess();
             }
-        });
+        }, severityNumber);
     }
 
     private boolean checkWriteError() {

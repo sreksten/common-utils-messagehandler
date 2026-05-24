@@ -346,11 +346,18 @@ This applies to:
 - retry telemetry counters (attempts/successes/failures; available for retry-capable handlers)
 - saturation telemetry (dispatch attempts, enqueue count, sync fallback count, saturation events,
   max observed queue size, configured queue capacity, bounded/unbounded flag, saturation ratio)
+- overload policy telemetry (current overflow policy, overflow timeout, drop-newest/drop-oldest counters,
+  block-timeout counter)
+- overload shedding telemetry (rate-limited count, sampled-out count, active rate-limit settings)
 
 Async backpressure behavior for these handlers:
 - `async=true` uses one background worker and a queue.
-- With a bounded queue (`queueCapacity > 0`), a full queue triggers synchronous execution on
-  the caller thread (`queue full -> sync fallback`), so messages are not silently dropped.
+- With a bounded queue (`queueCapacity > 0`), overflow handling is configurable via
+  `setQueueOverflowPolicy(...)`:
+  - `CALLER_RUNS` (default, backward-compatible): queue full -> sync fallback on caller thread
+  - `DROP_NEWEST`: shed the incoming message
+  - `DROP_OLDEST`: shed one queued message and keep the newest
+  - `BLOCK_WITH_TIMEOUT`: wait up to `queueOverflowBlockTimeoutMillis`, then shed on timeout
 - `queueCapacity <= 0` creates an unbounded queue.
 
 ```java
@@ -372,6 +379,35 @@ public class HandlerHealthExample {
         } finally {
             handler.close();
         }
+    }
+}
+```
+
+### Overload-control configuration example
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.AbstractOutputMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.GrafanaMessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
+
+public class OverloadControlsExample {
+    public static void main(String[] args) {
+        GrafanaMessageHandler handler = new GrafanaMessageHandler(
+                "http://localhost:4318/v1/logs",
+                true,
+                1000
+        );
+
+        // Queue overflow policy (default is CALLER_RUNS)
+        handler.setQueueOverflowPolicy(AbstractOutputMessageHandler.QueueOverflowPolicy.DROP_OLDEST);
+        handler.setQueueOverflowBlockTimeoutMillis(25L); // used only by BLOCK_WITH_TIMEOUT
+
+        // Token bucket rate limit (disabled when permitsPerSecond <= 0)
+        handler.setRateLimitPolicy(5000L, 10000L);
+        handler.setRateLimitBypassSeverity(SeverityNumber.ERROR);
+
+        // Severity-bucket sampling rates (TRACE, DEBUG, INFO, WARN, ERROR, FATAL)
+        handler.setSeveritySamplingPolicy(0.05d, 0.10d, 0.25d, 1.0d, 1.0d, 1.0d);
     }
 }
 ```
@@ -1504,9 +1540,10 @@ Note: CDI must be enabled for the deployment (add `beans.xml` to `WEB-INF` or `M
    - `FileMessageHandler`
    - `JaegerMessageHandler`
    - `GrafanaMessageHandler`
-   In bounded async mode, queue saturation applies backpressure: when the queue is full, the write
-   is executed synchronously on the caller thread (`queue full -> sync fallback`). With
-   `queueCapacity <= 0`, the queue is unbounded.
+   In bounded async mode, queue saturation follows `setQueueOverflowPolicy(...)`.
+   Default is `CALLER_RUNS` (`queue full -> sync fallback`), with optional shedding policies
+   (`DROP_NEWEST`, `DROP_OLDEST`, `BLOCK_WITH_TIMEOUT`). With `queueCapacity <= 0`,
+   the queue is unbounded.
    For `ConsoleMessageHandler`, `FileMessageHandler`, `JaegerMessageHandler`, and
    `GrafanaMessageHandler`, async convenience constructors (without an explicit
    `registerShutdownHook` argument) register a JVM shutdown hook by default.
@@ -1544,6 +1581,10 @@ Note: CDI must be enabled for the deployment (add `beans.xml` to `WEB-INF` or `M
     `System.err::println` for dead-letter reporting. This package targets small standalone
     applications; for server/high-throughput use, set durability policy and DLQ handling
     explicitly.
+23. Output handlers also expose optional overload controls:
+    queue overflow policy (`setQueueOverflowPolicy(...)`), token-bucket rate limiting
+    (`setRateLimitPolicy(...)` + `setRateLimitBypassSeverity(...)`), and
+    severity-bucket sampling (`setSeveritySamplingPolicy(...)`).
 
 Default output format by handler:
 

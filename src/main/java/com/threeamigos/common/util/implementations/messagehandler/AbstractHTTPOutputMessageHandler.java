@@ -343,7 +343,7 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
                     reportDispatchFailure(runtimeException, errorConsumer, dispatchErrorMessageKey,
                             closeOnDispatchError, closeThreadName);
                 }
-            });
+            }, logRecord.getSeverityNumber());
         } catch (IllegalStateException closedHandlerException) {
             // dispatch(...) already increments droppedOutputOperations when closed.
             reportDispatchFailure(closedHandlerException, errorConsumer, dispatchErrorMessageKey,
