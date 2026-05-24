@@ -476,6 +476,22 @@ class FileMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("Inter-process locking handler should remove LOCK_GUARDS entry on close")
+    void interProcessLockingHandlerShouldRemoveLockGuardEntryOnClose() throws Exception {
+        Path file = Files.createTempFile("fmh-ip-lock-cleanup", ".log");
+        Files.deleteIfExists(file);
+
+        FileMessageHandler handler = new FileMessageHandler(file.toString(), true);
+        Path lockFilePath = getLockFilePath(handler);
+        assertNotNull(lockFilePath);
+        assertTrue(getLockGuards().containsKey(lockFilePath), "LOCK_GUARDS should contain entry before close");
+
+        handler.close();
+
+        assertFalse(getLockGuards().containsKey(lockFilePath), "LOCK_GUARDS should not contain entry after close");
+    }
+
+    @Test
     @DisplayName("Rotation-policy constructors should reject null and require explicit NoRotationPolicy")
     void rotationPolicyConstructorsShouldRejectNullAndRequireExplicitNoRotationPolicy() throws Exception {
         Path file = Files.createTempFile("fmh-null-rotation-policy", ".log");
@@ -1214,5 +1230,12 @@ class FileMessageHandlerUnitTest {
         Field lockGuardField = FileMessageHandler.class.getDeclaredField("lockGuard");
         lockGuardField.setAccessible(true);
         return (ReentrantLock) lockGuardField.get(handler);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static java.util.concurrent.ConcurrentMap<Path, ReentrantLock> getLockGuards() throws Exception {
+        Field lockGuardsField = FileMessageHandler.class.getDeclaredField("LOCK_GUARDS");
+        lockGuardsField.setAccessible(true);
+        return (java.util.concurrent.ConcurrentMap<Path, ReentrantLock>) lockGuardsField.get(null);
     }
 }

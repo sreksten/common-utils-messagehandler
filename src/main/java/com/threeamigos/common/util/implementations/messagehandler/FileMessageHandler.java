@@ -740,6 +740,9 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
             writer.flush();
             writer.close();
             closeLockChannelQuietly();
+            if (interProcessLocking) {
+                LOCK_GUARDS.remove(lockFilePath);
+            }
         }
     }
 
