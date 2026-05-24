@@ -83,7 +83,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
     private final ReentrantLock lockGuard;
     private FileChannel lockFileChannel;
     private long bytesWritten = 0;
-    private volatile Consumer<String> errorConsumer = System.err::println;
+    private volatile Consumer<String> errorConsumer = InnerErrorMessageHandler::consume;
     private volatile boolean closeOnWriteError = false;
 
     // -------------------------------------------------------------------------
@@ -460,7 +460,8 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      * <p>
      * The consumer is invoked with a localized error message string whenever a write error
      * ({@link PrintWriter#checkError()}), a re-open failure, or a rotation failure occurs.
-     * Defaults to {@code System.err::println}. Useful in tests or environments without a console.
+     * Defaults to {@link InnerErrorMessageHandler#consume(String)} (which defaults to
+     * {@code System.err::println}). Useful in tests or environments without a console.
      *
      * @param errorConsumer the non-null error notification handler
      */
@@ -555,7 +556,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
             // Recovery failed; fall through to notification
         }
         // Layer 2: notify via the configurable consumer
-        errorConsumer.accept(MessageHandlerResourceBundle.get("fileWriteError"));
+        InnerErrorMessageHandler.consume(errorConsumer, MessageHandlerResourceBundle.get("fileWriteError"));
         // Layer 3: optionally close
         requestCloseOnErrorIfEnabled(closeOnWriteError, "FileMessageHandler-close-on-error");
         return false;
@@ -578,7 +579,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
                 writer = openWriter(filePath);
                 bytesWritten = resolveCurrentFileSize(filePath);
             } catch (IOException e) {
-                errorConsumer.accept(MessageHandlerResourceBundle.get("fileReopenError"));
+                InnerErrorMessageHandler.consume(errorConsumer, MessageHandlerResourceBundle.get("fileReopenError"));
                 return false;
             }
         }
@@ -606,7 +607,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
             bytesWritten = resolveCurrentFileSize(filePath);
             rotationPolicy.onRotated();
         } catch (IOException e) {
-            errorConsumer.accept(MessageHandlerResourceBundle.get("fileRotationError"));
+            InnerErrorMessageHandler.consume(errorConsumer, MessageHandlerResourceBundle.get("fileRotationError"));
             return false;
         }
         return true;
@@ -629,7 +630,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
             writeOperation.run();
         } catch (OverlappingFileLockException | IOException e) {
             failed[0] = true;
-            errorConsumer.accept(MessageHandlerResourceBundle.get("fileLockError"));
+            InnerErrorMessageHandler.consume(errorConsumer, MessageHandlerResourceBundle.get("fileLockError"));
             requestCloseOnErrorIfEnabled(closeOnWriteError, "FileMessageHandler-close-on-lock-error");
         } finally {
             lockGuard.unlock();

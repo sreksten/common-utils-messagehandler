@@ -316,6 +316,8 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
      * messages are silently dropped.
      * <p>
      * When async mode is inactive, the task runs synchronously on the calling thread.
+     * Runtime failures raised by the task are trapped and reported through
+     * {@link InnerErrorMessageHandler}; they are not propagated to logging callers.
      *
      * @param task the write operation to execute; must not be {@code null}
      * @throws IllegalStateException if the handler has been closed
@@ -328,7 +330,7 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
                 recordDroppedOutput();
                 throw new IllegalStateException(MessageHandlerResourceBundle.get("handlerIsClosed"));
             }
-            task.run();
+            runTaskSafely(task, "synchronous dispatch");
             return;
         }
         synchronized (dispatchLock) {
@@ -339,7 +341,7 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
             if (!queue.offer(task)) {
                 // queue full: run synchronously to avoid losing messages
                 recordQueueSaturation();
-                task.run();
+                runTaskSafely(task, "queue-saturation synchronous fallback");
             } else {
                 asyncEnqueuedOperations.incrementAndGet();
                 updateMaxObservedQueueSize(queue.size());
@@ -347,18 +349,32 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
         }
     }
 
+    /**
+     * Executes one output task and traps runtime failures to preserve caller flow.
+     *
+     * @param task dispatch task
+     * @param executionPhase short label describing the execution path
+     */
+    private void runTaskSafely(final Runnable task, final String executionPhase) {
+        try {
+            task.run();
+        } catch (RuntimeException taskFailure) {
+            reportInnerFailure("executing output task (" + executionPhase + ")", taskFailure);
+        }
+    }
+
     private void drainLoop() {
         try {
             while (!Thread.currentThread().isInterrupted()) {
                 Runnable task = queue.take();
-                task.run();
+                runTaskSafely(task, "async worker");
             }
         } catch (InterruptedException ignored) {
             Thread.currentThread().interrupt();
         } finally {
             Runnable task;
             while ((task = queue.poll()) != null) {
-                task.run();
+                runTaskSafely(task, "async worker finally-drain");
             }
         }
     }
@@ -601,7 +617,7 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
         }
         Runnable task;
         while ((task = queue.poll()) != null) {
-            task.run();
+            runTaskSafely(task, "close-time caller-thread drain");
         }
     }
 
@@ -646,6 +662,10 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
             }
         }
         drainQueueInCallerThread();
-        closeOutput();
+        try {
+            closeOutput();
+        } catch (RuntimeException closeFailure) {
+            reportInnerFailure("closing output resource", closeFailure);
+        }
     }
 }

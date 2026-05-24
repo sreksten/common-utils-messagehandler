@@ -14,10 +14,12 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -135,6 +137,37 @@ class AbstractOutputMessageHandlerUnitTest {
             assertTrue(Thread.currentThread().isInterrupted());
         } finally {
             Thread.interrupted();
+        }
+    }
+
+    @Test
+    @DisplayName("drain loop should continue when a queued task throws runtime exception")
+    void drainLoopShouldContinueWhenQueuedTaskThrowsRuntimeException() throws Exception {
+        ProbeOutputMessageHandler handler = new ProbeOutputMessageHandler(false, 0);
+        List<String> trapped = new ArrayList<String>();
+        InnerErrorMessageHandler.setGlobalConsumer(trapped::add);
+        try {
+            CountDownLatch drainedTaskExecuted = new CountDownLatch(1);
+
+            Field queueField = AbstractOutputMessageHandler.class.getDeclaredField("queue");
+            queueField.setAccessible(true);
+            BlockingQueue<Runnable> queue = new LinkedBlockingQueue<Runnable>();
+            queue.offer(() -> {
+                throw new IllegalStateException("task-boom");
+            });
+            queue.offer(drainedTaskExecuted::countDown);
+            queue.offer(() -> Thread.currentThread().interrupt());
+            queueField.set(handler, queue);
+
+            Method drainLoop = AbstractOutputMessageHandler.class.getDeclaredMethod("drainLoop");
+            drainLoop.setAccessible(true);
+
+            assertDoesNotThrow(() -> drainLoop.invoke(handler));
+            assertEquals(0L, drainedTaskExecuted.getCount());
+            assertFalse(trapped.isEmpty());
+            assertTrue(trapped.get(0).contains("task-boom"));
+        } finally {
+            InnerErrorMessageHandler.resetGlobalConsumer();
         }
     }
 

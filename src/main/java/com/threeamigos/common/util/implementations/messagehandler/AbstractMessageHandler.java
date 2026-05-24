@@ -40,6 +40,9 @@ import java.util.function.Supplier;
  * When no tracer is bound, each handler instance uses its own fallback
  * {@link LogRecordFactoryImpl}. There is no shared static fallback factory across handlers.
  * <p>
+ * Runtime failures raised by backend dispatch code are trapped and reported through
+ * {@link InnerErrorMessageHandler}, preserving caller flow.
+ * <p>
  * @author Stefano Reksten
  */
 public abstract class AbstractMessageHandler implements MessageHandler {
@@ -232,7 +235,14 @@ public abstract class AbstractMessageHandler implements MessageHandler {
         }
         SeverityNumber effectiveLevel = normalizeLevel(level);
         if (isEnabled(effectiveLevel)) {
-            handleMessage(effectiveLevel, message);
+            try {
+                handleMessage(effectiveLevel, message);
+            } catch (RuntimeException dispatchFailure) {
+                if (isClosedHandlerFailure(dispatchFailure)) {
+                    throw dispatchFailure;
+                }
+                reportInnerFailure("dispatching message for level " + effectiveLevel.name(), dispatchFailure);
+            }
         }
     }
 
@@ -250,7 +260,14 @@ public abstract class AbstractMessageHandler implements MessageHandler {
         }
         if (isEnabled(SeverityNumber.ERROR)) {
             String throwableMessage = throwable.getMessage() != null ? throwable.getMessage() : throwable.toString();
-            handleExceptionInternal(throwableMessage, throwable);
+            try {
+                handleExceptionInternal(throwableMessage, throwable);
+            } catch (RuntimeException dispatchFailure) {
+                if (isClosedHandlerFailure(dispatchFailure)) {
+                    throw dispatchFailure;
+                }
+                reportInnerFailure("dispatching throwable", dispatchFailure);
+            }
         }
     }
 
@@ -268,8 +285,56 @@ public abstract class AbstractMessageHandler implements MessageHandler {
             return;
         }
         if (isEnabled(SeverityNumber.ERROR)) {
-            handleExceptionInternal(message, throwable);
+            try {
+                handleExceptionInternal(message, throwable);
+            } catch (RuntimeException dispatchFailure) {
+                if (isClosedHandlerFailure(dispatchFailure)) {
+                    throw dispatchFailure;
+                }
+                reportInnerFailure("dispatching throwable with contextual message", dispatchFailure);
+            }
         }
+    }
+
+    /**
+     * Reports an internal runtime failure through the global inner-error sink.
+     * <p>
+     * This helper never throws and is intended for subclasses that need to trap infrastructure
+     * failures while preserving caller flow.
+     *
+     * @param operation operation context description
+     * @param failure runtime failure to report
+     */
+    protected final void reportInnerFailure(final @Nonnull String operation, final @Nonnull Throwable failure) {
+        if (operation == null || failure == null) {
+            return;
+        }
+        String reportMessage;
+        try {
+            reportMessage = MessageHandlerResourceBundle.format(
+                    "innerHandlerFailure",
+                    getClass().getName(),
+                    operation,
+                    toFailureDetails(failure));
+        } catch (RuntimeException ignored) {
+            reportMessage = getClass().getName()
+                    + " internal failure while " + operation + ": "
+                    + toFailureDetails(failure);
+        }
+        InnerErrorMessageHandler.consume(reportMessage);
+    }
+
+    private static String toFailureDetails(final Throwable failure) {
+        String failureMessage = failure.getMessage();
+        if (failureMessage == null || failureMessage.trim().isEmpty()) {
+            return failure.getClass().getName();
+        }
+        return failure.getClass().getName() + ": " + failureMessage;
+    }
+
+    private static boolean isClosedHandlerFailure(final RuntimeException failure) {
+        return failure instanceof IllegalStateException
+                && MessageHandlerResourceBundle.get("handlerIsClosed").equals(failure.getMessage());
     }
 
     /**

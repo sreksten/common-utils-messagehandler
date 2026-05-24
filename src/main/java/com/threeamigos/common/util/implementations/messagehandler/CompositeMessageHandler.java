@@ -50,7 +50,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
 
     private final List<MessageHandler> messageHandlers = new ArrayList<>();
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
-    private volatile Consumer<String> errorConsumer = System.err::println;
+    private volatile Consumer<String> errorConsumer = InnerErrorMessageHandler::consume;
     private final LevelControlMode levelControlMode;
 
     public CompositeMessageHandler() {
@@ -386,7 +386,8 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
      * <p>
      * The consumer is invoked with a single string containing the formatted error message and the
      * full stack trace of the {@link Throwable} thrown by the child handler, separated by a
-     * line separator. Defaults to {@code System.err::println}.
+     * line separator. Defaults to {@link InnerErrorMessageHandler#consume(String)} (which defaults
+     * to {@code System.err::println}).
      *
      * @param errorConsumer the non-null error notification consumer
      * @throws NullPointerException if {@code errorConsumer} is {@code null}
@@ -481,7 +482,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
                         MessageHandlerResourceBundle.get("exceptionDuringDispatch"), handler);
                 StringWriter sw = new StringWriter();
                 t.printStackTrace(new PrintWriter(sw, true));
-                errorConsumer.accept(msg + System.lineSeparator() + sw);
+                InnerErrorMessageHandler.consume(errorConsumer, msg + System.lineSeparator() + sw);
             }
         }
     }

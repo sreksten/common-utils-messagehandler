@@ -9,8 +9,10 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -295,5 +297,66 @@ class AbstractMessageHandlerUnitTest {
         assertEquals(1, sut.callCount);
         assertEquals("INFO", sut.lastLevel);
         assertEquals("msg", sut.lastMessage);
+    }
+
+    @Test
+    @DisplayName("supplier exceptions should propagate to caller")
+    void supplierExceptionsShouldPropagateToCaller() {
+        ProbeMessageHandler sut = new ProbeMessageHandler();
+        IllegalStateException thrown = assertThrows(IllegalStateException.class, () -> sut.info(() -> {
+            throw new IllegalStateException("supplier-boom");
+        }));
+        assertEquals("supplier-boom", thrown.getMessage());
+        assertEquals(0, sut.callCount);
+    }
+
+    @Test
+    @DisplayName("message-dispatch exceptions should be trapped and reported via InnerErrorMessageHandler")
+    void messageDispatchExceptionsShouldBeTrappedAndReportedViaInnerErrorMessageHandler() {
+        AbstractMessageHandler sut = new AbstractMessageHandler() {
+            @Override
+            public void handleMessage(@Nonnull final SeverityNumber level, @Nonnull final String message) {
+                throw new IllegalStateException("dispatch-boom");
+            }
+
+            @Override
+            protected void handleExceptionInternal(@Nonnull final String message, @Nonnull final Throwable throwable) {
+                // no-op
+            }
+        };
+        List<String> trapped = new ArrayList<String>();
+        InnerErrorMessageHandler.setGlobalConsumer(trapped::add);
+        try {
+            assertDoesNotThrow(() -> sut.info("x"));
+            assertFalse(trapped.isEmpty());
+            assertTrue(trapped.get(0).contains("dispatch-boom"));
+        } finally {
+            InnerErrorMessageHandler.resetGlobalConsumer();
+        }
+    }
+
+    @Test
+    @DisplayName("exception-dispatch exceptions should be trapped and reported via InnerErrorMessageHandler")
+    void exceptionDispatchExceptionsShouldBeTrappedAndReportedViaInnerErrorMessageHandler() {
+        AbstractMessageHandler sut = new AbstractMessageHandler() {
+            @Override
+            public void handleMessage(@Nonnull final SeverityNumber level, @Nonnull final String message) {
+                // no-op
+            }
+
+            @Override
+            protected void handleExceptionInternal(@Nonnull final String message, @Nonnull final Throwable throwable) {
+                throw new IllegalStateException("exception-dispatch-boom");
+            }
+        };
+        List<String> trapped = new ArrayList<String>();
+        InnerErrorMessageHandler.setGlobalConsumer(trapped::add);
+        try {
+            assertDoesNotThrow(() -> sut.exception(new RuntimeException("root")));
+            assertFalse(trapped.isEmpty());
+            assertTrue(trapped.get(0).contains("exception-dispatch-boom"));
+        } finally {
+            InnerErrorMessageHandler.resetGlobalConsumer();
+        }
     }
 }

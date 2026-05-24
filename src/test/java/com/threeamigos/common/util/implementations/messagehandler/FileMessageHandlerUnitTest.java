@@ -985,6 +985,25 @@ class FileMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("error-consumer runtime failures should fallback to global inner error consumer")
+    void errorConsumerRuntimeFailuresShouldFallbackToGlobalInnerErrorConsumer() throws Exception {
+        Path file = Files.createTempFile("fmh-failing-consumer-fallback", ".log");
+        List<String> trapped = new ArrayList<String>();
+        InnerErrorMessageHandler.setGlobalConsumer(trapped::add);
+        try (FileMessageHandler handler = new ErrorCheckWriterFileMessageHandler(file.toString())) {
+            handler.setErrorConsumer(message -> {
+                throw new IllegalStateException("local-consumer-boom");
+            });
+
+            assertDoesNotThrow(() -> handler.info("trigger"));
+            assertFalse(trapped.isEmpty());
+            assertTrue(trapped.get(0).contains("I/O error"));
+        } finally {
+            InnerErrorMessageHandler.resetGlobalConsumer();
+        }
+    }
+
+    @Test
     @DisplayName("health metrics should track successful file writes")
     void healthMetricsShouldTrackSuccessfulFileWrites() throws Exception {
         Path file = Files.createTempFile("fmh-health-success", ".log");

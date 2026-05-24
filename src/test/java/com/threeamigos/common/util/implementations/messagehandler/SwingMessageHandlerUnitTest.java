@@ -11,12 +11,14 @@ import javax.swing.*;
 import java.awt.*;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -50,6 +52,13 @@ class SwingMessageHandlerUnitTest {
             lastMessage = message;
             lastTitle = title;
             lastIcon = icon;
+        }
+    }
+
+    private static class ThrowingSwingMessageHandler extends SwingMessageHandler {
+        @Override
+        protected void invokeOptionPane(final String message, final String title, final int icon) {
+            throw new IllegalStateException("forced-ui-failure");
         }
     }
 
@@ -282,6 +291,23 @@ class SwingMessageHandlerUnitTest {
                 System.setProperty("java.awt.headless", original);
             }
         }
+    }
+
+    @Test
+    @DisplayName("Should report UI runtime failures through inner error sink without throwing")
+    void shouldReportUiRuntimeFailuresThroughInnerErrorSinkWithoutThrowing() {
+        ThrowingSwingMessageHandler sut = new ThrowingSwingMessageHandler();
+        List<String> innerErrors = new ArrayList<String>();
+        Consumer<String> previousGlobalConsumer = InnerErrorMessageHandler.getGlobalConsumer();
+        InnerErrorMessageHandler.setGlobalConsumer(innerErrors::add);
+        try {
+            assertDoesNotThrow(() -> sut.handleMessage(SeverityNumber.INFO, "boom"));
+        } finally {
+            InnerErrorMessageHandler.setGlobalConsumer(previousGlobalConsumer);
+        }
+        assertEquals(1, innerErrors.size());
+        assertTrue(innerErrors.get(0).contains("showing Swing option pane"));
+        assertTrue(innerErrors.get(0).contains("forced-ui-failure"));
     }
 
     @Test

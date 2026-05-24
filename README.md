@@ -395,7 +395,8 @@ For server/high-throughput workloads, explicitly set both:
 
 When dispatch fails with a permanent/non-retryable failure (for example HTTP 400), entries are
 routed to dead-letter reporting (`Consumer<String>`), so callers can redirect DLQ output to
-console, file, or any custom sink.
+console, file, or any custom sink. Retryable/transient I/O failures are instead reported through
+the handler error-consumer path and records remain in the durability store for later retries.
 
 ```java
 import com.threeamigos.common.util.implementations.messagehandler.JaegerMessageHandler;
@@ -427,6 +428,40 @@ public class HttpDurabilityExample {
 }
 ```
 
+## Global internal error sink (`InnerErrorMessageHandler`)
+
+Internal failures raised by the logging infrastructure itself (for example backend dispatch
+runtime failures or failing per-handler error consumers) are routed through
+`InnerErrorMessageHandler`.
+
+Default global consumer:
+- `System.err::println`
+
+You can replace it once at bootstrap time:
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.InnerErrorMessageHandler;
+
+public class InnerErrorBootstrap {
+    public static void main(String[] args) {
+        InnerErrorMessageHandler.setGlobalConsumer(
+                msg -> System.err.println("[INNER-ERROR] " + msg)
+        );
+
+        // ... create and use handlers
+
+        // Optional: restore default behavior.
+        InnerErrorMessageHandler.resetGlobalConsumer();
+    }
+}
+```
+
+`FileMessageHandler`, `CompositeMessageHandler`, `JaegerMessageHandler`, `GrafanaMessageHandler`,
+and `SwingMessageHandler` default their internal error reporting to this global sink.
+Runtime exceptions thrown by user-provided extension points (for example custom error consumers,
+custom delegates used by `CompositeMessageHandler`, or custom `RotationPolicy` logic) are also
+reported through this mechanism to preserve caller flow.
+
 ## `SwingMessageHandler`: standalone desktop apps
 
 For Swing/AWT apps, this handler shows popup dialogs instead of writing to console/file.
@@ -448,7 +483,9 @@ public class SwingHandlerExample {
 }
 ```
 `SwingMessageHandler` requires a graphical runtime. In headless environments, dialogs are
-silently suppressed by design (calls become no-ops).
+silently suppressed by design (calls become no-ops). Runtime UI invocation failures are treated as
+internal handler failures and reported through `InnerErrorMessageHandler` instead of being
+propagated to logging callers.
 
 Very probably, when dealing with a standalone application, you might want to show info messages to the user, while
 writing debug and error information to a file. You can do this using the next `MessageHandler`.
@@ -1460,8 +1497,9 @@ Note: CDI must be enabled for the deployment (add `beans.xml` to `WEB-INF` or `M
 4. A null severity is treated as `SeverityNumber.INFO`.
 5. `MessageHandler.startSpan(name)` works only on tracer-created handlers.
 6. Calling `startSpan(name)` on non-tracer handlers throws `IllegalStateException` (localized message).
-7. There is no `endSpan(...)` helper on handlers; callers close spans explicitly with `span.end()`.
-8. Async dispatch is optional and available only in output handlers based on `AbstractOutputMessageHandler`:
+7. Output handlers throw `IllegalStateException` if log methods are called after `close()`.
+8. There is no `endSpan(...)` helper on handlers; callers close spans explicitly with `span.end()`.
+9. Async dispatch is optional and available only in output handlers based on `AbstractOutputMessageHandler`:
    - `ConsoleMessageHandler`
    - `FileMessageHandler`
    - `JaegerMessageHandler`
@@ -1474,29 +1512,33 @@ Note: CDI must be enabled for the deployment (add `beans.xml` to `WEB-INF` or `M
    `registerShutdownHook` argument) register a JVM shutdown hook by default.
    If you choose a constructor with `registerShutdownHook=false`, call `close()` explicitly
    during application shutdown.
-9. Other handlers are synchronous unless they implement their own threading model.
-10. `GrafanaMessageHandler` exports logs only; configure `TracerProvider#setDefaultSpanDispatcher(...)`
+10. Other handlers are synchronous unless they implement their own threading model.
+11. `GrafanaMessageHandler` exports logs only; configure `TracerProvider#setDefaultSpanDispatcher(...)`
     (for example with `GrafanaSpanDispatcher`) to export spans/traces.
-11. `CompositeMessageHandler.close()` closes all currently registered delegates.
-12. `SwingMessageHandler` dialogs are no-ops in headless environments.
-13. `exception(...)` overloads treat null message/throwable inputs as no-op.
-14. `FileMessageHandler` constructors without an explicit `RotationPolicy` use default size-based
+12. `CompositeMessageHandler.close()` closes all currently registered delegates.
+13. `SwingMessageHandler` dialogs are no-ops in headless environments; runtime UI invocation
+    failures are reported through `InnerErrorMessageHandler` and are not propagated to logging callers.
+14. `exception(...)` overloads treat null message/throwable inputs as no-op.
+15. `FileMessageHandler` constructors without an explicit `RotationPolicy` use default size-based
     rotation (`FileMessageHandler.DEFAULT_SIZE_ROTATION_MAX_BYTES` = 10 MB). Use
     `new NoRotationPolicy()` to disable rotation explicitly.
-15. `FileMessageHandler` inter-process locking is opt-in (`new FileMessageHandler(path, true)` or
+16. `FileMessageHandler` inter-process locking is opt-in (`new FileMessageHandler(path, true)` or
     full constructor with `interProcessLocking=true`) and uses a sidecar `.lck` file.
-16. `JaegerMessageHandler` and `GrafanaMessageHandler` use JSON payloads by default
+17. `JaegerMessageHandler` and `GrafanaMessageHandler` use JSON payloads by default
     (`ExportLogsServiceRequestLogRecordFormatter`); `ConsoleMessageHandler` and
     `FileMessageHandler` default to `ConsoleLogRecordFormatter` (human-readable text).
-17. For server deployments that ingest console/file logs, enforce formatter selection centrally
+18. For server deployments that ingest console/file logs, enforce formatter selection centrally
     (bootstrap/factory), keep a stable JSON schema, and verify it with parser or golden-output tests.
-18. Output handlers (`ConsoleMessageHandler`, `FileMessageHandler`, `JaegerMessageHandler`,
+19. Output handlers (`ConsoleMessageHandler`, `FileMessageHandler`, `JaegerMessageHandler`,
     `GrafanaMessageHandler`) expose health metrics via `getHandlerHealthMetrics()` and a
     quick health status via `isHealthy()`.
-19. `JaegerMessageHandler` and `GrafanaMessageHandler` do not propagate dispatch/transport exceptions
+20. `JaegerMessageHandler` and `GrafanaMessageHandler` do not propagate dispatch/transport exceptions
     back to logging callers; failures are reported through the configured error consumer and reflected
     in handler health metrics.
-20. `JaegerMessageHandler` and `GrafanaMessageHandler` use a pluggable pending-record durability
+21. Internal logging-system failures are reported through `InnerErrorMessageHandler` (default:
+    `System.err::println`). You can override this globally via
+    `InnerErrorMessageHandler.setGlobalConsumer(...)`.
+22. `JaegerMessageHandler` and `GrafanaMessageHandler` use a pluggable pending-record durability
     policy (`HttpDispatchDurabilityStore`): default is in-memory, with optional file/Redis
     implementations. Constructors that do not expose DLQ configuration use
     `System.err::println` for dead-letter reporting. This package targets small standalone

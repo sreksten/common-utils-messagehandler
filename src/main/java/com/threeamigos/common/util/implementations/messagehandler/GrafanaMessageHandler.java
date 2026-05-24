@@ -29,7 +29,8 @@ import java.util.function.Consumer;
  * so payloads are JSON by default (OTLP ExportLogsServiceRequest JSON; or Loki JSON payload
  * when using a Loki push endpoint).
  * <p>
- * Dispatch failures are reported via a configurable error consumer (default: {@code System.err::println}).
+ * Dispatch failures are reported via a configurable error consumer (default:
+ * {@link InnerErrorMessageHandler#consume(String)}, which defaults to {@code System.err::println}).
  * Optional close-on-dispatch-error behavior can be enabled through
  * {@link #setCloseOnDispatchError(boolean)}. In async mode, close scheduling is one-shot, so
  * repeated failures do not create unbounded close threads.
@@ -44,7 +45,7 @@ import java.util.function.Consumer;
 public class GrafanaMessageHandler extends AbstractHTTPOutputMessageHandler {
 
     private final LogRecordDispatcher dispatcher;
-    private volatile Consumer<String> errorConsumer = System.err::println;
+    private volatile Consumer<String> errorConsumer = InnerErrorMessageHandler::consume;
     private volatile boolean closeOnDispatchError = false;
 
     public GrafanaMessageHandler(final @Nonnull String endpointUrl) {

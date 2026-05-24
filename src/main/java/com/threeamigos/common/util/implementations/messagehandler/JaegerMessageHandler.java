@@ -54,7 +54,8 @@ import java.util.function.Consumer;
  *
  * <h2>Failure handling</h2>
  * <p>
- * Dispatch errors are captured and reported to a configurable {@link Consumer} (default: {@code System.err::println}).
+ * Dispatch errors are captured and reported to a configurable {@link Consumer} (default:
+ * {@link InnerErrorMessageHandler#consume(String)}, which defaults to {@code System.err::println}).
  * Optionally, the handler can auto-close itself after a dispatch failure via
  * {@link #setCloseOnDispatchError(boolean)}. In async mode, close scheduling is one-shot, so
  * repeated failures do not create unbounded close threads.
@@ -70,7 +71,7 @@ import java.util.function.Consumer;
 public class JaegerMessageHandler extends AbstractHTTPOutputMessageHandler {
 
     private final LogRecordDispatcher dispatcher;
-    private volatile Consumer<String> errorConsumer = System.err::println;
+    private volatile Consumer<String> errorConsumer = InnerErrorMessageHandler::consume;
     private volatile boolean closeOnDispatchError = false;
 
     /**

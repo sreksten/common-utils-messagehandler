@@ -242,6 +242,26 @@ class CompositeMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("dispatch reporting should fallback to global inner error consumer when local consumer fails")
+    void dispatchReportingShouldFallbackToGlobalInnerErrorConsumerWhenLocalConsumerFails() {
+        doThrow(new RuntimeException("delegate-boom")).when(firstMessageHandler).info(anyString());
+        List<String> trapped = new ArrayList<String>();
+        InnerErrorMessageHandler.setGlobalConsumer(trapped::add);
+        try {
+            CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler);
+            sut.setErrorConsumer(message -> {
+                throw new RuntimeException("local-consumer-boom");
+            });
+
+            assertDoesNotThrow(() -> sut.info("x"));
+            assertFalse(trapped.isEmpty());
+            assertTrue(trapped.get(0).contains("Exception during dispatch"));
+        } finally {
+            InnerErrorMessageHandler.resetGlobalConsumer();
+        }
+    }
+
+    @Test
     @DisplayName("default constructor should use COMPOSITE_ONLY level control mode")
     void defaultConstructorShouldUseCompositeOnlyLevelControlMode() {
         CompositeMessageHandler sut = new CompositeMessageHandler();

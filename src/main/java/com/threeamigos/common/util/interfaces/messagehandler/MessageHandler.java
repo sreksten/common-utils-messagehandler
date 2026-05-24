@@ -85,6 +85,7 @@ public interface MessageHandler extends
      *
      * @param name span name
      * @return started span
+     * @throws IllegalStateException if no tracer is bound to this handler instance
      */
     Span startSpan(final @Nonnull String name);
 

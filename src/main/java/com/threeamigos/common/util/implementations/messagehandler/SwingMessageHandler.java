@@ -15,6 +15,9 @@ import java.awt.*;
 /**
  * An implementation of the {@link MessageHandler} interface that uses an
  * OptionPane to show messages and exceptions to the user.
+ * <p>
+ * Dialog-invocation runtime failures are treated as internal handler failures and are
+ * reported through {@link InnerErrorMessageHandler}, preserving caller flow.
  *
  * @author Stefano Reksten
  */
@@ -79,7 +82,8 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      * <p>
      * Delegates to {@link AWTCalls#showOptionPane(java.awt.Component, java.lang.String, java.lang.String, int)} which
      * handles headless environments (silently suppresses the dialog) and ensures the call
-     * runs on the Event Dispatch Thread.
+     * runs on the Event Dispatch Thread. Runtime UI failures are reported through
+     * {@link InnerErrorMessageHandler} and not propagated to callers.
      *
      * @param message the text to display in the dialog body
      * @param title   the dialog window title
@@ -87,6 +91,23 @@ public class SwingMessageHandler extends AbstractMessageHandler {
      *                (e.g. {@link javax.swing.JOptionPane#INFORMATION_MESSAGE})
      */
     protected void showOptionPane(final String message, final String title, final int icon) {
+        try {
+            invokeOptionPane(message, title, icon);
+        } catch (RuntimeException uiFailure) {
+            reportInnerFailure("showing Swing option pane", uiFailure);
+        }
+    }
+
+    /**
+     * Executes the raw AWT/Swing dialog invocation.
+     * <p>
+     * Exposed for tests so failure paths can be simulated without touching the real EDT.
+     *
+     * @param message dialog body text
+     * @param title dialog title
+     * @param icon JOptionPane icon constant
+     */
+    protected void invokeOptionPane(final String message, final String title, final int icon) {
         AWTCalls.showOptionPane(parentComponent, message, title, icon);
     }
 

@@ -34,6 +34,11 @@ import java.util.function.Consumer;
  * <p>
  * Retry batches are built from the configured durability store. Subclasses provide the concrete
  * transport call through {@link HttpDispatchOperation}.
+ * <p>
+ * Dead-letter policy: after retry handling completes, records are routed to the dead-letter
+ * consumer only for permanent failures (non-retryable HTTP status errors and runtime failures).
+ * Transient/retryable I/O failures are reported through the normal error-consumer path and
+ * records remain in the durability store for later dispatch attempts.
  *
  * @author Stefano Reksten
  */
@@ -761,17 +766,13 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
     }
 
     /**
-     * Safely invokes an error consumer, swallowing consumer-side runtime errors.
+     * Safely invokes an error consumer, with fallback to {@link InnerErrorMessageHandler}.
      *
      * @param errorConsumer target consumer
      * @param message message to emit
      */
     private static void safeConsume(final Consumer<String> errorConsumer, final String message) {
-        try {
-            errorConsumer.accept(message);
-        } catch (RuntimeException ignored) {
-            // Swallow consumer failures to avoid interrupting caller flow.
-        }
+        InnerErrorMessageHandler.consume(errorConsumer, message);
     }
 
     /**
