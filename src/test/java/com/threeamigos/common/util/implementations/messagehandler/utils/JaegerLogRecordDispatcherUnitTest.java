@@ -21,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -49,6 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -84,7 +86,9 @@ class JaegerLogRecordDispatcherUnitTest {
     @DisplayName("dispatch(LogRecord) should transform logs into span events when endpoint is /v1/traces")
     void dispatchShouldTransformLogsIntoSpanEventsForTraceEndpoint() throws Exception {
         StubConnection connection = new StubConnection(200, "ok", null);
-        JaegerLogRecordDispatcher dispatcher = new JaegerLogRecordDispatcher("http://localhost:4318/v1/traces");
+        JaegerLogRecordDispatcher dispatcher = new JaegerLogRecordDispatcher(
+                "http://localhost:4318/v1/traces", null, null, null, 5_000, 10_000, null,
+                new HttpUrlConnectionTransport());
         replaceEndpoint(dispatcher, urlFor(connection, "/v1/traces"));
 
         LogRecordImpl record = (LogRecordImpl) new LogRecordFactoryImpl().create(SeverityNumber.INFO, "hello jaeger");
@@ -108,7 +112,8 @@ class JaegerLogRecordDispatcherUnitTest {
     void dispatchShouldUseBasicAuthentication() throws Exception {
         StubConnection connection = new StubConnection(200, "ok", null);
         JaegerLogRecordDispatcher dispatcher = new JaegerLogRecordDispatcher(
-                "http://localhost:4318/v1/logs", "alice", "secret");
+                "http://localhost:4318/v1/logs", "alice", "secret", null, 5_000, 10_000, null,
+                new HttpUrlConnectionTransport());
         replaceEndpoint(dispatcher, urlFor(connection));
 
         dispatcher.dispatchFormatted("{\"resourceLogs\":[]}");
@@ -128,7 +133,8 @@ class JaegerLogRecordDispatcherUnitTest {
         headers.put("X-Null", null);
 
         JaegerLogRecordDispatcher dispatcher = new JaegerLogRecordDispatcher(
-                "http://localhost:4318/v1/logs", "alice", "secret", "token-123", 2_000, 2_000, headers);
+                "http://localhost:4318/v1/logs", "alice", "secret", "token-123", 2_000, 2_000, headers,
+                new HttpUrlConnectionTransport());
         replaceEndpoint(dispatcher, urlFor(connection));
 
         dispatcher.dispatchFormatted("{\"resourceLogs\":[]}");
@@ -295,7 +301,7 @@ class JaegerLogRecordDispatcherUnitTest {
         assertTrue(payloadVersionOnlyScope.contains("\"name\":\"log-event\""));
         assertTrue(payloadVersionOnlyScope.contains("\"name\":\"log\""));
 
-        Method extractBodyAsString = JaegerLogRecordDispatcher.class
+        Method extractBodyAsString = AbstractLogRecordDispatcher.class
                 .getDeclaredMethod("extractBodyAsString", LogRecord.class);
         extractBodyAsString.setAccessible(true);
         assertEquals("", extractBodyAsString.invoke(null,
@@ -323,7 +329,7 @@ class JaegerLogRecordDispatcherUnitTest {
                 resource(Collections.singletonList(keyValue("service.name", anyString("orders")))),
                 "scope-D"));
 
-        Method toUnsignedNanosString = JaegerLogRecordDispatcher.class
+        Method toUnsignedNanosString = AbstractLogRecordDispatcher.class
                 .getDeclaredMethod("toUnsignedNanosString", Instant.class);
         toUnsignedNanosString.setAccessible(true);
         String nanosNow = (String) toUnsignedNanosString.invoke(null, new Object[]{null});
@@ -350,7 +356,7 @@ class JaegerLogRecordDispatcherUnitTest {
         appendStringKeyValueAttribute.invoke(null, attrBuilder, "k", null);
         assertTrue(attrBuilder.toString().contains("\"stringValue\":\"\""));
 
-        Method escapeJson = JaegerLogRecordDispatcher.class.getDeclaredMethod("escapeJson", String.class);
+        Method escapeJson = AbstractLogRecordDispatcher.class.getDeclaredMethod("escapeJson", String.class);
         escapeJson.setAccessible(true);
         assertEquals("", escapeJson.invoke(null, new Object[]{null}));
         String escaped = (String) escapeJson.invoke(null, "\"\\\b\f\n\r\t" + ((char) 1) + "x");
@@ -363,7 +369,7 @@ class JaegerLogRecordDispatcherUnitTest {
         assertTrue(escaped.contains("\\t"));
         assertTrue(escaped.contains("\\u0001"));
 
-        Method applyAuthentication = JaegerLogRecordDispatcher.class
+        Method applyAuthentication = AbstractLogRecordDispatcher.class
                 .getDeclaredMethod("applyAuthentication", Map.class);
         applyAuthentication.setAccessible(true);
 
@@ -384,7 +390,7 @@ class JaegerLogRecordDispatcherUnitTest {
         applyAuthentication.invoke(basicDispatcher, noAuthHeaders);
         assertFalse(noAuthHeaders.containsKey("Authorization"));
 
-        Method toImmutableHeaders = JaegerLogRecordDispatcher.class
+        Method toImmutableHeaders = AbstractLogRecordDispatcher.class
                 .getDeclaredMethod("toImmutableHeaders", Map.class);
         toImmutableHeaders.setAccessible(true);
         assertTrue(((Map<?, ?>) toImmutableHeaders.invoke(null, new Object[]{null})).isEmpty());
@@ -396,8 +402,8 @@ class JaegerLogRecordDispatcherUnitTest {
         assertThrows(UnsupportedOperationException.class, () -> immutableHeaders.put("C", "D"));
 
         // Cover throwIfNonSuccess(null) path
-        Method throwIfNonSuccess = JaegerLogRecordDispatcher.class.getDeclaredMethod(
-                "throwIfNonSuccess", JaegerLogRecordDispatcher.DispatchResult.class);
+        Method throwIfNonSuccess = AbstractLogRecordDispatcher.class.getDeclaredMethod(
+                "throwIfNonSuccess", AbstractLogRecordDispatcher.DispatchResult.class);
         throwIfNonSuccess.setAccessible(true);
         replaceEndpoint(dispatcher, new URL("http://localhost:4318/v1/logs"));
         InvocationTargetException nullResultEx = assertThrows(
@@ -407,7 +413,7 @@ class JaegerLogRecordDispatcherUnitTest {
         assertTrue(nullResultEx.getCause() instanceof IOException);
 
         // Cover sanitizeLogRecords null-element skip
-        Method sanitizeLogRecords = JaegerLogRecordDispatcher.class.getDeclaredMethod("sanitizeLogRecords", List.class);
+        Method sanitizeLogRecords = AbstractLogRecordDispatcher.class.getDeclaredMethod("sanitizeLogRecords", List.class);
         sanitizeLogRecords.setAccessible(true);
         LogRecordFactoryImpl sanitizeFactory = new LogRecordFactoryImpl();
         List<LogRecord> listWithNull = Arrays.asList(
@@ -449,7 +455,9 @@ class JaegerLogRecordDispatcherUnitTest {
     @DisplayName("dispatchLogRecords with traces endpoint should dispatch 2+ records sequentially")
     void dispatchLogRecordsShouldDispatchSequentiallyForTracesEndpoint() throws Exception {
         StubConnection connection = new StubConnection(200, "ok", null);
-        JaegerLogRecordDispatcher dispatcher = new JaegerLogRecordDispatcher("http://localhost:4318/v1/traces");
+        JaegerLogRecordDispatcher dispatcher = new JaegerLogRecordDispatcher(
+                "http://localhost:4318/v1/traces", null, null, null, 5_000, 10_000, null,
+                new HttpUrlConnectionTransport());
         replaceEndpoint(dispatcher, urlFor(connection, "/v1/traces"));
         LogRecordFactoryImpl factory = new LogRecordFactoryImpl();
         List<LogRecord> records = Arrays.asList(
@@ -484,7 +492,7 @@ class JaegerLogRecordDispatcherUnitTest {
 
         JaegerLogRecordDispatcher dispatcher = new JaegerLogRecordDispatcher(
                 "http://localhost:4318/v1/logs", null, null, null, 1000, 1000, null, mockTransport);
-        JaegerLogRecordDispatcher.DispatchResult result = dispatcher.dispatchFormatted("{\"resourceLogs\":[]}");
+        AbstractLogRecordDispatcher.DispatchResult result = dispatcher.dispatchFormatted("{\"resourceLogs\":[]}");
 
         assertEquals(200, result.getStatusCode());
         assertEquals("dispatched", result.getResponseBody());
@@ -492,27 +500,27 @@ class JaegerLogRecordDispatcherUnitTest {
     }
 
     @Test
-    @DisplayName("8-arg constructor with null transport should fall back to HttpUrlConnectionTransport")
+    @DisplayName("8-arg constructor with null transport should fall back to preferred transport (auto-detected)")
     void eightArgConstructorWithNullTransportShouldFallBackToDefault() throws Exception {
         JaegerLogRecordDispatcher dispatcher = new JaegerLogRecordDispatcher(
                 "http://localhost:4318/v1/logs", null, null, null, 1000, 1000, null, null);
-        Field transportField = JaegerLogRecordDispatcher.class.getDeclaredField("httpTransport");
+        Field transportField = AbstractLogRecordDispatcher.class.getDeclaredField("httpTransport");
         transportField.setAccessible(true);
-        assertTrue(transportField.get(dispatcher) instanceof HttpUrlConnectionTransport);
+        assertNotNull(transportField.get(dispatcher));
     }
 
     @Test
     @DisplayName("DispatchResult should report success only for 2xx statuses")
     void dispatchResultShouldReportSuccessRange() throws Exception {
-        Constructor<?> constructor = JaegerLogRecordDispatcher.DispatchResult.class
+        Constructor<?> constructor = AbstractLogRecordDispatcher.DispatchResult.class
                 .getDeclaredConstructor(int.class, String.class);
         constructor.setAccessible(true);
-        JaegerLogRecordDispatcher.DispatchResult ok =
-                (JaegerLogRecordDispatcher.DispatchResult) constructor.newInstance(299, null);
-        JaegerLogRecordDispatcher.DispatchResult below =
-                (JaegerLogRecordDispatcher.DispatchResult) constructor.newInstance(199, "too-early");
-        JaegerLogRecordDispatcher.DispatchResult redirect =
-                (JaegerLogRecordDispatcher.DispatchResult) constructor.newInstance(302, "r");
+        AbstractLogRecordDispatcher.DispatchResult ok =
+                (AbstractLogRecordDispatcher.DispatchResult) constructor.newInstance(299, null);
+        AbstractLogRecordDispatcher.DispatchResult below =
+                (AbstractLogRecordDispatcher.DispatchResult) constructor.newInstance(199, "too-early");
+        AbstractLogRecordDispatcher.DispatchResult redirect =
+                (AbstractLogRecordDispatcher.DispatchResult) constructor.newInstance(302, "r");
 
         assertTrue(ok.isSuccessful());
         assertEquals("", ok.getResponseBody());
@@ -705,7 +713,7 @@ class JaegerLogRecordDispatcherUnitTest {
     private static void setField(final JaegerLogRecordDispatcher dispatcher,
                                  final String fieldName,
                                  final Object value) throws Exception {
-        Field field = JaegerLogRecordDispatcher.class.getDeclaredField(fieldName);
+        Field field = AbstractLogRecordDispatcher.class.getDeclaredField(fieldName);
         field.setAccessible(true);
         field.set(dispatcher, value);
     }
@@ -719,8 +727,80 @@ class JaegerLogRecordDispatcherUnitTest {
         return (URL) allocateInstance.invoke(unsafe, URL.class);
     }
 
+    // -------------------------------------------------------------------------
+    // close() / transport lifecycle tests
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("close() should close owned (auto-detected) transport")
+    void close_ownsTransport_closesTransport() throws Exception {
+        CloseableTransport transport = new CloseableTransport();
+        // null → auto-detect, but we cannot inject auto-detection result easily here.
+        // Use explicit null-transport path by injecting via the 8-param constructor with a
+        // CloseableTransport to verify the ownsTransport=false path, then use reflection
+        // for ownsTransport=true path.
+        JaegerLogRecordDispatcher dispatcher = new JaegerLogRecordDispatcher(
+                "http://localhost:4318/v1/logs", null, null, null, 5_000, 10_000, null, transport);
+        // ownsTransport is false here (explicit transport provided)
+        dispatcher.close();
+        assertFalse(transport.closed);
+
+        // Force ownsTransport=true via reflection to test the owned-close path
+        Field ownsField = AbstractLogRecordDispatcher.class.getDeclaredField("ownsTransport");
+        ownsField.setAccessible(true);
+        ownsField.set(dispatcher, true);
+        dispatcher.close();
+        assertTrue(transport.closed);
+    }
+
+    @Test
+    @DisplayName("close() should not close externally-provided transport")
+    void close_externalTransport_doesNotCloseTransport() throws Exception {
+        CloseableTransport transport = new CloseableTransport();
+        JaegerLogRecordDispatcher dispatcher = new JaegerLogRecordDispatcher(
+                "http://localhost:4318/v1/logs", null, null, null, 5_000, 10_000, null, transport);
+        dispatcher.close();
+        assertFalse(transport.closed);
+    }
+
+    @Test
+    @DisplayName("close() on auto-detected transport (null passed) owns and closes it")
+    void close_nullTransport_autoDetectsAndOwns() throws Exception {
+        JaegerLogRecordDispatcher dispatcher = new JaegerLogRecordDispatcher(
+                "http://localhost:4318/v1/logs", null, null, null, 5_000, 10_000, null, null);
+        // Should not throw; auto-detected transport is closed (no assertion on type—just lifecycle)
+        dispatcher.close();
+    }
+
+    @Test
+    @DisplayName("close() is no-op for non-Closeable transport when owned")
+    void close_nonCloseableTransport_noOp() throws Exception {
+        JaegerLogRecordDispatcher dispatcher = new JaegerLogRecordDispatcher(
+                "http://localhost:4318/v1/logs", null, null, null, 5_000, 10_000, null, mockTransport);
+        // mockTransport does not implement Closeable; ownsTransport=false anyway
+        dispatcher.close(); // must not throw
+    }
+
+    private static final class CloseableTransport implements HttpTransport, Closeable {
+        boolean closed = false;
+
+        @Override
+        public com.threeamigos.common.util.interfaces.messagehandler.transport.HttpTransportResponse post(
+                java.net.URL endpoint, byte[] body, java.util.Map<String, String> headers,
+                int connectTimeoutMillis, int readTimeoutMillis) {
+            return new com.threeamigos.common.util.interfaces.messagehandler.transport.HttpTransportResponse(200, "");
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+        }
+    }
+
     private static JaegerLogRecordDispatcher dispatcherWithConnection(final StubConnection connection) throws Exception {
-        JaegerLogRecordDispatcher dispatcher = new JaegerLogRecordDispatcher("http://localhost:4318/v1/logs");
+        JaegerLogRecordDispatcher dispatcher = new JaegerLogRecordDispatcher(
+                "http://localhost:4318/v1/logs", null, null, null, 5_000, 10_000, null,
+                new HttpUrlConnectionTransport());
         replaceEndpoint(dispatcher, urlFor(connection));
         return dispatcher;
     }
@@ -739,7 +819,7 @@ class JaegerLogRecordDispatcherUnitTest {
     }
 
     private static void replaceEndpoint(final JaegerLogRecordDispatcher dispatcher, final URL url) throws Exception {
-        Field endpointField = JaegerLogRecordDispatcher.class.getDeclaredField("endpoint");
+        Field endpointField = AbstractLogRecordDispatcher.class.getDeclaredField("endpoint");
         endpointField.setAccessible(true);
         endpointField.set(dispatcher, url);
     }

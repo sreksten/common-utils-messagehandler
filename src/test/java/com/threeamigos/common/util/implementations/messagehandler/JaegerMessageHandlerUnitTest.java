@@ -588,6 +588,52 @@ class JaegerMessageHandlerUnitTest {
         }
     }
 
+    // -------------------------------------------------------------------------
+    // closeOutput() dispatcher lifecycle tests
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("close() should invoke close() on a Closeable dispatcher")
+    void close_invokesCloseOnCloseableDispatcher() {
+        CloseTrackingDispatcher dispatcher = new CloseTrackingDispatcher();
+        JaegerMessageHandler sut = new JaegerMessageHandler(
+                new LogRecordFactoryImpl(), logRecord -> "{}", dispatcher, false, 0, false);
+        sut.close();
+        assertTrue(dispatcher.wasClosed);
+    }
+
+    @Test
+    @DisplayName("close() should not fail when dispatcher does not implement Closeable")
+    void close_nonCloseableDispatcher_noError() {
+        NonCloseableDispatcher dispatcher = new NonCloseableDispatcher();
+        JaegerMessageHandler sut = new JaegerMessageHandler(
+                new LogRecordFactoryImpl(), logRecord -> "{}", dispatcher, false, 0, false);
+        sut.close(); // must not throw
+    }
+
+    private static final class CloseTrackingDispatcher extends JaegerLogRecordDispatcher {
+        boolean wasClosed = false;
+
+        CloseTrackingDispatcher() {
+            super("http://localhost:4318/v1/logs");
+        }
+
+        @Override
+        public void close() throws java.io.IOException {
+            wasClosed = true;
+            super.close();
+        }
+    }
+
+    private static final class NonCloseableDispatcher implements
+            com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordDispatcher {
+        @Override
+        public void dispatchLogRecord(
+                final @Nonnull com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord logRecord,
+                final @Nonnull com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter formatter) {
+        }
+    }
+
     private static final class MinimalThrowableFormatter implements LogRecordFormatter {
         @Override
         public String format(final LogRecord logRecord) {

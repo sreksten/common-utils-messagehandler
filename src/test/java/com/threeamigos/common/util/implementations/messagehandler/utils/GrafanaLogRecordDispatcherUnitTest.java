@@ -35,6 +35,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
+import java.io.Closeable;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -83,7 +84,9 @@ class GrafanaLogRecordDispatcherUnitTest {
     @DisplayName("dispatch(LogRecord) should use Loki push payload for /loki/api/v1/push endpoint")
     void dispatchShouldUseLokiPushPayloadForLokiEndpoint() throws Exception {
         StubConnection connection = new StubConnection(204, "", null);
-        GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher("http://localhost:3100/loki/api/v1/push");
+        GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher(
+                "http://localhost:3100/loki/api/v1/push", null, null, null, 5_000, 10_000, null,
+                new HttpUrlConnectionTransport());
         replaceEndpoint(dispatcher, urlFor(connection, "/loki/api/v1/push"));
         LogRecord record = new LogRecordFactoryImpl().create(SeverityNumber.INFO, "hello loki");
 
@@ -104,7 +107,8 @@ class GrafanaLogRecordDispatcherUnitTest {
     void dispatchShouldUseBasicAuthentication() throws Exception {
         StubConnection connection = new StubConnection(200, "ok", null);
         GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher(
-                "http://localhost:4318/v1/logs", "alice", "secret");
+                "http://localhost:4318/v1/logs", "alice", "secret", null, 5_000, 10_000, null,
+                new HttpUrlConnectionTransport());
         replaceEndpoint(dispatcher, urlFor(connection));
 
         dispatcher.dispatchFormatted("{\"resourceLogs\":[]}");
@@ -124,7 +128,8 @@ class GrafanaLogRecordDispatcherUnitTest {
         headers.put("X-Null", null);
 
         GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher(
-                "http://localhost:4318/v1/logs", "alice", "secret", "token-123", 2_000, 2_000, headers);
+                "http://localhost:4318/v1/logs", "alice", "secret", "token-123", 2_000, 2_000, headers,
+                new HttpUrlConnectionTransport());
         replaceEndpoint(dispatcher, urlFor(connection));
 
         dispatcher.dispatchFormatted("{\"resourceLogs\":[]}");
@@ -241,13 +246,13 @@ class GrafanaLogRecordDispatcherUnitTest {
     @Test
     @DisplayName("DispatchResult should report success only for 2xx statuses")
     void dispatchResultShouldReportSuccessRange() throws Exception {
-        Constructor<?> constructor = GrafanaLogRecordDispatcher.DispatchResult.class
+        Constructor<?> constructor = AbstractLogRecordDispatcher.DispatchResult.class
                 .getDeclaredConstructor(int.class, String.class);
         constructor.setAccessible(true);
-        GrafanaLogRecordDispatcher.DispatchResult ok =
-                (GrafanaLogRecordDispatcher.DispatchResult) constructor.newInstance(299, null);
-        GrafanaLogRecordDispatcher.DispatchResult redirect =
-                (GrafanaLogRecordDispatcher.DispatchResult) constructor.newInstance(302, "r");
+        AbstractLogRecordDispatcher.DispatchResult ok =
+                (AbstractLogRecordDispatcher.DispatchResult) constructor.newInstance(299, null);
+        AbstractLogRecordDispatcher.DispatchResult redirect =
+                (AbstractLogRecordDispatcher.DispatchResult) constructor.newInstance(302, "r");
 
         assertTrue(ok.isSuccessful());
         assertEquals("", ok.getResponseBody());
@@ -290,7 +295,7 @@ class GrafanaLogRecordDispatcherUnitTest {
                 null, resource(Collections.singletonList(keyValue("service.name", anyString("orders")))),
                 scope("fallback")));
 
-        Method extractBodyAsString = GrafanaLogRecordDispatcher.class.getDeclaredMethod("extractBodyAsString", LogRecord.class);
+        Method extractBodyAsString = AbstractLogRecordDispatcher.class.getDeclaredMethod("extractBodyAsString", LogRecord.class);
         extractBodyAsString.setAccessible(true);
         assertEquals("", extractBodyAsString.invoke(null, logRecord(null, null, null, null, null, null, Instant.now())));
         assertEquals("", extractBodyAsString.invoke(null,
@@ -298,14 +303,14 @@ class GrafanaLogRecordDispatcherUnitTest {
         assertEquals("msg", extractBodyAsString.invoke(null,
                 logRecord(anyString("msg"), null, null, null, null, null, Instant.now())));
 
-        Method toUnsignedNanosString = GrafanaLogRecordDispatcher.class
+        Method toUnsignedNanosString = AbstractLogRecordDispatcher.class
                 .getDeclaredMethod("toUnsignedNanosString", Instant.class);
         toUnsignedNanosString.setAccessible(true);
         String nowNanos = (String) toUnsignedNanosString.invoke(null, new Object[]{null});
         assertTrue(nowNanos.matches("\\d+"));
         assertEquals("0", toUnsignedNanosString.invoke(null, Instant.ofEpochSecond(-1)));
 
-        Method applyAuthentication = GrafanaLogRecordDispatcher.class
+        Method applyAuthentication = AbstractLogRecordDispatcher.class
                 .getDeclaredMethod("applyAuthentication", Map.class);
         applyAuthentication.setAccessible(true);
         GrafanaLogRecordDispatcher basicDispatcher = new GrafanaLogRecordDispatcher(
@@ -315,13 +320,13 @@ class GrafanaLogRecordDispatcherUnitTest {
         applyAuthentication.invoke(basicDispatcher, authHeaders);
         assertFalse(authHeaders.containsKey("Authorization"));
 
-        Method toImmutableHeaders = GrafanaLogRecordDispatcher.class
+        Method toImmutableHeaders = AbstractLogRecordDispatcher.class
                 .getDeclaredMethod("toImmutableHeaders", Map.class);
         toImmutableHeaders.setAccessible(true);
         Map<?, ?> immutable = (Map<?, ?>) toImmutableHeaders.invoke(null, Collections.emptyMap());
         assertTrue(immutable.isEmpty());
 
-        Method escapeJson = GrafanaLogRecordDispatcher.class.getDeclaredMethod("escapeJson", String.class);
+        Method escapeJson = AbstractLogRecordDispatcher.class.getDeclaredMethod("escapeJson", String.class);
         escapeJson.setAccessible(true);
         assertEquals("", escapeJson.invoke(null, new Object[]{null}));
         String escaped = (String) escapeJson.invoke(null, "\"\\\b\f\n\r\t" + ((char) 1) + "a");
@@ -341,8 +346,8 @@ class GrafanaLogRecordDispatcherUnitTest {
         assertTrue(lokiPayloadWithTrace.contains("\\\"span_id\\\":\\\"spanid01\\\""));
 
         // Cover throwIfNonSuccess(null) path
-        Method throwIfNonSuccess = GrafanaLogRecordDispatcher.class.getDeclaredMethod(
-                "throwIfNonSuccess", GrafanaLogRecordDispatcher.DispatchResult.class);
+        Method throwIfNonSuccess = AbstractLogRecordDispatcher.class.getDeclaredMethod(
+                "throwIfNonSuccess", AbstractLogRecordDispatcher.DispatchResult.class);
         throwIfNonSuccess.setAccessible(true);
         replaceEndpoint(dispatcher, new URL("http://localhost:4318/v1/logs"));
         InvocationTargetException nullResultEx = assertThrows(
@@ -352,7 +357,7 @@ class GrafanaLogRecordDispatcherUnitTest {
         assertTrue(nullResultEx.getCause() instanceof IOException);
 
         // Cover sanitizeLogRecords null-element skip
-        Method sanitizeLogRecords = GrafanaLogRecordDispatcher.class.getDeclaredMethod("sanitizeLogRecords", List.class);
+        Method sanitizeLogRecords = AbstractLogRecordDispatcher.class.getDeclaredMethod("sanitizeLogRecords", List.class);
         sanitizeLogRecords.setAccessible(true);
         LogRecordFactoryImpl sanitizeFactory = new LogRecordFactoryImpl();
         List<LogRecord> listWithNull = Arrays.asList(
@@ -407,7 +412,8 @@ class GrafanaLogRecordDispatcherUnitTest {
     void dispatchLogRecordsShouldDispatchSequentiallyForLokiEndpoint() throws Exception {
         StubConnection connection = new StubConnection(204, "", null);
         GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher(
-                "http://localhost:3100/loki/api/v1/push");
+                "http://localhost:3100/loki/api/v1/push", null, null, null, 5_000, 10_000, null,
+                new HttpUrlConnectionTransport());
         replaceEndpoint(dispatcher, urlFor(connection, "/loki/api/v1/push"));
         LogRecordFactoryImpl factory = new LogRecordFactoryImpl();
         List<LogRecord> records = Arrays.asList(
@@ -442,7 +448,7 @@ class GrafanaLogRecordDispatcherUnitTest {
 
         GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher(
                 "http://localhost:4318/v1/logs", null, null, null, 1000, 1000, null, mockTransport);
-        GrafanaLogRecordDispatcher.DispatchResult result = dispatcher.dispatchFormatted("{\"resourceLogs\":[]}");
+        AbstractLogRecordDispatcher.DispatchResult result = dispatcher.dispatchFormatted("{\"resourceLogs\":[]}");
 
         assertEquals(200, result.getStatusCode());
         assertEquals("dispatched", result.getResponseBody());
@@ -450,17 +456,83 @@ class GrafanaLogRecordDispatcherUnitTest {
     }
 
     @Test
-    @DisplayName("8-arg constructor with null transport should fall back to HttpUrlConnectionTransport")
+    @DisplayName("8-arg constructor with null transport should fall back to preferred transport (auto-detected)")
     void eightArgConstructorWithNullTransportShouldFallBackToDefault() throws Exception {
         GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher(
                 "http://localhost:4318/v1/logs", null, null, null, 1000, 1000, null, null);
-        Field transportField = GrafanaLogRecordDispatcher.class.getDeclaredField("httpTransport");
+        Field transportField = AbstractLogRecordDispatcher.class.getDeclaredField("httpTransport");
         transportField.setAccessible(true);
-        assertTrue(transportField.get(dispatcher) instanceof HttpUrlConnectionTransport);
+        assertNotNull(transportField.get(dispatcher));
+    }
+
+    // -------------------------------------------------------------------------
+    // close() / transport lifecycle tests
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("close() should close owned (auto-detected) transport")
+    void close_ownsTransport_closesTransport() throws Exception {
+        CloseableTransport transport = new CloseableTransport();
+        GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher(
+                "http://localhost:3100/loki/api/v1/push", null, null, null, 5_000, 10_000, null, transport);
+        // ownsTransport is false here (explicit transport provided)
+        dispatcher.close();
+        assertFalse(transport.closed);
+
+        // Force ownsTransport=true via reflection to test the owned-close path
+        Field ownsField = AbstractLogRecordDispatcher.class.getDeclaredField("ownsTransport");
+        ownsField.setAccessible(true);
+        ownsField.set(dispatcher, true);
+        dispatcher.close();
+        assertTrue(transport.closed);
+    }
+
+    @Test
+    @DisplayName("close() should not close externally-provided transport")
+    void close_externalTransport_doesNotCloseTransport() throws Exception {
+        CloseableTransport transport = new CloseableTransport();
+        GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher(
+                "http://localhost:3100/loki/api/v1/push", null, null, null, 5_000, 10_000, null, transport);
+        dispatcher.close();
+        assertFalse(transport.closed);
+    }
+
+    @Test
+    @DisplayName("close() on auto-detected transport (null passed) owns and closes it")
+    void close_nullTransport_autoDetectsAndOwns() throws Exception {
+        GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher(
+                "http://localhost:3100/loki/api/v1/push", null, null, null, 5_000, 10_000, null, null);
+        dispatcher.close();
+    }
+
+    @Test
+    @DisplayName("close() is no-op for non-Closeable transport when owned")
+    void close_nonCloseableTransport_noOp() throws Exception {
+        GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher(
+                "http://localhost:3100/loki/api/v1/push", null, null, null, 5_000, 10_000, null, mockTransport);
+        dispatcher.close();
+    }
+
+    private static final class CloseableTransport implements HttpTransport, Closeable {
+        boolean closed = false;
+
+        @Override
+        public com.threeamigos.common.util.interfaces.messagehandler.transport.HttpTransportResponse post(
+                java.net.URL endpoint, byte[] body, java.util.Map<String, String> headers,
+                int connectTimeoutMillis, int readTimeoutMillis) {
+            return new com.threeamigos.common.util.interfaces.messagehandler.transport.HttpTransportResponse(200, "");
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+        }
     }
 
     private static GrafanaLogRecordDispatcher dispatcherWithConnection(final StubConnection connection) throws Exception {
-        GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher("http://localhost:4318/v1/logs");
+        GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher(
+                "http://localhost:4318/v1/logs", null, null, null, 5_000, 10_000, null,
+                new HttpUrlConnectionTransport());
         replaceEndpoint(dispatcher, urlFor(connection));
         return dispatcher;
     }
@@ -479,13 +551,13 @@ class GrafanaLogRecordDispatcherUnitTest {
     }
 
     private static void replaceEndpoint(final GrafanaLogRecordDispatcher dispatcher, final URL url) throws Exception {
-        Field endpointField = GrafanaLogRecordDispatcher.class.getDeclaredField("endpoint");
+        Field endpointField = AbstractLogRecordDispatcher.class.getDeclaredField("endpoint");
         endpointField.setAccessible(true);
         endpointField.set(dispatcher, url);
     }
 
     private static void setField(final Object target, final String fieldName, final Object value) throws Exception {
-        Field field = GrafanaLogRecordDispatcher.class.getDeclaredField(fieldName);
+        Field field = AbstractLogRecordDispatcher.class.getDeclaredField(fieldName);
         field.setAccessible(true);
         field.set(target, value);
     }

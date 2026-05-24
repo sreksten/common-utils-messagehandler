@@ -372,6 +372,18 @@ public class JaegerMessageHandler extends AbstractHTTPOutputMessageHandler {
                 "JaegerMessageHandler-async", "JaegerMessageHandler-shutdown");
     }
 
+    @Override
+    protected void closeOutput() {
+        super.closeOutput();
+        if (dispatcher instanceof java.io.Closeable) {
+            try {
+                ((java.io.Closeable) dispatcher).close();
+            } catch (java.io.IOException e) {
+                reportInnerFailure("closing Jaeger dispatcher", e);
+            }
+        }
+    }
+
     /**
      * Sets the error consumer invoked whenever HTTP dispatch fails.
      *

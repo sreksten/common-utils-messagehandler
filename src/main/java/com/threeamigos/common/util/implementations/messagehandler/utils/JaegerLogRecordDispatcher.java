@@ -1,33 +1,18 @@
 package com.threeamigos.common.util.implementations.messagehandler.utils;
 
-import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.ExportLogsServiceRequestLogRecordFormatter;
 import com.threeamigos.common.util.implementations.messagehandler.tracecontext.TraceContextGenerator;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.InstrumentationScope;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordDispatcher;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Resource;
-
-import com.threeamigos.common.util.implementations.messagehandler.transport.HttpUrlConnectionTransport;
 import com.threeamigos.common.util.interfaces.messagehandler.transport.HttpTransport;
-import com.threeamigos.common.util.interfaces.messagehandler.transport.HttpTransportResponse;
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
 
-import java.io.IOException;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 
 /**
  * HTTP dispatcher for OTLP log payloads formatted as {@code ExportLogsServiceRequest} JSON.
@@ -37,8 +22,8 @@ import java.util.Objects;
  * that already produces {@link LogRecord} instances.
  * <p>
  * Input records are serialized via
- * {@link ExportLogsServiceRequestLogRecordFormatter}, so each dispatched payload is a full
- * OTLP JSON {@code ExportLogsServiceRequest} document.
+ * {@link com.threeamigos.common.util.implementations.messagehandler.otel.formatters.ExportLogsServiceRequestLogRecordFormatter},
+ * so each dispatched payload is a full OTLP JSON {@code ExportLogsServiceRequest} document.
  *
  * <h2>Jaeger Compatibility Note</h2>
  * <p>
@@ -78,11 +63,24 @@ import java.util.Objects;
  * </ul>
  * If both Basic and Bearer are configured, Bearer is used.
  *
+ * <h2>HTTP Transport</h2>
+ * <p>
+ * When no explicit {@link HttpTransport} is provided, the dispatcher auto-detects the preferred
+ * implementation at construction time via
+ * {@link com.threeamigos.common.util.implementations.messagehandler.transport.HttpTransports#createPreferred()}:
+ * if Apache HttpClient 4.x is on the classpath, {@code ApacheHttpClientTransport} (connection
+ * pooling) is used; otherwise
+ * {@link com.threeamigos.common.util.implementations.messagehandler.transport.HttpUrlConnectionTransport}
+ * is used (zero extra dependencies).
+ * <p>
+ * When the dispatcher owns the transport (auto-detected), calling {@link #close()} releases any
+ * pooled connections. This is typically handled automatically when the dispatcher is owned by
+ * {@link com.threeamigos.common.util.implementations.messagehandler.JaegerMessageHandler},
+ * which closes its dispatcher as part of its own {@code close()} lifecycle.
+ *
  * <h2>Thread Safety</h2>
  * <p>
  * Instances are immutable after construction and safe for concurrent use.
- * Each dispatch call opens a dedicated {@link HttpURLConnection}; when streams are fully consumed
- * and closed, the JDK keep-alive cache can reuse sockets for subsequent requests.
  *
  * <h2>References</h2>
  * <ul>
@@ -92,22 +90,7 @@ import java.util.Objects;
  *
  * @author Stefano Reksten
  */
-public class JaegerLogRecordDispatcher implements LogRecordDispatcher {
-
-    private static final int DEFAULT_CONNECT_TIMEOUT_MILLIS = 10_000;
-    private static final int DEFAULT_READ_TIMEOUT_MILLIS = 10_000;
-    private static final String APPLICATION_JSON = "application/json";
-    private static final BigInteger NANOS_PER_SECOND = BigInteger.valueOf(1_000_000_000L);
-
-    private final URL endpoint;
-    private final String username;
-    private final String password;
-    private final String bearerToken;
-    private final int connectTimeoutMillis;
-    private final int readTimeoutMillis;
-    private final Map<String, String> additionalHeaders;
-    private final ExportLogsServiceRequestLogRecordFormatter formatter;
-    private final HttpTransport httpTransport;
+public class JaegerLogRecordDispatcher extends AbstractLogRecordDispatcher {
 
     /**
      * Creates a dispatcher with no authentication and default timeouts.
@@ -122,8 +105,8 @@ public class JaegerLogRecordDispatcher implements LogRecordDispatcher {
      * Creates a dispatcher with optional Basic authentication and default timeouts.
      *
      * @param endpointUrl full HTTP endpoint
-     * @param username basic-auth username, nullable
-     * @param password basic-auth password, nullable
+     * @param username    basic-auth username, nullable
+     * @param password    basic-auth password, nullable
      */
     public JaegerLogRecordDispatcher(final @Nonnull String endpointUrl,
                                      final @Nullable String username,
@@ -136,13 +119,13 @@ public class JaegerLogRecordDispatcher implements LogRecordDispatcher {
      * <p>
      * {@code bearerToken} takes precedence over Basic authentication when both are provided.
      *
-     * @param endpointUrl full HTTP endpoint
-     * @param username basic-auth username, nullable
-     * @param password basic-auth password, nullable
-     * @param bearerToken bearer token, nullable
+     * @param endpointUrl          full HTTP endpoint
+     * @param username             basic-auth username, nullable
+     * @param password             basic-auth password, nullable
+     * @param bearerToken          bearer token, nullable
      * @param connectTimeoutMillis connect timeout in milliseconds, must be positive
-     * @param readTimeoutMillis read timeout in milliseconds, must be positive
-     * @param additionalHeaders optional extra headers
+     * @param readTimeoutMillis    read timeout in milliseconds, must be positive
+     * @param additionalHeaders    optional extra headers
      */
     public JaegerLogRecordDispatcher(final @Nonnull String endpointUrl,
                                      final @Nullable String username,
@@ -152,14 +135,20 @@ public class JaegerLogRecordDispatcher implements LogRecordDispatcher {
                                      final int readTimeoutMillis,
                                      final @Nullable Map<String, String> additionalHeaders) {
         this(endpointUrl, username, password, bearerToken, connectTimeoutMillis, readTimeoutMillis,
-                additionalHeaders, new HttpUrlConnectionTransport());
+                additionalHeaders, null);
     }
 
     /**
-     * Creates a dispatcher with full configuration and a custom HTTP transport.
+     * Creates a dispatcher with full configuration and an optional custom HTTP transport.
      * <p>
-     * Use this constructor to provide an {@link HttpTransport} with connection-pooling
-     * support (for example {@code new ApacheHttpClientTransport()}).
+     * When {@code httpTransport} is {@code null}, the preferred transport is selected
+     * automatically via
+     * {@link com.threeamigos.common.util.implementations.messagehandler.transport.HttpTransports#createPreferred()}:
+     * {@code ApacheHttpClientTransport} if Apache HttpClient is on the classpath,
+     * otherwise {@link com.threeamigos.common.util.implementations.messagehandler.transport.HttpUrlConnectionTransport}.
+     * <p>
+     * When a non-null transport is supplied, the caller owns its lifecycle and must close it
+     * independently. The dispatcher will not close a caller-provided transport.
      *
      * @param endpointUrl          full HTTP endpoint
      * @param username             basic-auth username, nullable
@@ -168,8 +157,7 @@ public class JaegerLogRecordDispatcher implements LogRecordDispatcher {
      * @param connectTimeoutMillis connect timeout in milliseconds, must be positive
      * @param readTimeoutMillis    read timeout in milliseconds, must be positive
      * @param additionalHeaders    optional extra headers
-     * @param httpTransport        transport to use for HTTP calls; defaults to
-     *                             {@link HttpUrlConnectionTransport} when {@code null}
+     * @param httpTransport        transport to use for HTTP calls; {@code null} selects automatically
      */
     public JaegerLogRecordDispatcher(final @Nonnull String endpointUrl,
                                      final @Nullable String username,
@@ -179,180 +167,27 @@ public class JaegerLogRecordDispatcher implements LogRecordDispatcher {
                                      final int readTimeoutMillis,
                                      final @Nullable Map<String, String> additionalHeaders,
                                      final @Nullable HttpTransport httpTransport) {
-        this.endpoint = parseEndpoint(endpointUrl);
-        this.username = normalizeNullable(username);
-        this.password = normalizeNullable(password);
-        this.bearerToken = normalizeNullable(bearerToken);
-        this.connectTimeoutMillis = requirePositive(connectTimeoutMillis, "connectTimeoutMillis");
-        this.readTimeoutMillis = requirePositive(readTimeoutMillis, "readTimeoutMillis");
-        this.additionalHeaders = toImmutableHeaders(additionalHeaders);
-        this.formatter = new ExportLogsServiceRequestLogRecordFormatter();
-        this.httpTransport = httpTransport != null ? httpTransport : new HttpUrlConnectionTransport();
-        validateAuthConfiguration();
+        super(endpointUrl, username, password, bearerToken, connectTimeoutMillis, readTimeoutMillis,
+                additionalHeaders, httpTransport);
     }
 
-    /**
-     * Formats and dispatches a {@link LogRecord}.
-     *
-     * @param logRecord record to send
-     * @return HTTP dispatch result
-     * @throws IOException network/transport errors
-     */
-    public DispatchResult dispatch(final @Nonnull LogRecord logRecord) throws IOException {
-        return dispatch(logRecord, formatter);
-    }
-
-    /**
-     * Formats and dispatches a {@link LogRecord} using the provided formatter.
-     * <p>
-     * When the configured endpoint path targets OTLP traces ({@code /v1/traces}),
-     * the dispatcher transforms the log record into a synthetic span event payload
-     * so that the message becomes queryable in Jaeger.
-     *
-     * @param logRecord record to send
-     * @param logRecordFormatter formatter used for standard log export endpoints
-     * @return HTTP dispatch result
-     * @throws IOException network/transport errors
-     */
-    public DispatchResult dispatch(final @Nonnull LogRecord logRecord,
-                                   final @Nonnull LogRecordFormatter logRecordFormatter) throws IOException {
-        Objects.requireNonNull(logRecord, "logRecord must not be null");
-        Objects.requireNonNull(logRecordFormatter, "logRecordFormatter must not be null");
-        String payload = shouldTransformLogsIntoTraceSpanEvents()
-                ? toExportTracesRequestJson(logRecord)
-                : logRecordFormatter.format(logRecord);
-        return dispatchFormatted(payload);
-    }
-
-    /**
-     * Dispatches one log record and fails on non-2xx responses.
-     *
-     * @param logRecord record to dispatch
-     * @param logRecordFormatter formatter used to build payloads when needed
-     * @throws IOException transport errors or non-success HTTP status
-     */
     @Override
-    public void dispatchLogRecord(final @Nonnull LogRecord logRecord,
-                                  final @Nonnull LogRecordFormatter logRecordFormatter) throws IOException {
-        DispatchResult result = dispatch(logRecord, logRecordFormatter);
-        throwIfNonSuccess(result);
+    protected String getUserAgent() {
+        return "common-utils-messagehandler/jaeger-logrecord-dispatcher";
     }
 
-    /**
-     * Dispatches multiple records, preferring one batched OTLP request when possible.
-     * <p>
-     * Batch fast-path is used when:
-     * <ul>
-     *   <li>formatter is {@link ExportLogsServiceRequestLogRecordFormatter}</li>
-     *   <li>endpoint mode is OTLP logs (not trace-transformation mode on {@code /v1/traces})</li>
-     * </ul>
-     * Otherwise records are dispatched sequentially with single-record semantics.
-     *
-     * @param logRecords records to dispatch
-     * @param logRecordFormatter formatter used to build payloads
-     * @throws IOException transport errors or non-success HTTP status
-     */
     @Override
-    public void dispatchLogRecords(final @Nonnull List<LogRecord> logRecords,
-                                   final @Nonnull LogRecordFormatter logRecordFormatter) throws IOException {
-        Objects.requireNonNull(logRecords, "logRecords must not be null");
-        Objects.requireNonNull(logRecordFormatter, "logRecordFormatter must not be null");
-        List<LogRecord> sanitized = sanitizeLogRecords(logRecords);
-        if (sanitized.isEmpty()) {
-            return;
-        }
-        if (sanitized.size() == 1) {
-            dispatchLogRecord(sanitized.get(0), logRecordFormatter);
-            return;
-        }
-        if (!shouldTransformLogsIntoTraceSpanEvents()
-                && logRecordFormatter instanceof ExportLogsServiceRequestLogRecordFormatter) {
-            String payload = ((ExportLogsServiceRequestLogRecordFormatter) logRecordFormatter).formatBatch(sanitized);
-            DispatchResult result = dispatchFormatted(payload);
-            throwIfNonSuccess(result);
-            return;
-        }
-        for (LogRecord logRecord : sanitized) {
-            dispatchLogRecord(logRecord, logRecordFormatter);
-        }
+    protected boolean usesSpecialEndpointFormat() {
+        return shouldTransformLogsIntoTraceSpanEvents();
     }
 
-    /**
-     * Dispatches a pre-formatted OTLP JSON payload.
-     * <p>
-     * This method assumes the payload already follows OTLP JSON shape, typically generated by
-     * {@link ExportLogsServiceRequestLogRecordFormatter}.
-     *
-     * @param formattedExportLogsServiceRequestJson payload body
-     * @return HTTP dispatch result
-     * @throws IOException network/transport errors
-     */
-    public DispatchResult dispatchFormatted(final @Nonnull String formattedExportLogsServiceRequestJson) throws IOException {
-        Objects.requireNonNull(formattedExportLogsServiceRequestJson, "formattedExportLogsServiceRequestJson must not be null");
-        byte[] payloadBytes = formattedExportLogsServiceRequestJson.getBytes(StandardCharsets.UTF_8);
-        HttpTransportResponse response = httpTransport.post(endpoint, payloadBytes, buildHeaders(),
-                connectTimeoutMillis, readTimeoutMillis);
-        return new DispatchResult(response.getStatusCode(), response.getBody());
-    }
-
-    private Map<String, String> buildHeaders() {
-        Map<String, String> headers = new LinkedHashMap<String, String>();
-        headers.put("Content-Type", APPLICATION_JSON);
-        headers.put("Accept", APPLICATION_JSON);
-        headers.put("Connection", "keep-alive");
-        headers.put("User-Agent", "common-utils-messagehandler/jaeger-logrecord-dispatcher");
-        applyAuthentication(headers);
-        applyAdditionalHeaders(headers);
-        return headers;
-    }
-
-    /**
-     * Dispatches a record and fails fast when the remote endpoint does not return a 2xx status code.
-     *
-     * @param logRecord record to send
-     * @return successful dispatch result
-     * @throws IOException network/transport errors or non-success HTTP status
-     */
-    public DispatchResult dispatchOrThrow(final @Nonnull LogRecord logRecord) throws IOException {
-        DispatchResult result = dispatch(logRecord);
-        throwIfNonSuccess(result);
-        return result;
-    }
-
-    /**
-     * Throws an {@link IOException} when the provided result is null or non-success.
-     *
-     * @param result dispatch result to validate
-     * @throws IOException when result is null or status code is non-2xx
-     */
-    private void throwIfNonSuccess(final DispatchResult result) throws IOException {
-        if (result == null) {
-            throw new IOException("Dispatcher returned null dispatch result for endpoint " + endpoint);
-        }
-        if (!result.isSuccessful()) {
-            throw new HttpDispatchStatusException(endpoint.toString(), result.getStatusCode(), result.getResponseBody());
-        }
-    }
-
-    /**
-     * Returns a copy of input records without null entries.
-     *
-     * @param logRecords input records
-     * @return non-null records preserving input order
-     */
-    private static List<LogRecord> sanitizeLogRecords(final List<LogRecord> logRecords) {
-        List<LogRecord> sanitized = new ArrayList<LogRecord>(logRecords.size());
-        for (LogRecord logRecord : logRecords) {
-            if (logRecord == null) {
-                continue;
-            }
-            sanitized.add(logRecord);
-        }
-        return sanitized;
+    @Override
+    protected String buildSpecialPayload(final LogRecord logRecord) {
+        return toExportTracesRequestJson(logRecord);
     }
 
     private boolean shouldTransformLogsIntoTraceSpanEvents() {
-        String path = endpoint.getPath();
+        String path = getEndpoint().getPath();
         if (path == null) {
             return false;
         }
@@ -419,14 +254,6 @@ public class JaegerLogRecordDispatcher implements LogRecordDispatcher {
         return sb.toString();
     }
 
-    private static String extractBodyAsString(final LogRecord logRecord) {
-        if (logRecord.getBody() == null) {
-            return "";
-        }
-        String value = logRecord.getBody().asString();
-        return value == null ? "" : value;
-    }
-
     private static String resolveScopeName(final InstrumentationScope scope) {
         if (scope == null) {
             return null;
@@ -464,17 +291,6 @@ public class JaegerLogRecordDispatcher implements LogRecordDispatcher {
         return "common-utils-messagehandler";
     }
 
-    private static String toUnsignedNanosString(final Instant timestamp) {
-        Instant safeTimestamp = timestamp == null ? Instant.now() : timestamp;
-        BigInteger nanos = BigInteger.valueOf(safeTimestamp.getEpochSecond())
-                .multiply(NANOS_PER_SECOND)
-                .add(BigInteger.valueOf(safeTimestamp.getNano()));
-        if (nanos.signum() < 0) {
-            return "0";
-        }
-        return nanos.toString();
-    }
-
     private static String normalizeHexId(final String id, final int expectedLength) {
         String normalized = normalizeNullable(id);
         if (normalized == null || normalized.length() != expectedLength) {
@@ -501,155 +317,5 @@ public class JaegerLogRecordDispatcher implements LogRecordDispatcher {
         sb.append("{\"key\":\"").append(escapeJson(key))
                 .append("\",\"value\":{\"stringValue\":\"")
                 .append(escapeJson(value == null ? "" : value)).append("\"}}");
-    }
-
-    private static String escapeJson(final String value) {
-        if (value == null) {
-            return "";
-        }
-        StringBuilder escaped = new StringBuilder(value.length() + 16);
-        for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
-            switch (c) {
-                case '"':
-                    escaped.append("\\\"");
-                    break;
-                case '\\':
-                    escaped.append("\\\\");
-                    break;
-                case '\b':
-                    escaped.append("\\b");
-                    break;
-                case '\f':
-                    escaped.append("\\f");
-                    break;
-                case '\n':
-                    escaped.append("\\n");
-                    break;
-                case '\r':
-                    escaped.append("\\r");
-                    break;
-                case '\t':
-                    escaped.append("\\t");
-                    break;
-                default:
-                    if (c < 0x20) {
-                        String hex = Integer.toHexString(c);
-                        escaped.append("\\u");
-                        for (int j = hex.length(); j < 4; j++) {
-                            escaped.append('0');
-                        }
-                        escaped.append(hex);
-                    } else {
-                        escaped.append(c);
-                    }
-            }
-        }
-        return escaped.toString();
-    }
-
-    private void applyAuthentication(final Map<String, String> headers) {
-        if (hasText(bearerToken)) {
-            headers.put("Authorization", "Bearer " + bearerToken);
-            return;
-        }
-        if (hasText(username) && password != null) {
-            String raw = username + ":" + password;
-            String encoded = Base64.getEncoder().encodeToString(raw.getBytes(StandardCharsets.UTF_8));
-            headers.put("Authorization", "Basic " + encoded);
-        }
-    }
-
-    private void applyAdditionalHeaders(final Map<String, String> headers) {
-        for (Map.Entry<String, String> entry : additionalHeaders.entrySet()) {
-            if (!hasText(entry.getKey())) {
-                continue;
-            }
-            if (entry.getValue() == null) {
-                continue;
-            }
-            headers.put(entry.getKey(), entry.getValue());
-        }
-    }
-
-    private void validateAuthConfiguration() {
-        if (hasText(username) && password == null) {
-            throw new IllegalArgumentException("Basic auth password is required when username is set");
-        }
-        if (!hasText(username) && password != null) {
-            throw new IllegalArgumentException("Basic auth username is required when password is set");
-        }
-    }
-
-    private static URL parseEndpoint(final String endpointUrl) {
-        String normalized = normalizeNullable(endpointUrl);
-        if (normalized == null) {
-            throw new IllegalArgumentException("endpointUrl must not be null or blank");
-        }
-        try {
-            return new URL(normalized);
-        } catch (Exception ex) {
-            throw new IllegalArgumentException("Invalid endpointUrl: " + endpointUrl, ex);
-        }
-    }
-
-    private static int requirePositive(final int value, final String fieldName) {
-        if (value <= 0) {
-            throw new IllegalArgumentException(fieldName + " must be > 0");
-        }
-        return value;
-    }
-
-    private static Map<String, String> toImmutableHeaders(final Map<String, String> headers) {
-        if (headers == null || headers.isEmpty()) {
-            return Collections.emptyMap();
-        }
-        return Collections.unmodifiableMap(new LinkedHashMap<>(headers));
-    }
-
-    private static String normalizeNullable(final String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
-    }
-
-    private static boolean hasText(final String value) {
-        return value != null && !value.trim().isEmpty();
-    }
-
-    /**
-     * Immutable result of a single HTTP dispatch call.
-     */
-    public static final class DispatchResult {
-        private final int statusCode;
-        private final String responseBody;
-
-        private DispatchResult(final int statusCode, final String responseBody) {
-            this.statusCode = statusCode;
-            this.responseBody = responseBody == null ? "" : responseBody;
-        }
-
-        /**
-         * @return HTTP status code returned by the endpoint
-         */
-        public int getStatusCode() {
-            return statusCode;
-        }
-
-        /**
-         * @return response body (empty string when absent)
-         */
-        public String getResponseBody() {
-            return responseBody;
-        }
-
-        /**
-         * @return {@code true} when status code is in {@code [200..299]}
-         */
-        public boolean isSuccessful() {
-            return statusCode >= 200 && statusCode < 300;
-        }
     }
 }

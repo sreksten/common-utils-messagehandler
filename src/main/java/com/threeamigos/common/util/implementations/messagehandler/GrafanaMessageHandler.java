@@ -334,6 +334,18 @@ public class GrafanaMessageHandler extends AbstractHTTPOutputMessageHandler {
                 "GrafanaMessageHandler-async", "GrafanaMessageHandler-shutdown");
     }
 
+    @Override
+    protected void closeOutput() {
+        super.closeOutput();
+        if (dispatcher instanceof java.io.Closeable) {
+            try {
+                ((java.io.Closeable) dispatcher).close();
+            } catch (java.io.IOException e) {
+                reportInnerFailure("closing Grafana dispatcher", e);
+            }
+        }
+    }
+
     /**
      * Sets the error consumer invoked whenever HTTP dispatch fails.
      *
