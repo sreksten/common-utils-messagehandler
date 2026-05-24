@@ -14,6 +14,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Base class for output-oriented handlers that optionally dispatch write operations asynchronously.
@@ -130,14 +131,36 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
     private volatile double rateLimitAvailableTokens = 0.0d;
     private volatile long rateLimitLastRefillNanos = 0L;
     private volatile SeverityNumber rateLimitBypassSeverity = SeverityNumber.ERROR;
-    private volatile double traceSamplingRate = 1.0d;
-    private volatile double debugSamplingRate = 1.0d;
-    private volatile double infoSamplingRate = 1.0d;
-    private volatile double warnSamplingRate = 1.0d;
-    private volatile double errorSamplingRate = 1.0d;
-    private volatile double fatalSamplingRate = 1.0d;
+    private final AtomicReference<SamplingPolicy> samplingPolicy =
+            new AtomicReference<>(new SamplingPolicy(1.0d, 1.0d, 1.0d, 1.0d, 1.0d, 1.0d));
     private final Object dispatchLock = new Object();
     protected volatile LogRecordFormatter logRecordFormatter;
+
+    /**
+     * Immutable value object holding all six per-bucket sampling rates.
+     * <p>
+     * Held in an {@link AtomicReference} so that {@link #setSeveritySamplingPolicy} is an
+     * atomic reference swap: readers always observe either the old or the new complete set,
+     * never a mix of old and new individual rates.
+     */
+    private static final class SamplingPolicy {
+        final double traceRate;
+        final double debugRate;
+        final double infoRate;
+        final double warnRate;
+        final double errorRate;
+        final double fatalRate;
+
+        SamplingPolicy(final double traceRate, final double debugRate, final double infoRate,
+                       final double warnRate, final double errorRate, final double fatalRate) {
+            this.traceRate = traceRate;
+            this.debugRate = debugRate;
+            this.infoRate = infoRate;
+            this.warnRate = warnRate;
+            this.errorRate = errorRate;
+            this.fatalRate = fatalRate;
+        }
+    }
 
     /**
      * Immutable snapshot of output-handler health counters.
@@ -528,12 +551,7 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
         validateSamplingRate("warnRate", warnRate);
         validateSamplingRate("errorRate", errorRate);
         validateSamplingRate("fatalRate", fatalRate);
-        this.traceSamplingRate = traceRate;
-        this.debugSamplingRate = debugRate;
-        this.infoSamplingRate = infoRate;
-        this.warnSamplingRate = warnRate;
-        this.errorSamplingRate = errorRate;
-        this.fatalSamplingRate = fatalRate;
+        samplingPolicy.set(new SamplingPolicy(traceRate, debugRate, infoRate, warnRate, errorRate, fatalRate));
     }
 
     private static void validateSamplingRate(final String name, final double samplingRate) {
@@ -641,25 +659,26 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
 
     private double resolveSamplingRate(final SeverityNumber severityNumber) {
         SeverityNumber effectiveSeverity = normalizeSeverity(severityNumber);
+        SamplingPolicy sp = samplingPolicy.get();
         if (effectiveSeverity.isTrace()) {
-            return traceSamplingRate;
+            return sp.traceRate;
         }
         if (effectiveSeverity.isDebug()) {
-            return debugSamplingRate;
+            return sp.debugRate;
         }
         if (effectiveSeverity.isInfo()) {
-            return infoSamplingRate;
+            return sp.infoRate;
         }
         if (effectiveSeverity.isWarn()) {
-            return warnSamplingRate;
+            return sp.warnRate;
         }
         if (effectiveSeverity.isError()) {
-            return errorSamplingRate;
+            return sp.errorRate;
         }
         if (effectiveSeverity.isFatal()) {
-            return fatalSamplingRate;
+            return sp.fatalRate;
         }
-        return infoSamplingRate;
+        return sp.infoRate;
     }
 
     private boolean tryConsumeRateLimitToken() {

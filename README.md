@@ -128,6 +128,9 @@ This package provides a series of classes that implement the `MessageHandler` in
 ```
 AbstractMessageHandler (implements MessageHandler)
 ├── AbstractOutputMessageHandler (may handle the message asynchronously)
+│   ├── AbstractHTTPOutputMessageHandler
+│   │   ├── JaegerMessageHandler (OTLP/HTTP log transport for Jaeger-compatible pipelines)
+│   │   └── GrafanaMessageHandler (OTLP/HTTP log transport for Grafana-compatible pipelines)
 │   ├── ConsoleMessageHandler
 │   └── FileMessageHandler
 ├── SwingMessageHandler (JOptionPane dialogs)
