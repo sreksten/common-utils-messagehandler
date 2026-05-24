@@ -5,6 +5,7 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.Entity;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Resource;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -19,7 +20,9 @@ import java.util.Set;
  *
  * @author Stefano Reksten
  */
-final class ResourceImpl implements Resource {
+final class ResourceImpl implements Resource, Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     private static final String RESOURCE_ATTRIBUTES_FIELD_NAME = MessageHandlerResourceBundle.get("resourceAttributesFieldName");
     private static final String RESOURCE_ENTITIES_FIELD_NAME = MessageHandlerResourceBundle.get("resourceEntitiesFieldName");

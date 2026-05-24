@@ -8,6 +8,7 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Resource;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 
+import java.io.Serializable;
 import java.math.BigInteger;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -21,7 +22,9 @@ import java.util.regex.Pattern;
  *
  * @author Stefano Reksten
  */
-public class LogRecordImpl implements LogRecord {
+public class LogRecordImpl implements LogRecord, Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     private static final Pattern TRACE_ID_PATTERN = Pattern.compile("(?!0{32})[0-9a-f]{32}");
     private static final Pattern SPAN_ID_PATTERN  = Pattern.compile("(?!0{16})[0-9a-f]{16}");

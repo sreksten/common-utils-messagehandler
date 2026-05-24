@@ -6,6 +6,7 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Entity;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 
+import java.io.Serializable;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Instant;
@@ -22,7 +23,9 @@ import java.util.regex.Pattern;
  *
  * @author Stefano Reksten
  */
-final class EntityImpl implements Entity {
+final class EntityImpl implements Entity, Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     private static final RawJsonRecordFormatter RAW_JSON_RECORD_FORMATTER = new RawJsonRecordFormatter();
     private static final Instant CANONICAL_TIMESTAMP = Instant.EPOCH;

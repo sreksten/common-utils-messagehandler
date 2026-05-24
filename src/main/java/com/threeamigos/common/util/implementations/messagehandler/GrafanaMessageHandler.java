@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
+import com.threeamigos.common.util.implementations.messagehandler.durability.HttpDispatchDurabilityStore;
+import com.threeamigos.common.util.implementations.messagehandler.durability.InMemoryHttpDispatchDurabilityStore;
 import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordFactoryImpl;
 import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.ExportLogsServiceRequestLogRecordFormatter;
 import com.threeamigos.common.util.implementations.messagehandler.utils.GrafanaLogRecordDispatcher;
@@ -31,6 +33,9 @@ import java.util.function.Consumer;
  * Optional close-on-dispatch-error behavior can be enabled through
  * {@link #setCloseOnDispatchError(boolean)}. In async mode, close scheduling is one-shot, so
  * repeated failures do not create unbounded close threads.
+ * Durable pending storage is configurable through {@link HttpDispatchDurabilityStore};
+ * constructors that do not expose a policy use {@link InMemoryHttpDispatchDurabilityStore}.
+ * Dead-letter reporting is configurable via a dedicated consumer and defaults to {@code System.err::println}.
  * <p>
  * Async convenience constructors (without an explicit {@code registerShutdownHook} argument)
  * enable shutdown-hook registration by default. When using constructors where
@@ -47,6 +52,33 @@ public class GrafanaMessageHandler extends AbstractHTTPOutputMessageHandler {
                 new ExportLogsServiceRequestLogRecordFormatter(),
                 new GrafanaLogRecordDispatcher(endpointUrl),
                 false, 0, false);
+    }
+
+    /**
+     * Creates a synchronous handler with explicit durability policy and default dead-letter consumer.
+     *
+     * @param endpointUrl OTLP HTTP endpoint
+     * @param durabilityStore pending-record durability policy
+     */
+    public GrafanaMessageHandler(final @Nonnull String endpointUrl,
+                                 final @Nonnull HttpDispatchDurabilityStore durabilityStore) {
+        this(endpointUrl, durabilityStore, System.err::println);
+    }
+
+    /**
+     * Creates a synchronous handler with explicit durability policy and dead-letter consumer.
+     *
+     * @param endpointUrl OTLP HTTP endpoint
+     * @param durabilityStore pending-record durability policy
+     * @param deadLetterConsumer consumer invoked for dead-letter records
+     */
+    public GrafanaMessageHandler(final @Nonnull String endpointUrl,
+                                 final @Nonnull HttpDispatchDurabilityStore durabilityStore,
+                                 final @Nonnull Consumer<String> deadLetterConsumer) {
+        this(new LogRecordFactoryImpl(),
+                new ExportLogsServiceRequestLogRecordFormatter(),
+                new GrafanaLogRecordDispatcher(endpointUrl),
+                false, 0, false, durabilityStore, deadLetterConsumer);
     }
 
     public GrafanaMessageHandler(final @Nonnull String endpointUrl,
@@ -154,11 +186,43 @@ public class GrafanaMessageHandler extends AbstractHTTPOutputMessageHandler {
                                  final boolean async,
                                  final int queueCapacity,
                                  final boolean registerShutdownHook) {
+        this(endpointUrl, username, password, bearerToken, connectTimeoutMillis, readTimeoutMillis, additionalHeaders,
+                async, queueCapacity, registerShutdownHook, new InMemoryHttpDispatchDurabilityStore(), System.err::println);
+    }
+
+    /**
+     * Creates a handler with full dispatcher, durability, and dead-letter configuration.
+     *
+     * @param endpointUrl OTLP HTTP endpoint
+     * @param username basic-auth username, nullable
+     * @param password basic-auth password, nullable
+     * @param bearerToken bearer token, nullable
+     * @param connectTimeoutMillis connect timeout in milliseconds
+     * @param readTimeoutMillis read timeout in milliseconds
+     * @param additionalHeaders optional additional headers
+     * @param async whether to use background dispatch
+     * @param queueCapacity async queue capacity (0 or negative means unbounded)
+     * @param registerShutdownHook whether to register a JVM shutdown hook that closes the handler
+     * @param durabilityStore pending-record durability policy
+     * @param deadLetterConsumer consumer invoked for dead-letter records
+     */
+    public GrafanaMessageHandler(final @Nonnull String endpointUrl,
+                                 final @Nullable String username,
+                                 final @Nullable String password,
+                                 final @Nullable String bearerToken,
+                                 final int connectTimeoutMillis,
+                                 final int readTimeoutMillis,
+                                 final @Nullable Map<String, String> additionalHeaders,
+                                 final boolean async,
+                                 final int queueCapacity,
+                                 final boolean registerShutdownHook,
+                                 final @Nonnull HttpDispatchDurabilityStore durabilityStore,
+                                 final @Nonnull Consumer<String> deadLetterConsumer) {
         this(new LogRecordFactoryImpl(),
                 new ExportLogsServiceRequestLogRecordFormatter(),
                 new GrafanaLogRecordDispatcher(endpointUrl, username, password, bearerToken,
                         connectTimeoutMillis, readTimeoutMillis, additionalHeaders),
-                async, queueCapacity, registerShutdownHook);
+                async, queueCapacity, registerShutdownHook, durabilityStore, deadLetterConsumer);
     }
 
     /**
@@ -178,7 +242,8 @@ public class GrafanaMessageHandler extends AbstractHTTPOutputMessageHandler {
                                  final boolean async,
                                  final int queueCapacity,
                                  final boolean registerShutdownHook) {
-        this(logRecordFactory, logRecordFormatter, (LogRecordDispatcher) dispatcher, async, queueCapacity, registerShutdownHook);
+        this(logRecordFactory, logRecordFormatter, (LogRecordDispatcher) dispatcher, async, queueCapacity,
+                registerShutdownHook, new InMemoryHttpDispatchDurabilityStore(), System.err::println);
     }
 
     /**
@@ -238,7 +303,31 @@ public class GrafanaMessageHandler extends AbstractHTTPOutputMessageHandler {
                                  final boolean async,
                                  final int queueCapacity,
                                  final boolean registerShutdownHook) {
-        super(logRecordFactory, logRecordFormatter);
+        this(logRecordFactory, logRecordFormatter, dispatcher, async, queueCapacity, registerShutdownHook,
+                new InMemoryHttpDispatchDurabilityStore(), System.err::println);
+    }
+
+    /**
+     * Creates a handler with explicit dependencies, durability policy, and dead-letter consumer.
+     *
+     * @param logRecordFactory factory used to create log records from incoming message calls
+     * @param logRecordFormatter formatter used to encode each log record before dispatch
+     * @param dispatcher dispatcher responsible for HTTP transport
+     * @param async whether to use background dispatch
+     * @param queueCapacity async queue capacity (0 or negative means unbounded)
+     * @param registerShutdownHook whether to register a JVM shutdown hook that closes the handler
+     * @param durabilityStore pending-record durability policy
+     * @param deadLetterConsumer consumer invoked for dead-letter records
+     */
+    public GrafanaMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
+                                 final @Nonnull LogRecordFormatter logRecordFormatter,
+                                 final @Nonnull LogRecordDispatcher dispatcher,
+                                 final boolean async,
+                                 final int queueCapacity,
+                                 final boolean registerShutdownHook,
+                                 final @Nonnull HttpDispatchDurabilityStore durabilityStore,
+                                 final @Nonnull Consumer<String> deadLetterConsumer) {
+        super(logRecordFactory, logRecordFormatter, durabilityStore, deadLetterConsumer);
         this.dispatcher = Objects.requireNonNull(dispatcher, MessageHandlerResourceBundle.get("nullDispatcherProvided"));
         initializeOutputDispatch(async, queueCapacity, registerShutdownHook,
                 "GrafanaMessageHandler-async", "GrafanaMessageHandler-shutdown");

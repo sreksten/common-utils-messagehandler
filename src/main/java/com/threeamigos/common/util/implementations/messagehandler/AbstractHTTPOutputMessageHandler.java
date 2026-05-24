@@ -1,5 +1,8 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
+import com.threeamigos.common.util.implementations.messagehandler.durability.DurableLogRecordEntry;
+import com.threeamigos.common.util.implementations.messagehandler.durability.HttpDispatchDurabilityStore;
+import com.threeamigos.common.util.implementations.messagehandler.durability.InMemoryHttpDispatchDurabilityStore;
 import com.threeamigos.common.util.implementations.messagehandler.utils.HttpDispatchStatusException;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
@@ -8,10 +11,9 @@ import jakarta.annotation.Nonnull;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 
@@ -25,14 +27,13 @@ import java.util.function.Consumer;
  *   <li>retryability classification for I/O and HTTP status failures</li>
  *   <li>circuit breaker with closed/open/half-open transitions</li>
  *   <li>best-effort JVM keep-alive configuration for {@link java.net.HttpURLConnection}</li>
- *   <li>failure buffering so records that fail dispatch can be retried as a later batch</li>
+ *   <li>pluggable durability store (in-memory/file/Redis) for pending dispatch records</li>
  *   <li>non-throwing dispatch path: transport/runtime failures are reported to the configured
  *       error consumer instead of being propagated to the logging caller</li>
  * </ul>
  * <p>
- * Retry batches are built by draining previously failed records from an internal buffer and appending
- * the current record. Subclasses provide the concrete transport call through
- * {@link HttpDispatchOperation}.
+ * Retry batches are built from the configured durability store. Subclasses provide the concrete
+ * transport call through {@link HttpDispatchOperation}.
  *
  * @author Stefano Reksten
  */
@@ -73,7 +74,8 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
     private long retryBudgetWindowStartMillis = System.currentTimeMillis();
     private int retryBudgetWindowPrimaryAttempts = 0;
     private int retryBudgetWindowConsumedRetries = 0;
-    private final Queue<LogRecord> retryBuffer = new ConcurrentLinkedQueue<LogRecord>();
+    private final HttpDispatchDurabilityStore durabilityStore;
+    private volatile Consumer<String> deadLetterConsumer;
 
     private enum CircuitState {
         CLOSED,
@@ -110,6 +112,8 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
      *   <li>retry budget: 200% of primary throughput (minimum 1 retry token per second window)</li>
      *   <li>retry jitter factor: ±20%</li>
      *   <li>circuit breaker: opens after 5 consecutive failures, 3-second open window, 1 half-open probe</li>
+     *   <li>durability policy: in-memory pending store</li>
+     *   <li>dead-letter consumer: {@code System.err::println}</li>
      *   <li>HTTP keep-alive max-connections hint: 32</li>
      * </ul>
      *
@@ -118,7 +122,24 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
      */
     public AbstractHTTPOutputMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
                                             final @Nonnull LogRecordFormatter logRecordFormatter) {
+        this(logRecordFactory, logRecordFormatter, new InMemoryHttpDispatchDurabilityStore(), System.err::println);
+    }
+
+    /**
+     * Creates an HTTP output handler with explicit durability and dead-letter policy.
+     *
+     * @param logRecordFactory record factory used by the superclass
+     * @param logRecordFormatter formatter used by the superclass
+     * @param durabilityStore pending-record durability policy
+     * @param deadLetterConsumer consumer invoked for dead-letter records
+     */
+    public AbstractHTTPOutputMessageHandler(final @Nonnull LogRecordFactory logRecordFactory,
+                                            final @Nonnull LogRecordFormatter logRecordFormatter,
+                                            final @Nonnull HttpDispatchDurabilityStore durabilityStore,
+                                            final @Nonnull Consumer<String> deadLetterConsumer) {
         super(logRecordFactory, logRecordFormatter);
+        this.durabilityStore = Objects.requireNonNull(durabilityStore, "durabilityStore must not be null");
+        this.deadLetterConsumer = Objects.requireNonNull(deadLetterConsumer, "deadLetterConsumer must not be null");
         configureHttpConnectionPooling(DEFAULT_HTTP_MAX_CONNECTIONS);
     }
 
@@ -238,15 +259,24 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
     }
 
     /**
+     * Sets the dead-letter consumer invoked when records are routed to dead-letter handling.
+     *
+     * @param deadLetterConsumer non-null dead-letter consumer
+     */
+    public final void setDeadLetterConsumer(final @Nonnull Consumer<String> deadLetterConsumer) {
+        this.deadLetterConsumer = Objects.requireNonNull(deadLetterConsumer, "deadLetterConsumer must not be null");
+    }
+
+    /**
      * Dispatches one logical log record through the provided HTTP dispatch operation.
      * <p>
      * Behavior:
      * <ol>
-     *   <li>Builds a dispatch batch by prepending buffered failed records to the current record.</li>
+     *   <li>Stores the current record in the durability store and builds a batch from all pending entries.</li>
      *   <li>Executes dispatch through {@link #dispatch(Runnable)} (sync or async, depending on handler mode).</li>
      *   <li>Applies retry/backoff policy for retryable {@link IOException}s.</li>
-     *   <li>On failure, records metrics, re-buffers batch records, reports to {@code errorConsumer},
-     *       and optionally requests close-on-error.</li>
+     *   <li>On failure, records metrics; permanent failures are routed to dead-letter handling, all failures
+     *       are reported to {@code errorConsumer}, and close-on-error may be requested.</li>
      * </ol>
      * <p>
      * This method is intentionally non-throwing for dispatch-related failures; it preserves caller flow.
@@ -269,21 +299,42 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
         Objects.requireNonNull(errorConsumer, MessageHandlerResourceBundle.get("nullErrorConsumerProvided"));
         Objects.requireNonNull(dispatchErrorMessageKey, "dispatchErrorMessageKey must not be null");
         Objects.requireNonNull(closeThreadName, "closeThreadName must not be null");
-        final List<LogRecord> recordsToDispatch = buildDispatchBatch(logRecord);
+        try {
+            persistPendingRecord(logRecord);
+        } catch (IOException durabilityFailure) {
+            recordOutputFailure();
+            reportDispatchFailure(durabilityFailure, errorConsumer, dispatchErrorMessageKey,
+                    closeOnDispatchError, closeThreadName);
+            return;
+        }
 
         try {
             dispatch(() -> {
+                final List<DurableLogRecordEntry> durableBatch;
                 try {
+                    durableBatch = retrievePendingBatch();
+                    if (durableBatch.isEmpty()) {
+                        return;
+                    }
+                } catch (IOException retrieveFailure) {
+                    recordOutputFailure();
+                    reportDispatchFailure(retrieveFailure, errorConsumer, dispatchErrorMessageKey,
+                            closeOnDispatchError, closeThreadName);
+                    return;
+                }
+                try {
+                    List<LogRecord> recordsToDispatch = extractLogRecords(durableBatch);
                     executeHttpDispatchWithRetry(recordsToDispatch, dispatchOperation);
+                    acknowledgeDispatchedBatch(durableBatch);
                     recordOutputSuccess();
                 } catch (IOException dispatchException) {
                     recordOutputFailure();
-                    enqueueRetryCandidates(recordsToDispatch);
+                    deadLetterIfPermanentFailure(durableBatch, dispatchException);
                     reportDispatchFailure(dispatchException, errorConsumer, dispatchErrorMessageKey,
                             closeOnDispatchError, closeThreadName);
                 } catch (RuntimeException runtimeException) {
                     recordOutputFailure();
-                    enqueueRetryCandidates(recordsToDispatch);
+                    deadLetterIfPermanentFailure(durableBatch, runtimeException);
                     reportDispatchFailure(runtimeException, errorConsumer, dispatchErrorMessageKey,
                             closeOnDispatchError, closeThreadName);
                 }
@@ -294,7 +345,7 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
                     closeOnDispatchError, closeThreadName);
         } catch (RuntimeException runtimeException) {
             recordOutputFailure();
-            enqueueRetryCandidates(recordsToDispatch);
+            deadLetterIfPermanentFailure(Collections.<DurableLogRecordEntry>emptyList(), runtimeException);
             reportDispatchFailure(runtimeException, errorConsumer, dispatchErrorMessageKey,
                     closeOnDispatchError, closeThreadName);
         }
@@ -378,37 +429,98 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
         }
     }
 
-    /**
-     * Builds the next dispatch batch by draining buffered failed records and appending the current record.
-     *
-     * @param currentRecord record from the current logging call
-     * @return ordered dispatch batch: buffered-failures first, current record last
-     */
-    private List<LogRecord> buildDispatchBatch(final LogRecord currentRecord) {
-        List<LogRecord> batch = new ArrayList<LogRecord>();
-        LogRecord pendingRetryRecord;
-        while ((pendingRetryRecord = retryBuffer.poll()) != null) {
-            batch.add(pendingRetryRecord);
-        }
-        batch.add(currentRecord);
-        return batch;
+    private String persistPendingRecord(final LogRecord currentRecord) throws IOException {
+        return durabilityStore.store(currentRecord);
     }
 
-    /**
-     * Re-enqueues records so a future dispatch call can retry them as a batch.
-     *
-     * @param logRecords records to re-buffer
-     */
-    private void enqueueRetryCandidates(final List<LogRecord> logRecords) {
-        if (logRecords == null || logRecords.isEmpty()) {
-            return;
+    private List<DurableLogRecordEntry> retrievePendingBatch() throws IOException {
+        List<DurableLogRecordEntry> pendingEntries = durabilityStore.retrievePending();
+        if (pendingEntries == null) {
+            throw new IOException("Durability store returned null pending list");
         }
-        for (LogRecord logRecord : logRecords) {
-            if (logRecord == null) {
+        return pendingEntries;
+    }
+
+    private static List<LogRecord> extractLogRecords(final List<DurableLogRecordEntry> durableBatch) {
+        if (durableBatch == null || durableBatch.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<LogRecord> logRecords = new ArrayList<LogRecord>(durableBatch.size());
+        for (DurableLogRecordEntry durableEntry : durableBatch) {
+            if (durableEntry == null || durableEntry.getLogRecord() == null) {
                 continue;
             }
-            retryBuffer.offer(logRecord);
+            logRecords.add(durableEntry.getLogRecord());
         }
+        return logRecords;
+    }
+
+    private static List<String> extractEntryIds(final List<DurableLogRecordEntry> durableBatch) {
+        if (durableBatch == null || durableBatch.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<String> entryIds = new ArrayList<String>(durableBatch.size());
+        for (DurableLogRecordEntry durableEntry : durableBatch) {
+            if (durableEntry == null || durableEntry.getEntryId() == null) {
+                continue;
+            }
+            entryIds.add(durableEntry.getEntryId());
+        }
+        return entryIds;
+    }
+
+    private void acknowledgeDispatchedBatch(final List<DurableLogRecordEntry> durableBatch) throws IOException {
+        List<String> entryIds = extractEntryIds(durableBatch);
+        if (entryIds.isEmpty()) {
+            return;
+        }
+        durabilityStore.remove(entryIds);
+    }
+
+    private void deadLetterIfPermanentFailure(final List<DurableLogRecordEntry> durableBatch,
+                                              final Throwable failure) {
+        if (!shouldRouteToDeadLetter(failure)) {
+            return;
+        }
+        List<String> entryIds = extractEntryIds(durableBatch);
+        if (!entryIds.isEmpty()) {
+            try {
+                durabilityStore.remove(entryIds);
+            } catch (IOException removeFailure) {
+                safeConsume(deadLetterConsumer,
+                        "Failed to remove dead-letter entries from durability store " + durabilityStore.getPolicyName()
+                                + ": " + toDispatchFailureDetails(removeFailure));
+            }
+        }
+        for (DurableLogRecordEntry durableEntry : durableBatch) {
+            if (durableEntry == null || durableEntry.getLogRecord() == null) {
+                continue;
+            }
+            safeConsume(deadLetterConsumer, formatDeadLetterMessage(durableEntry, failure));
+        }
+    }
+
+    private static boolean shouldRouteToDeadLetter(final Throwable failure) {
+        if (failure instanceof HttpDispatchStatusException) {
+            int statusCode = ((HttpDispatchStatusException) failure).getStatusCode();
+            return !isRetryableHttpStatus(statusCode);
+        }
+        return failure instanceof RuntimeException;
+    }
+
+    private static String formatDeadLetterMessage(final DurableLogRecordEntry durableEntry,
+                                                  final Throwable failure) {
+        LogRecord logRecord = durableEntry.getLogRecord();
+        String severityText = logRecord.getSeverityText() == null ? "UNSPECIFIED" : logRecord.getSeverityText();
+        String messageBody = "";
+        if (logRecord.getBody() != null && logRecord.getBody().asString() != null) {
+            messageBody = logRecord.getBody().asString();
+        }
+        return "DLQ entryId=" + durableEntry.getEntryId()
+                + " createdAt=" + durableEntry.getCreatedAtEpochMillis()
+                + " severity=" + severityText
+                + " reason=" + toDispatchFailureDetails(failure)
+                + " body=" + messageBody;
     }
 
     /**
@@ -432,9 +544,13 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
         }
         if (dispatchException instanceof HttpDispatchStatusException) {
             int statusCode = ((HttpDispatchStatusException) dispatchException).getStatusCode();
-            return statusCode == 408 || statusCode == 429 || (statusCode >= 500 && statusCode <= 599);
+            return isRetryableHttpStatus(statusCode);
         }
         return true;
+    }
+
+    private static boolean isRetryableHttpStatus(final int statusCode) {
+        return statusCode == 408 || statusCode == 429 || (statusCode >= 500 && statusCode <= 599);
     }
 
     /**
@@ -640,7 +756,7 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
         } catch (RuntimeException ignored) {
             localizedMessage = details;
         }
-        safeConsumeError(errorConsumer, localizedMessage);
+        safeConsume(errorConsumer, localizedMessage);
         requestCloseOnErrorIfEnabled(closeOnDispatchError, closeThreadName);
     }
 
@@ -650,7 +766,7 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
      * @param errorConsumer target consumer
      * @param message message to emit
      */
-    private static void safeConsumeError(final Consumer<String> errorConsumer, final String message) {
+    private static void safeConsume(final Consumer<String> errorConsumer, final String message) {
         try {
             errorConsumer.accept(message);
         } catch (RuntimeException ignored) {
@@ -667,6 +783,17 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
     private static String toDispatchFailureDetails(final Throwable failure) {
         String details = failure.getMessage();
         return details == null ? failure.getClass().getName() : details;
+    }
+
+    @Override
+    protected void closeOutput() {
+        try {
+            durabilityStore.close();
+        } catch (IOException closeFailure) {
+            safeConsume(deadLetterConsumer,
+                    "Failed to close durability store " + durabilityStore.getPolicyName() + ": "
+                            + toDispatchFailureDetails(closeFailure));
+        }
     }
 
     /**

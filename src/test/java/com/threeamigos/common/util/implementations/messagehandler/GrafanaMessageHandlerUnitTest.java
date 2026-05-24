@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
+import com.threeamigos.common.util.implementations.messagehandler.durability.InMemoryHttpDispatchDurabilityStore;
 import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordFactoryImpl;
 import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
 import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.ExportLogsServiceRequestLogRecordFormatter;
@@ -349,6 +350,12 @@ class GrafanaMessageHandlerUnitTest {
         assertThrows(NullPointerException.class, () -> sut.setErrorConsumer(null));
         assertThrows(NullPointerException.class, () -> new GrafanaMessageHandler(
                 new LogRecordFactoryImpl(), logRecord -> "{}", null, false, 0, false));
+        assertThrows(NullPointerException.class, () -> new GrafanaMessageHandler(
+                new LogRecordFactoryImpl(), logRecord -> "{}", dispatcher, false, 0, false,
+                null, System.err::println));
+        assertThrows(NullPointerException.class, () -> new GrafanaMessageHandler(
+                new LogRecordFactoryImpl(), logRecord -> "{}", dispatcher, false, 0, false,
+                new InMemoryHttpDispatchDurabilityStore(), null));
         assertThrows(IllegalArgumentException.class, () -> sut.setHttpCircuitBreakerPolicy(0, 100L, 1));
         assertThrows(IllegalArgumentException.class, () -> sut.setHttpCircuitBreakerPolicy(1, 0L, 1));
         assertThrows(IllegalArgumentException.class, () -> sut.setHttpCircuitBreakerPolicy(1, 100L, 0));

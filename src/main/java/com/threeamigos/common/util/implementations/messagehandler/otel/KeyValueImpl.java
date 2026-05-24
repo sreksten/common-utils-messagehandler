@@ -4,6 +4,7 @@ import com.threeamigos.common.util.implementations.messagehandler.MessageHandler
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 
+import java.io.Serializable;
 import java.util.Objects;
 
 /**
@@ -11,7 +12,9 @@ import java.util.Objects;
  *
  * @author Stefano Reksten
  */
-final class KeyValueImpl implements KeyValue {
+final class KeyValueImpl implements KeyValue, Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     private final String key;
     private final AnyValue value;

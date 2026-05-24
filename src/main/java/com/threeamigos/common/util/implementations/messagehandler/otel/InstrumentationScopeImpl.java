@@ -5,6 +5,7 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.Instrumentatio
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 import jakarta.annotation.Nullable;
 
+import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 
@@ -13,7 +14,9 @@ import java.util.List;
  *
  * @author Stefano Reksten
  */
-final class InstrumentationScopeImpl implements InstrumentationScope {
+final class InstrumentationScopeImpl implements InstrumentationScope, Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     private final String name;
     private final String version;

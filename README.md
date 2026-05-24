@@ -2,6 +2,10 @@
 
 Part of the common-utils classes, that can help when writing standalone Java applications.
 
+This package is primarily intended for small standalone Java applications.
+Server/high-throughput deployments are supported, but should explicitly configure HTTP durability
+policy and dead-letter (DLQ) handling for Jaeger/Grafana handlers.
+
 This subpackage addresses the following needs:
 
 ### Logging and message handling
@@ -368,6 +372,57 @@ public class HandlerHealthExample {
         } finally {
             handler.close();
         }
+    }
+}
+```
+
+## HTTP durability policies (Jaeger/Grafana)
+
+`JaegerMessageHandler` and `GrafanaMessageHandler` now accept a pluggable durability policy via
+`HttpDispatchDurabilityStore`:
+- `InMemoryHttpDispatchDurabilityStore` (default)
+- `FileHttpDispatchDurabilityStore`
+- `RedisHttpDispatchDurabilityStore` (Jedis)
+
+Default constructors use:
+- durability store: `InMemoryHttpDispatchDurabilityStore`
+- dead-letter consumer: `System.err::println`
+
+For standalone applications, these defaults are usually acceptable.
+For server/high-throughput workloads, explicitly set both:
+- a non-volatile durability policy (`FileHttpDispatchDurabilityStore` or `RedisHttpDispatchDurabilityStore`);
+- a production DLQ consumer (`Consumer<String>`) aligned with your operational tooling.
+
+When dispatch fails with a permanent/non-retryable failure (for example HTTP 400), entries are
+routed to dead-letter reporting (`Consumer<String>`), so callers can redirect DLQ output to
+console, file, or any custom sink.
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.JaegerMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.durability.FileHttpDispatchDurabilityStore;
+import com.threeamigos.common.util.implementations.messagehandler.durability.RedisHttpDispatchDurabilityStore;
+
+import java.nio.file.Paths;
+
+public class HttpDurabilityExample {
+    public static void main(String[] args) throws Exception {
+        JaegerMessageHandler fileDurable = new JaegerMessageHandler(
+                "http://localhost:4318/v1/logs",
+                new FileHttpDispatchDurabilityStore(Paths.get("logs", "jaeger-pending.bin")),
+                msg -> System.err.println("[DLQ] " + msg)
+        );
+
+        JaegerMessageHandler redisDurable = new JaegerMessageHandler(
+                "http://localhost:4318/v1/logs",
+                new RedisHttpDispatchDurabilityStore("redis://localhost:6379", "mh:jaeger:pending"),
+                msg -> System.err.println("[DLQ] " + msg)
+        );
+
+        fileDurable.info("persisted locally before dispatch");
+        redisDurable.info("persisted in Redis before dispatch");
+
+        fileDurable.close();
+        redisDurable.close();
     }
 }
 ```
@@ -1441,9 +1496,12 @@ Note: CDI must be enabled for the deployment (add `beans.xml` to `WEB-INF` or `M
 19. `JaegerMessageHandler` and `GrafanaMessageHandler` do not propagate dispatch/transport exceptions
     back to logging callers; failures are reported through the configured error consumer and reflected
     in handler health metrics.
-20. HTTP handlers keep a retry buffer: when dispatch fails, failed records are re-attempted on the
-    next emission and may be shipped together with the new record in one OTLP
-    `ExportLogsServiceRequest` envelope (endpoint/formatter dependent as documented above).
+20. `JaegerMessageHandler` and `GrafanaMessageHandler` use a pluggable pending-record durability
+    policy (`HttpDispatchDurabilityStore`): default is in-memory, with optional file/Redis
+    implementations. Constructors that do not expose DLQ configuration use
+    `System.err::println` for dead-letter reporting. This package targets small standalone
+    applications; for server/high-throughput use, set durability policy and DLQ handling
+    explicitly.
 
 Default output format by handler:
 

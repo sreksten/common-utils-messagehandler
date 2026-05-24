@@ -4,6 +4,7 @@ import com.threeamigos.common.util.implementations.messagehandler.MessageHandler
 import com.threeamigos.common.util.interfaces.messagehandler.otel.AnyValue;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.KeyValue;
 
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -16,7 +17,9 @@ import java.util.Objects;
  *
  * @author Stefano Reksten
  */
-final class AnyValueImpl implements AnyValue {
+final class AnyValueImpl implements AnyValue, Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     private final Type type;
     private final String stringValue;

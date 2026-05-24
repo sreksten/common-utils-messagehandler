@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
+import com.threeamigos.common.util.implementations.messagehandler.durability.InMemoryHttpDispatchDurabilityStore;
 import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordFactoryImpl;
 import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.ExportLogsServiceRequestLogRecordFormatter;
 import com.threeamigos.common.util.implementations.messagehandler.utils.HttpDispatchStatusException;
@@ -170,6 +171,33 @@ class JaegerMessageHandlerUnitTest {
         assertEquals(1L, metrics.getRetryAttempts());
         assertEquals(1L, metrics.getRetrySuccesses());
         assertEquals(0L, metrics.getRetryFailures());
+    }
+
+    @Test
+    @DisplayName("non-retryable failures should route entries to dead-letter and clear durability store")
+    void nonRetryableFailuresShouldRouteEntriesToDeadLetterAndClearDurabilityStore() throws Exception {
+        CapturingDispatcher dispatcher = new CapturingDispatcher();
+        dispatcher.throwable = new HttpDispatchStatusException(
+                "http://localhost:4318/v1/logs",
+                400,
+                "bad-request");
+        InMemoryHttpDispatchDurabilityStore durabilityStore = new InMemoryHttpDispatchDurabilityStore();
+        List<String> deadLetters = new ArrayList<String>();
+
+        JaegerMessageHandler sut = new JaegerMessageHandler(
+                new LogRecordFactoryImpl(),
+                logRecord -> "{}",
+                dispatcher,
+                false, 0, false,
+                durabilityStore,
+                deadLetters::add);
+
+        sut.info("x");
+        sut.close();
+
+        assertEquals(1, deadLetters.size());
+        assertTrue(deadLetters.get(0).contains("DLQ entryId="));
+        assertTrue(durabilityStore.retrievePending().isEmpty());
     }
 
     @Test
@@ -389,6 +417,12 @@ class JaegerMessageHandlerUnitTest {
         assertThrows(NullPointerException.class, () -> sut.setErrorConsumer(null));
         assertThrows(NullPointerException.class, () -> new JaegerMessageHandler(
                 new LogRecordFactoryImpl(), logRecord -> "{}", null, false, 0, false));
+        assertThrows(NullPointerException.class, () -> new JaegerMessageHandler(
+                new LogRecordFactoryImpl(), logRecord -> "{}", dispatcher, false, 0, false,
+                null, System.err::println));
+        assertThrows(NullPointerException.class, () -> new JaegerMessageHandler(
+                new LogRecordFactoryImpl(), logRecord -> "{}", dispatcher, false, 0, false,
+                new InMemoryHttpDispatchDurabilityStore(), null));
         assertThrows(IllegalArgumentException.class, () -> sut.setHttpCircuitBreakerPolicy(0, 100L, 1));
         assertThrows(IllegalArgumentException.class, () -> sut.setHttpCircuitBreakerPolicy(1, 0L, 1));
         assertThrows(IllegalArgumentException.class, () -> sut.setHttpCircuitBreakerPolicy(1, 100L, 0));
