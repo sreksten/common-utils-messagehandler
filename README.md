@@ -467,6 +467,38 @@ public class HttpDurabilityExample {
 }
 ```
 
+## HTTP worker pool (Jaeger/Grafana throughput scaling)
+
+By default each HTTP handler dispatches one HTTP POST at a time (single worker). For RTT-bound
+transports this limits throughput to roughly `1000 ms / backend-latency-ms` records per second.
+Use `setHttpWorkerPoolSize(int)` to enable concurrent in-flight HTTP calls:
+
+```java
+JaegerMessageHandler handler = new JaegerMessageHandler("http://localhost:4318/v1/logs");
+handler.setHttpWorkerPoolSize(4);   // up to 4 concurrent HTTP POSTs
+```
+
+The pool size can also be read back:
+
+```java
+int size = handler.getHttpWorkerPoolSize();   // 1 (default) or the configured value
+```
+
+**Behaviour when `poolSize > 1`:**
+- Each log record is dispatched individually by a dedicated pool thread; no batching across workers.
+- The durability-store catch-up batch (retrieve-all-pending on startup) is disabled to prevent
+  duplicate dispatch between concurrent workers.
+- `close()` waits up to 5 seconds for in-flight HTTP calls to complete before closing the
+  durability store, so no records are left orphaned on normal shutdown.
+
+**When to keep `poolSize = 1` (the default):**
+- You rely on crash-recovery batching — records pending before a JVM restart are re-dispatched as
+  a batch on the next startup only when a single worker is active.
+- You prefer the simpler, lower-resource profile for low-throughput workloads.
+
+The underlying queue/overload controls (rate limiting, sampling, queue overflow policy) remain
+active in both modes; the worker pool only parallelises the outbound HTTP leg.
+
 ## Global internal error sink (`InnerErrorMessageHandler`)
 
 Internal failures raised by the logging infrastructure itself (for example backend dispatch
@@ -1166,11 +1198,13 @@ both handlers can target the same collector OTLP endpoint (commonly `http://loca
 Transport behavior for both handlers (`AbstractHTTPOutputMessageHandler`):
 - bounded retry/backoff is enabled by default (`maxRetries=1`, exponential backoff from `50 ms`, capped at `500 ms`);
 - retryable failures include I/O exceptions and HTTP `408`, `429`, and `5xx`;
-- failures are buffered and retried on subsequent emissions as a batch;
+- failures are buffered and retried on subsequent emissions as a batch (single-worker mode);
 - for OTLP log endpoints and `ExportLogsServiceRequestLogRecordFormatter`, buffered retries and the
   current record are sent in one `ExportLogsServiceRequest` envelope;
 - for Jaeger `/v1/traces` transform mode and Grafana Loki push mode, records are retried but sent
-  with per-record backend semantics.
+  with per-record backend semantics;
+- throughput can be scaled with `setHttpWorkerPoolSize(N)` — see the
+  [HTTP worker pool](#http-worker-pool-jaebergrafana-throughput-scaling) section.
 
 Important:
 - `GrafanaMessageHandler` exports log records only (Loki push payload or OTLP logs payload depending on endpoint).
@@ -1593,6 +1627,11 @@ Note: CDI must be enabled for the deployment (add `beans.xml` to `WEB-INF` or `M
     queue overflow policy (`setQueueOverflowPolicy(...)`), token-bucket rate limiting
     (`setRateLimitPolicy(...)` + `setRateLimitBypassSeverity(...)`), and
     severity-bucket sampling (`setSeveritySamplingPolicy(...)`).
+24. HTTP handlers (`JaegerMessageHandler`, `GrafanaMessageHandler`) expose
+    `setHttpWorkerPoolSize(int)` to run multiple concurrent HTTP dispatch threads. Default is
+    `1` (single worker, backward-compatible). When `poolSize > 1`, each record is dispatched
+    individually; crash-recovery batching (retrieve-all-pending on restart) is disabled in pool
+    mode to prevent duplicate dispatch.
 
 Default output format by handler:
 

@@ -14,7 +14,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
@@ -28,6 +32,7 @@ import java.util.function.Consumer;
  *   <li>circuit breaker with closed/open/half-open transitions</li>
  *   <li>best-effort JVM keep-alive configuration for {@link java.net.HttpURLConnection}</li>
  *   <li>pluggable durability store (in-memory/file/Redis) for pending dispatch records</li>
+ *   <li>configurable HTTP worker pool for concurrent in-flight dispatch (default: 1 worker)</li>
  *   <li>non-throwing dispatch path: transport/runtime failures are reported to the configured
  *       error consumer instead of being propagated to the logging caller</li>
  * </ul>
@@ -45,6 +50,7 @@ import java.util.function.Consumer;
 public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMessageHandler {
 
     private static final int DEFAULT_HTTP_MAX_CONNECTIONS = 32;
+    private static final int DEFAULT_HTTP_WORKER_POOL_SIZE = 1;
     private static final int DEFAULT_MAX_RETRIES = 1;
     private static final long DEFAULT_INITIAL_RETRY_BACKOFF_MILLIS = 50L;
     private static final long DEFAULT_MAX_RETRY_BACKOFF_MILLIS = 500L;
@@ -61,6 +67,7 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
     private static final Object HTTP_TRANSPORT_CONFIGURATION_LOCK = new Object();
     private final Object circuitBreakerLock = new Object();
     private final Object retryBudgetLock = new Object();
+    private final Object httpWorkerPoolLock = new Object();
 
     private volatile int maxRetries = DEFAULT_MAX_RETRIES;
     private volatile long initialRetryBackoffMillis = DEFAULT_INITIAL_RETRY_BACKOFF_MILLIS;
@@ -81,6 +88,8 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
     private int retryBudgetWindowConsumedRetries = 0;
     private final HttpDispatchDurabilityStore durabilityStore;
     private volatile Consumer<String> deadLetterConsumer;
+    private volatile int httpWorkerPoolSize = DEFAULT_HTTP_WORKER_POOL_SIZE;
+    private volatile ExecutorService httpWorkerPool = null;
 
     private enum CircuitState {
         CLOSED,
@@ -273,6 +282,60 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
     }
 
     /**
+     * Sets the number of concurrent HTTP worker threads used to execute HTTP dispatch operations.
+     * <p>
+     * The default pool size is {@code 1} (single worker, backward-compatible). When set to a value
+     * greater than {@code 1}, each submitted log record is dispatched by a dedicated pool thread,
+     * allowing multiple HTTP calls to be in-flight concurrently. This is particularly effective for
+     * RTT-bound transports (Jaeger, Grafana Loki) where parallelism reduces end-to-end latency.
+     * <p>
+     * <strong>Batching trade-off:</strong> when {@code poolSize > 1}, each log record is dispatched
+     * individually; the durability-store catch-up batch (retrieve-all-pending) is disabled to prevent
+     * duplicate dispatch between concurrent workers. If crash-recovery batching (dispatch of records
+     * that were pending before a JVM restart) is important for your use-case, keep the pool at 1.
+     * <p>
+     * If the pool size is changed while the handler is active, the old pool is shut down gracefully
+     * (in-flight tasks are allowed to complete) and a new pool is created. To avoid races, prefer
+     * calling this method during handler construction before any messages are dispatched.
+     *
+     * @param poolSize number of HTTP worker threads (must be >= 1)
+     * @throws IllegalArgumentException if {@code poolSize < 1}
+     */
+    public final void setHttpWorkerPoolSize(final int poolSize) {
+        if (poolSize < 1) {
+            throw new IllegalArgumentException("poolSize must be >= 1");
+        }
+        synchronized (httpWorkerPoolLock) {
+            if (poolSize == this.httpWorkerPoolSize) {
+                return;
+            }
+            final ExecutorService oldPool = this.httpWorkerPool;
+            this.httpWorkerPool = poolSize > 1 ? createHttpWorkerPool(poolSize) : null;
+            this.httpWorkerPoolSize = poolSize;
+            if (oldPool != null) {
+                oldPool.shutdown();
+            }
+        }
+    }
+
+    /**
+     * Returns the currently configured HTTP worker pool size.
+     *
+     * @return number of HTTP worker threads (>= 1)
+     */
+    public final int getHttpWorkerPoolSize() {
+        return httpWorkerPoolSize;
+    }
+
+    private static ExecutorService createHttpWorkerPool(final int poolSize) {
+        return Executors.newFixedThreadPool(poolSize, r -> {
+            Thread t = new Thread(r, "http-output-worker");
+            t.setDaemon(true);
+            return t;
+        });
+    }
+
+    /**
      * Dispatches one logical log record through the provided HTTP dispatch operation.
      * <p>
      * Behavior:
@@ -304,8 +367,9 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
         Objects.requireNonNull(errorConsumer, MessageHandlerResourceBundle.get("nullErrorConsumerProvided"));
         Objects.requireNonNull(dispatchErrorMessageKey, "dispatchErrorMessageKey must not be null");
         Objects.requireNonNull(closeThreadName, "closeThreadName must not be null");
+        final String entryId;
         try {
-            persistPendingRecord(logRecord);
+            entryId = persistPendingRecord(logRecord);
         } catch (IOException durabilityFailure) {
             recordOutputFailure();
             reportDispatchFailure(durabilityFailure, errorConsumer, dispatchErrorMessageKey,
@@ -313,37 +377,60 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
             return;
         }
 
+        // Snapshot the pool reference so that a concurrent setHttpWorkerPoolSize() call does not
+        // change the mode between the check and the lambda capture below.
+        final ExecutorService pool = httpWorkerPool;
+
         try {
-            dispatch(() -> {
-                final List<DurableLogRecordEntry> durableBatch;
-                try {
-                    durableBatch = retrievePendingBatch();
-                    if (durableBatch.isEmpty()) {
+            if (pool != null) {
+                // Multi-worker pool mode: the queue task is a fast "submit to HTTP pool" operation.
+                // Each record is dispatched individually to avoid duplicate-dispatch races between
+                // concurrent pool workers (which would occur if all workers retrieved the same
+                // pending batch from the durability store).
+                final DurableLogRecordEntry entry = new DurableLogRecordEntry(
+                        entryId, System.currentTimeMillis(), logRecord);
+                dispatch(() -> {
+                    try {
+                        pool.submit(() -> dispatchSingleRecord(entry, dispatchOperation, errorConsumer,
+                                dispatchErrorMessageKey, closeOnDispatchError, closeThreadName));
+                    } catch (RejectedExecutionException ignored) {
+                        // HTTP worker pool was shut down concurrently with close(); drop silently.
+                    }
+                }, logRecord.getSeverityNumber());
+            } else {
+                // Single-worker mode: retrieve and dispatch the full pending batch so that any
+                // records that survived a previous JVM crash are also sent.
+                dispatch(() -> {
+                    final List<DurableLogRecordEntry> durableBatch;
+                    try {
+                        durableBatch = retrievePendingBatch();
+                        if (durableBatch.isEmpty()) {
+                            return;
+                        }
+                    } catch (IOException retrieveFailure) {
+                        recordOutputFailure();
+                        reportDispatchFailure(retrieveFailure, errorConsumer, dispatchErrorMessageKey,
+                                closeOnDispatchError, closeThreadName);
                         return;
                     }
-                } catch (IOException retrieveFailure) {
-                    recordOutputFailure();
-                    reportDispatchFailure(retrieveFailure, errorConsumer, dispatchErrorMessageKey,
-                            closeOnDispatchError, closeThreadName);
-                    return;
-                }
-                try {
-                    List<LogRecord> recordsToDispatch = extractLogRecords(durableBatch);
-                    executeHttpDispatchWithRetry(recordsToDispatch, dispatchOperation);
-                    acknowledgeDispatchedBatch(durableBatch);
-                    recordOutputSuccess();
-                } catch (IOException dispatchException) {
-                    recordOutputFailure();
-                    deadLetterIfPermanentFailure(durableBatch, dispatchException);
-                    reportDispatchFailure(dispatchException, errorConsumer, dispatchErrorMessageKey,
-                            closeOnDispatchError, closeThreadName);
-                } catch (RuntimeException runtimeException) {
-                    recordOutputFailure();
-                    deadLetterIfPermanentFailure(durableBatch, runtimeException);
-                    reportDispatchFailure(runtimeException, errorConsumer, dispatchErrorMessageKey,
-                            closeOnDispatchError, closeThreadName);
-                }
-            }, logRecord.getSeverityNumber());
+                    try {
+                        List<LogRecord> recordsToDispatch = extractLogRecords(durableBatch);
+                        executeHttpDispatchWithRetry(recordsToDispatch, dispatchOperation);
+                        acknowledgeDispatchedBatch(durableBatch);
+                        recordOutputSuccess();
+                    } catch (IOException dispatchException) {
+                        recordOutputFailure();
+                        deadLetterIfPermanentFailure(durableBatch, dispatchException);
+                        reportDispatchFailure(dispatchException, errorConsumer, dispatchErrorMessageKey,
+                                closeOnDispatchError, closeThreadName);
+                    } catch (RuntimeException runtimeException) {
+                        recordOutputFailure();
+                        deadLetterIfPermanentFailure(durableBatch, runtimeException);
+                        reportDispatchFailure(runtimeException, errorConsumer, dispatchErrorMessageKey,
+                                closeOnDispatchError, closeThreadName);
+                    }
+                }, logRecord.getSeverityNumber());
+            }
         } catch (IllegalStateException closedHandlerException) {
             // dispatch(...) already increments droppedOutputOperations when closed.
             reportDispatchFailure(closedHandlerException, errorConsumer, dispatchErrorMessageKey,
@@ -351,6 +438,44 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
         } catch (RuntimeException runtimeException) {
             recordOutputFailure();
             deadLetterIfPermanentFailure(Collections.<DurableLogRecordEntry>emptyList(), runtimeException);
+            reportDispatchFailure(runtimeException, errorConsumer, dispatchErrorMessageKey,
+                    closeOnDispatchError, closeThreadName);
+        }
+    }
+
+    /**
+     * Dispatches one log record through the HTTP transport and handles success/failure accounting.
+     * <p>
+     * Used exclusively in multi-worker pool mode, where each pool thread dispatches its own record
+     * independently rather than retrieving a shared pending batch.
+     *
+     * @param entry durable entry wrapping the record to dispatch
+     * @param dispatchOperation transport callback
+     * @param errorConsumer consumer for localized failure messages
+     * @param dispatchErrorMessageKey resource-bundle key for failure message formatting
+     * @param closeOnDispatchError whether close-on-error behavior is enabled
+     * @param closeThreadName thread name for async close scheduling if needed
+     */
+    private void dispatchSingleRecord(final DurableLogRecordEntry entry,
+                                      final HttpDispatchOperation dispatchOperation,
+                                      final Consumer<String> errorConsumer,
+                                      final String dispatchErrorMessageKey,
+                                      final boolean closeOnDispatchError,
+                                      final String closeThreadName) {
+        final List<DurableLogRecordEntry> singleBatch = Collections.singletonList(entry);
+        try {
+            final List<LogRecord> singleRecord = Collections.singletonList(entry.getLogRecord());
+            executeHttpDispatchWithRetry(singleRecord, dispatchOperation);
+            acknowledgeDispatchedBatch(singleBatch);
+            recordOutputSuccess();
+        } catch (IOException dispatchException) {
+            recordOutputFailure();
+            deadLetterIfPermanentFailure(singleBatch, dispatchException);
+            reportDispatchFailure(dispatchException, errorConsumer, dispatchErrorMessageKey,
+                    closeOnDispatchError, closeThreadName);
+        } catch (RuntimeException runtimeException) {
+            recordOutputFailure();
+            deadLetterIfPermanentFailure(singleBatch, runtimeException);
             reportDispatchFailure(runtimeException, errorConsumer, dispatchErrorMessageKey,
                     closeOnDispatchError, closeThreadName);
         }
@@ -788,6 +913,20 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
 
     @Override
     protected void closeOutput() {
+        // Drain the HTTP worker pool first so that any in-flight HTTP tasks complete (and remove
+        // their entries from the durability store) before the store itself is closed.
+        final ExecutorService pool = httpWorkerPool;
+        if (pool != null) {
+            pool.shutdown();
+            try {
+                if (!pool.awaitTermination(5, TimeUnit.SECONDS)) {
+                    pool.shutdownNow();
+                }
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                pool.shutdownNow();
+            }
+        }
         try {
             durabilityStore.close();
         } catch (IOException closeFailure) {
