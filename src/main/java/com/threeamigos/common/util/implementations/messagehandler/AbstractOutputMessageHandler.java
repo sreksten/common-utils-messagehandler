@@ -128,8 +128,8 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
     private final Object rateLimitLock = new Object();
     private volatile long rateLimitPermitsPerSecond = 0L;
     private volatile long rateLimitBurstCapacity = 0L;
-    private volatile double rateLimitAvailableTokens = 0.0d;
-    private volatile long rateLimitLastRefillNanos = 0L;
+    private double rateLimitAvailableTokens = 0.0d;
+    private long rateLimitLastRefillNanos = 0L;
     private volatile SeverityNumber rateLimitBypassSeverity = SeverityNumber.ERROR;
     private final AtomicReference<SamplingPolicy> samplingPolicy =
             new AtomicReference<>(new SamplingPolicy(1.0d, 1.0d, 1.0d, 1.0d, 1.0d, 1.0d));
