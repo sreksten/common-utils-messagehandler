@@ -13,6 +13,10 @@ import java.util.function.Consumer;
  * An implementation of the {@link MessageHandler} interface that forwards messages and exceptions
  * to one or more other {@link MessageHandler}s.
  * <p>
+ * <strong>Dispatch model:</strong> the composite itself has no asynchronous queue. Fan-out to
+ * delegates happens synchronously on the calling thread; any asynchronous behaviour is provided
+ * by individual delegates that extend {@link AbstractOutputMessageHandler}.
+ * <p>
  * Level control behavior is configurable via {@link LevelControlMode}:
  * <ul>
  *   <li>{@link LevelControlMode#COMPOSITE_ONLY} (default): the composite applies its own level gate;
