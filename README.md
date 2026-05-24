@@ -502,6 +502,88 @@ int size = handler.getHttpWorkerPoolSize();   // 1 (default) or the configured v
 The underlying queue/overload controls (rate limiting, sampling, queue overflow policy) remain
 active in both modes; the worker pool only parallelises the outbound HTTP leg.
 
+## HTTP transport layer (`HttpTransport`)
+
+All HTTP dispatchers (`JaegerLogRecordDispatcher`, `GrafanaLogRecordDispatcher`, and span
+dispatchers) delegate the low-level HTTP POST to a pluggable `HttpTransport` instance. Two
+implementations are provided:
+
+| Transport | Dependencies | Connection handling | When to use |
+|---|---|---|---|
+| `HttpUrlConnectionTransport` | None (JDK only) | One connection per call; JVM keep-alive cache may reuse sockets | Default; suitable for low-to-medium throughput |
+| `ApacheHttpClientTransport` | `org.apache.httpcomponents:httpclient` (optional) | Shared `PoolingHttpClientConnectionManager`; persistent connections | Sustained high-throughput workloads; explicit pool sizing |
+
+### Default: `HttpUrlConnectionTransport`
+
+Used automatically when no transport is specified. Requires no additional dependencies:
+
+```java
+// Default — uses HttpUrlConnectionTransport implicitly
+JaegerMessageHandler handler = new JaegerMessageHandler("http://localhost:4318/v1/logs");
+```
+
+### Connection pooling: `ApacheHttpClientTransport`
+
+For workloads where per-call TCP handshake overhead is measurable, use `ApacheHttpClientTransport`.
+It creates a single `PoolingHttpClientConnectionManager` (50 total / 10 per-route by default)
+shared across all dispatch calls.
+
+**Step 1** — add the optional dependency to `pom.xml`:
+
+```xml
+<dependency>
+    <groupId>org.apache.httpcomponents</groupId>
+    <artifactId>httpclient</artifactId>
+    <version>4.5.14</version>
+</dependency>
+```
+
+**Step 2** — supply the transport to the dispatcher constructor:
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.transport.ApacheHttpClientTransport;
+import com.threeamigos.common.util.implementations.messagehandler.utils.GrafanaLogRecordDispatcher;
+
+ApacheHttpClientTransport transport = new ApacheHttpClientTransport();
+
+GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher(
+        "https://logs-prod.example.com/loki/api/v1/push",
+        null, null, "bearer-token",
+        5_000, 10_000, null,
+        transport  // connection-pooled transport
+);
+
+// ... use dispatcher ...
+
+transport.close();  // release pooled connections on shutdown
+```
+
+Custom pool sizing is available via the second constructor:
+
+```java
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
+
+PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
+cm.setMaxTotal(100);
+cm.setDefaultMaxPerRoute(20);
+
+CloseableHttpClient customClient = HttpClients.custom()
+        .setConnectionManager(cm)
+        .build();
+
+ApacheHttpClientTransport transport = new ApacheHttpClientTransport(customClient);
+```
+
+### Lifecycle note
+
+`ApacheHttpClientTransport` implements `Closeable`. Call `transport.close()` at application
+shutdown to release pooled sockets. `HttpUrlConnectionTransport` is stateless and does not need
+explicit closing.
+
+A single transport instance may be shared across multiple dispatcher instances.
+
 ## Global internal error sink (`InnerErrorMessageHandler`)
 
 Internal failures raised by the logging infrastructure itself (for example backend dispatch

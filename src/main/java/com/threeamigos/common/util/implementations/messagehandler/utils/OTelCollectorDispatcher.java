@@ -22,13 +22,28 @@ public class OTelCollectorDispatcher implements LogRecordDispatcher {
 
     private final CopyOnWriteArrayList<LogRecordDispatcher> delegates = new CopyOnWriteArrayList<LogRecordDispatcher>();
 
+    /**
+     * Creates an empty collector dispatcher with no delegates.
+     * Delegates can be added later via {@link #addDispatcher(LogRecordDispatcher)}.
+     */
     public OTelCollectorDispatcher() {
     }
 
+    /**
+     * Creates a collector dispatcher pre-populated with the given delegates.
+     *
+     * @param delegates initial set of delegates; {@code null} or empty is allowed
+     */
     public OTelCollectorDispatcher(final @Nullable Collection<? extends LogRecordDispatcher> delegates) {
         setDelegates(delegates);
     }
 
+    /**
+     * Adds a delegate dispatcher if it is not already present.
+     * {@code null} is silently ignored.
+     *
+     * @param dispatcher delegate to add
+     */
     public void addDispatcher(final @Nullable LogRecordDispatcher dispatcher) {
         if (dispatcher == null) {
             return;
@@ -36,6 +51,12 @@ public class OTelCollectorDispatcher implements LogRecordDispatcher {
         delegates.addIfAbsent(dispatcher);
     }
 
+    /**
+     * Removes a delegate dispatcher.
+     * {@code null} is silently ignored.
+     *
+     * @param dispatcher delegate to remove
+     */
     public void removeDispatcher(final @Nullable LogRecordDispatcher dispatcher) {
         if (dispatcher == null) {
             return;
@@ -43,6 +64,13 @@ public class OTelCollectorDispatcher implements LogRecordDispatcher {
         delegates.remove(dispatcher);
     }
 
+    /**
+     * Replaces the current delegate list with the supplied collection.
+     * Existing delegates are cleared first. {@code null} entries within the collection
+     * and {@code null} collection itself are silently skipped.
+     *
+     * @param newDelegates new set of delegates; may be {@code null} or empty
+     */
     public void setDelegates(final @Nullable Collection<? extends LogRecordDispatcher> newDelegates) {
         delegates.clear();
         if (newDelegates == null || newDelegates.isEmpty()) {
@@ -55,10 +83,28 @@ public class OTelCollectorDispatcher implements LogRecordDispatcher {
         }
     }
 
+    /**
+     * Returns a point-in-time snapshot of the current delegate list.
+     * The returned list is an independent copy; subsequent changes to this dispatcher
+     * do not affect it.
+     *
+     * @return immutable snapshot of the delegate list (may be empty, never {@code null})
+     */
     public List<LogRecordDispatcher> snapshotDelegates() {
         return new ArrayList<LogRecordDispatcher>(delegates);
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Iterates over all registered delegates and calls
+     * {@link LogRecordDispatcher#dispatchLogRecord dispatchLogRecord} on each.
+     * If one or more delegates throw {@link IOException}, their exceptions are aggregated and
+     * re-thrown as a single {@code IOException} with suppressed causes; all other delegates
+     * are still invoked even if earlier ones fail.
+     *
+     * @throws IOException if at least one delegate fails; suppressed exceptions contain individual failures
+     */
     @Override
     public void dispatchLogRecord(final @Nonnull LogRecord logRecord,
                                   final @Nonnull LogRecordFormatter logRecordFormatter) throws IOException {

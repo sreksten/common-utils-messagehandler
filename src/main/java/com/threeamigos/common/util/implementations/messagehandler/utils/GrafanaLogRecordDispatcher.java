@@ -30,8 +30,36 @@ import java.util.Objects;
 /**
  * HTTP dispatcher for OTLP log payloads sent to Grafana-compatible OTLP logs endpoints.
  * <p>
- * This dispatcher always ships logs as OTLP logs payloads (ExportLogsServiceRequest JSON).
- * It does not transform logs into spans/events.
+ * Records are serialized as OTLP {@code ExportLogsServiceRequest} JSON. When the endpoint path
+ * contains {@code loki} or {@code push}, the dispatcher automatically switches to Grafana Loki
+ * push JSON format instead.
+ *
+ * <h2>Authentication</h2>
+ * <p>
+ * Supports HTTP Basic authentication (username/password) and Bearer token authentication.
+ * When both are provided, Bearer token takes precedence. Additional custom headers can also
+ * be specified to support reverse-proxy auth or Grafana Cloud tenancy headers.
+ *
+ * <h2>HTTP Transport</h2>
+ * <p>
+ * By default each dispatch call uses {@link com.threeamigos.common.util.implementations.messagehandler.transport.HttpUrlConnectionTransport}
+ * (JDK's {@link java.net.HttpURLConnection}, zero extra dependencies). For sustained workloads
+ * that benefit from explicit connection pooling, supply an
+ * {@link com.threeamigos.common.util.implementations.messagehandler.transport.ApacheHttpClientTransport}
+ * via the full constructor:
+ * <pre>{@code
+ * GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher(
+ *     "https://logs-prod.example.com/loki/api/v1/push",
+ *     null, null, "bearer-token", 5_000, 10_000, null,
+ *     new ApacheHttpClientTransport()
+ * );
+ * }</pre>
+ *
+ * <h2>Thread Safety</h2>
+ * <p>
+ * Instances are immutable after construction and safe for concurrent use.
+ *
+ * @author Stefano Reksten
  */
 public class GrafanaLogRecordDispatcher implements LogRecordDispatcher {
 
@@ -50,16 +78,41 @@ public class GrafanaLogRecordDispatcher implements LogRecordDispatcher {
     private final ExportLogsServiceRequestLogRecordFormatter formatter;
     private final HttpTransport httpTransport;
 
+    /**
+     * Creates a dispatcher with no authentication and default timeouts.
+     *
+     * @param endpointUrl full HTTP endpoint to post to (for example {@code http://localhost:3100/loki/api/v1/push})
+     */
     public GrafanaLogRecordDispatcher(final @Nonnull String endpointUrl) {
         this(endpointUrl, null, null, null, DEFAULT_CONNECT_TIMEOUT_MILLIS, DEFAULT_READ_TIMEOUT_MILLIS, null);
     }
 
+    /**
+     * Creates a dispatcher with optional Basic authentication and default timeouts.
+     *
+     * @param endpointUrl full HTTP endpoint
+     * @param username    basic-auth username; {@code null} to skip Basic auth
+     * @param password    basic-auth password; {@code null} to skip Basic auth
+     */
     public GrafanaLogRecordDispatcher(final @Nonnull String endpointUrl,
                                       final @Nullable String username,
                                       final @Nullable String password) {
         this(endpointUrl, username, password, null, DEFAULT_CONNECT_TIMEOUT_MILLIS, DEFAULT_READ_TIMEOUT_MILLIS, null);
     }
 
+    /**
+     * Creates a dispatcher with full configuration and the default {@link com.threeamigos.common.util.implementations.messagehandler.transport.HttpUrlConnectionTransport}.
+     * <p>
+     * {@code bearerToken} takes precedence over Basic authentication when both are provided.
+     *
+     * @param endpointUrl          full HTTP endpoint
+     * @param username             basic-auth username; nullable
+     * @param password             basic-auth password; nullable
+     * @param bearerToken          bearer token; nullable
+     * @param connectTimeoutMillis connect timeout in milliseconds; must be positive
+     * @param readTimeoutMillis    read timeout in milliseconds; must be positive
+     * @param additionalHeaders    optional extra headers; {@code null} is treated as empty
+     */
     public GrafanaLogRecordDispatcher(final @Nonnull String endpointUrl,
                                       final @Nullable String username,
                                       final @Nullable String password,
@@ -107,10 +160,28 @@ public class GrafanaLogRecordDispatcher implements LogRecordDispatcher {
         validateAuthConfiguration();
     }
 
+    /**
+     * Formats and dispatches a {@link LogRecord} using the default formatter.
+     *
+     * @param logRecord record to send
+     * @return HTTP dispatch result
+     * @throws IOException network/transport error
+     */
     public DispatchResult dispatch(final @Nonnull LogRecord logRecord) throws IOException {
         return dispatch(logRecord, formatter);
     }
 
+    /**
+     * Formats and dispatches a {@link LogRecord} using the supplied formatter.
+     * <p>
+     * When the endpoint targets a Loki push path, Loki push JSON is produced regardless of the
+     * formatter argument.
+     *
+     * @param logRecord          record to send
+     * @param logRecordFormatter formatter to use for OTLP-style endpoints
+     * @return HTTP dispatch result
+     * @throws IOException network/transport error
+     */
     public DispatchResult dispatch(final @Nonnull LogRecord logRecord,
                                    final @Nonnull LogRecordFormatter logRecordFormatter) throws IOException {
         Objects.requireNonNull(logRecord, "logRecord must not be null");
