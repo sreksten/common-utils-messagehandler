@@ -468,7 +468,6 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * <p>
      * Silently ignores the call when info-level handling is disabled.
      *
-     * @throws NullPointerException if {@code message} is {@code null}
      */
     @Override
     public void info(final @Nonnull String message) {
@@ -480,7 +479,6 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * <p>
      * Silently ignores the call when info-level handling is disabled.
      *
-     * @throws NullPointerException if either {@code messageSupplier} or its production is {@code null}
      */
     public void info(final @Nonnull Supplier<String> messageSupplier) {
         log(SeverityNumber.INFO, messageSupplier);
@@ -491,7 +489,6 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * <p>
      * Silently ignores the call when warning-level handling is disabled.
      *
-     * @throws NullPointerException if {@code message} is {@code null}
      */
     @Override
     public void warn(final @Nonnull String message) {
@@ -503,7 +500,6 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * <p>
      * Silently ignores the call when warn-level handling is disabled.
      *
-     * @throws NullPointerException if either {@code messageSupplier} or its production is {@code null}
      */
     public void warn(final @Nonnull Supplier<String> messageSupplier) {
         log(SeverityNumber.WARN, messageSupplier);
@@ -514,7 +510,6 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * <p>
      * Silently ignores the call when error-level handling is disabled.
      *
-     * @throws NullPointerException if {@code message} is {@code null}
      */
     @Override
     public void error(final @Nonnull String message) {
@@ -526,7 +521,6 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * <p>
      * Silently ignores the call when error-level handling is disabled.
      *
-     * @throws NullPointerException if either {@code messageSupplier} or its production is {@code null}
      */
     public void error(final @Nonnull Supplier<String> messageSupplier) {
         log(SeverityNumber.ERROR, messageSupplier);
@@ -537,7 +531,6 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * <p>
      * Silently ignores the call when fatal-level handling is disabled.
      *
-     * @throws NullPointerException if either {@code message} or {@code contextInfo} is {@code null}
      */
     @Override
     public void fatal(final @Nonnull String message) {
@@ -549,7 +542,6 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * <p>
      * Silently ignores the call when fatal-level handling is disabled.
      *
-     * @throws NullPointerException if either {@code messageSupplier} or its production is {@code null}
      */
     public void fatal(final @Nonnull Supplier<String> messageSupplier) {
         log(SeverityNumber.FATAL, messageSupplier);
@@ -560,7 +552,6 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * <p>
      * Silently ignores the call when debug-level handling is disabled.
      *
-     * @throws NullPointerException if {@code message} is {@code null}
      */
     @Override
     public void debug(final @Nonnull String message) {
@@ -572,7 +563,6 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * <p>
      * Silently ignores the call when debug-level handling is disabled.
      *
-     * @throws NullPointerException if {@code messageSupplier} is {@code null}
      */
     public void debug(final @Nonnull Supplier<String> messageSupplier) {
         log(SeverityNumber.DEBUG, messageSupplier);
@@ -583,7 +573,6 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * <p>
      * Silently ignores the call when trace-level handling is disabled.
      *
-     * @throws NullPointerException if {@code message} is {@code null}
      */
     @Override
     public void trace(final @Nonnull String message) {
@@ -595,7 +584,6 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * <p>
      * Silently ignores the call when trace-level handling is disabled.
      *
-     * @throws NullPointerException if {@code messageSupplier} is {@code null}
      */
     public void trace(final @Nonnull Supplier<String> messageSupplier) {
         log(SeverityNumber.TRACE, messageSupplier);
