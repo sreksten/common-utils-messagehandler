@@ -601,16 +601,27 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
             runTaskSafely(task, "synchronous dispatch");
             return;
         }
+        boolean blockingOfferNeeded = false;
         synchronized (dispatchLock) {
             if (closed.get()) {
                 recordDroppedOutput();
                 throw new IllegalStateException(MessageHandlerResourceBundle.get("handlerIsClosed"));
             }
             if (!queue.offer(task)) {
-                handleQueueOverflow(task);
+                if (queueOverflowPolicy == QueueOverflowPolicy.BLOCK_WITH_TIMEOUT) {
+                    // Record saturation under the lock, but perform the timed offer outside
+                    // it so that other dispatch threads are not serialized during the wait.
+                    recordQueueSaturation();
+                    blockingOfferNeeded = true;
+                } else {
+                    handleQueueOverflow(task);
+                }
             } else {
                 recordAsyncEnqueue();
             }
+        }
+        if (blockingOfferNeeded) {
+            handleBlockWithTimeoutOverflow(task);
         }
     }
 
@@ -722,10 +733,6 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
         }
         if (overflowPolicy == QueueOverflowPolicy.DROP_OLDEST) {
             handleDropOldestOverflow(task);
-            return;
-        }
-        if (overflowPolicy == QueueOverflowPolicy.BLOCK_WITH_TIMEOUT) {
-            handleBlockWithTimeoutOverflow(task);
             return;
         }
         recordSynchronousFallback();
