@@ -8,9 +8,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Field;
-
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
@@ -55,29 +52,4 @@ class HandlerTracerBinderUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         assertSame(span, handler.startSpan("bound-span"));
     }
 
-    @Test
-    @DisplayName("bindTracer should suppress reflective access failures")
-    void bindTracerShouldSuppressReflectiveAccessFailures() throws Exception {
-        InMemoryMessageHandler handler = new InMemoryMessageHandler();
-        Tracer tracer = mock(Tracer.class);
-
-        Field fieldRef = HandlerTracerBinder.class.getDeclaredField("TRACER_FIELD");
-        fieldRef.setAccessible(true);
-        Field tracerField = (Field) fieldRef.get(null);
-        boolean originalAccessible = tracerField.isAccessible();
-        try {
-            tracerField.setAccessible(false);
-            HandlerTracerBinder.bindTracer(handler, tracer);
-            assertThrows(IllegalStateException.class, () -> handler.startSpan("still-unbound"));
-        } finally {
-            tracerField.setAccessible(originalAccessible);
-        }
-    }
-
-    @Test
-    @DisplayName("resolveTracerField should return null for classes without tracer field")
-    void resolveTracerFieldShouldReturnNullForClassesWithoutTracerField() {
-        Field field = HandlerTracerBinder.resolveTracerField(String.class);
-        assertNull(field);
-    }
 }

@@ -49,10 +49,6 @@ public abstract class AbstractMessageHandler implements MessageHandler {
 
     private final LogRecordFactory defaultLogRecordFactory = new LogRecordFactoryImpl();
 
-    /**
-     * Bound internally by otel package code through reflection to keep tracer linkage
-     * hidden from the public API.
-     */
     private volatile Tracer tracer;
 
     /**
@@ -76,6 +72,32 @@ public abstract class AbstractMessageHandler implements MessageHandler {
 
     Tracer getBoundTracerForTests() {
         return tracer;
+    }
+
+    /**
+     * Binds a {@link Tracer} to this handler instance.
+     * <p>
+     * <strong>Framework-internal method — do not call directly from application code
+     * or extension handlers.</strong>
+     * <p>
+     * This method is {@code public} solely because Java's access-control rules prevent
+     * code in a sub-package ({@code .otel}) from calling a {@code protected} method on an
+     * instance of a class defined in a parent package, unless the caller is itself a
+     * subclass. {@link com.threeamigos.common.util.implementations.messagehandler.otel.HandlerTracerBinder}
+     * is not a subclass, so {@code public} is the minimum access level that avoids
+     * reflection.
+     * <p>
+     * Tracer binding is managed exclusively by
+     * {@link com.threeamigos.common.util.implementations.messagehandler.otel.TracerMessageHandlerFactory}.
+     * Calling this method directly will override the framework-managed tracer, silently
+     * breaking span correlation, log-record factory resolution, and trace context
+     * propagation. There is intentionally no unbind method — a bound tracer remains
+     * for the lifetime of the handler.
+     *
+     * @param tracer the tracer instance to bind; must not be {@code null}
+     */
+    public final void bindTracer(final Tracer tracer) {
+        this.tracer = tracer;
     }
 
     protected final LogRecord createLogRecord(final @Nonnull SeverityNumber level, final @Nonnull String message) {
