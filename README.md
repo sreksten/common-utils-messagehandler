@@ -533,9 +533,14 @@ writing debug and error information to a file. You can do this using the next `M
 
 Use it when one log call must go to multiple destinations. For example, to the console and to a file.
 Level control can be configured through `CompositeMessageHandler.LevelControlMode`:
-- `COMPOSITE_ONLY` (default): only the composite gates levels.
-- `PROPAGATE_TO_DELEGATES`: composite level changes are also applied to level-aware delegates.
-- `DELEGATE_ONLY`: delegates own their level state; composite level mutators throw.
+- `COMPOSITE_ONLY` (default): only the composite gates levels. **All delegates must have all
+  severity levels enabled** — a delegate with a level disabled will silently drop messages at
+  that level even when the composite has forwarded them.
+- `PROPAGATE_TO_DELEGATES`: composite level changes are also propagated to level-aware delegates,
+  keeping them in sync. Use this when delegates are configured independently but should follow the
+  composite's decisions.
+- `DELEGATE_ONLY`: each delegate owns its own level state; composite level mutators throw
+  `UnsupportedOperationException`. Use this when each destination has a different filtering policy.
 
 Calling `composite.close()` closes all registered delegates.
 

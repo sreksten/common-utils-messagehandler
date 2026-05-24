@@ -15,17 +15,18 @@ import java.util.function.Consumer;
  * <p>
  * Level control behavior is configurable via {@link LevelControlMode}:
  * <ul>
- *   <li>{@link LevelControlMode#COMPOSITE_ONLY}: this composite applies its own level gate only;
- *       delegates keep their own level configuration unchanged.</li>
- *   <li>{@link LevelControlMode#PROPAGATE_TO_DELEGATES}: this composite applies its own level gate
+ *   <li>{@link LevelControlMode#COMPOSITE_ONLY} (default): the composite applies its own level gate;
+ *       delegates keep their own level configuration unchanged and apply it independently.
+ *       <strong>For the composite to be the sole level gate, all delegates must have all severity
+ *       levels enabled.</strong> A delegate with a level disabled will silently drop messages at
+ *       that level even when the composite has forwarded them.</li>
+ *   <li>{@link LevelControlMode#PROPAGATE_TO_DELEGATES}: the composite applies its own level gate
  *       and forwards level changes to delegates that are {@link AbstractMessageHandler} instances.
  *       Newly added delegates are aligned with the composite level state.</li>
- *   <li>{@link LevelControlMode#DELEGATE_ONLY}: this composite does not own level mutators.
- *       Calls to level-mutating APIs throw {@link UnsupportedOperationException}; routing is always
- *       forwarded and delegates decide their own filtering.</li>
+ *   <li>{@link LevelControlMode#DELEGATE_ONLY}: the composite does not own level mutators.
+ *       Calls to level-mutating APIs throw {@link UnsupportedOperationException}; every message
+ *       that reaches the composite is forwarded and each delegate decides its own filtering.</li>
  * </ul>
- * <p>
- * Default mode is {@link LevelControlMode#COMPOSITE_ONLY}.
  *
  * @author Stefano Reksten
  */
@@ -36,14 +37,28 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
     public enum LevelControlMode {
         /**
          * The composite keeps its own level state and does not change delegate level state.
+         * <p>
+         * The composite's level gate is applied first. If a message passes the composite's
+         * filter, it is forwarded to each delegate, which then applies its own level gate
+         * independently. This means a delegate that has a severity level disabled will silently
+         * drop messages at that level even if the composite forwarded them.
+         * <p>
+         * <strong>Invariant:</strong> for the composite to be the sole level gate, all delegates
+         * must have all severity levels enabled. If delegates carry their own level configuration,
+         * use {@link #DELEGATE_ONLY} or {@link #PROPAGATE_TO_DELEGATES} instead.
          */
         COMPOSITE_ONLY,
         /**
          * The composite keeps its own level state and propagates mutations to level-aware delegates.
+         * <p>
+         * Newly added delegates are aligned with the composite's current level state.
          */
         PROPAGATE_TO_DELEGATES,
         /**
          * Level state is managed only on delegates; composite-level mutators are unsupported.
+         * <p>
+         * {@link CompositeMessageHandler#isEnabled(SeverityNumber)} always returns {@code true};
+         * each delegate decides its own filtering.
          */
         DELEGATE_ONLY
     }
