@@ -1151,6 +1151,14 @@ OTel attribute validation uses `OpenTelemetryAttributeValidator` with two modes:
 - strict mode (default): invalid input throws `IllegalArgumentException`
 - lenient mode: invalid input is reported and processing continues with safe fallbacks where possible
 
+Default resolution rules:
+- `OTEL_ERROR_HANDLER_LENIENT=true` (case-insensitive) -> lenient mode enabled
+- variable missing, empty, or any value other than `true` -> strict mode (`false`)
+
+Recommended environment policy:
+- production: set `OTEL_ERROR_HANDLER_LENIENT=true`
+- development/test: keep strict mode (unset the variable or set `OTEL_ERROR_HANDLER_LENIENT=false`)
+
 Set the environment variable before starting the JVM:
 
 ```bash
