@@ -1,9 +1,11 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+
 /**
  * Internal utility for converting a {@link Throwable} to a human-readable string.
  * <p>
- * Used by all output-oriented {@link com.threeamigos.common.util.interfaces.messagehandler.MessageHandler}
+ * Used by all output-oriented {@link MessageHandler}
  * implementations to produce a consistent text representation when writing or displaying exceptions.
  * <p>
  * This class is package-private and not part of the public API.

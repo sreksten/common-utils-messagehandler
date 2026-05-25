@@ -16,7 +16,14 @@ import java.util.function.Consumer;
  */
 public final class InnerErrorMessageHandler {
 
-    private static final Consumer<String> DEFAULT_GLOBAL_CONSUMER = System.err::println;
+    /**
+     *  If System.err::println is used as a static default consumer, that method reference binds to the System.err
+     *  instance at class-load time, so when tests later do System.setErr(...) (like FileMessageHandlerUnitTest lines
+     *  729/919 expectations), messages can go to an old stream, and assertions see empty output when the full suite
+     *  order changes.
+     */
+    @SuppressWarnings("Convert2MethodRef")
+    private static final Consumer<String> DEFAULT_GLOBAL_CONSUMER = message -> System.err.println(message);
 
     private static final AtomicReference<Consumer<String>> GLOBAL_CONSUMER =
             new AtomicReference<>(DEFAULT_GLOBAL_CONSUMER);
