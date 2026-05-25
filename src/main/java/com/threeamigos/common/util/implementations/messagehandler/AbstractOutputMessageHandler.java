@@ -64,8 +64,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p>
  * <strong>Scope of the guarantee:</strong> this no-loss behavior applies only to
  * <em>async mode</em> and only to tasks already in the queue when {@code close()} is called.
- * Tasks submitted concurrently with or after {@code close()} receive an
- * {@link IllegalStateException} and are dropped. Synchronous handlers have no queue;
+ * Tasks submitted concurrently with or after {@code close()} are dropped and reported through
+ * {@link InnerErrorMessageHandler}. Synchronous handlers have no queue;
  * {@code close()} immediately seals the handler and releases the output resource.
  *
  * <h3>Close-on-error helper for subclasses</h3>
@@ -602,7 +602,8 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
         if (!async) {
             if (closed.get()) {
                 recordDroppedOutput();
-                throw new IllegalStateException(MessageHandlerResourceBundle.get("handlerIsClosed"));
+                reportInnerFailure("dispatching output task on a closed handler", new HandlerClosedException());
+                return;
             }
             runTaskSafely(task, "synchronous dispatch");
             return;
@@ -611,7 +612,8 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
         synchronized (dispatchLock) {
             if (closed.get()) {
                 recordDroppedOutput();
-                throw new IllegalStateException(MessageHandlerResourceBundle.get("handlerIsClosed"));
+                reportInnerFailure("dispatching output task on a closed handler", new HandlerClosedException());
+                return;
             }
             if (!queue.offer(task)) {
                 if (queueOverflowPolicy == QueueOverflowPolicy.BLOCK_WITH_TIMEOUT) {
@@ -1097,8 +1099,9 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
      * <p>
      * <strong>Scope of the no-loss guarantee:</strong> applies to async mode only, and only for
      * tasks already in the queue at the time {@code close()} is called. Tasks submitted
-     * concurrently with or after {@code close()} throw {@link IllegalStateException} and are
-     * dropped. Synchronous handlers have no queue; {@code close()} seals the handler and releases
+     * concurrently with or after {@code close()} are dropped and reported through
+     * {@link InnerErrorMessageHandler}. Synchronous handlers have no queue; {@code close()} seals
+     * the handler and releases
      * the output resource immediately without draining.
      */
     @Override
@@ -1112,6 +1115,8 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
                     removeShutdownHook(shutdownHook);
                 } catch (IllegalStateException ignored) {
                     // JVM is shutting down
+                } catch (SecurityException securityException) {
+                    reportInnerFailure("removing shutdown hook", securityException);
                 }
             }
             synchronized (dispatchLock) {

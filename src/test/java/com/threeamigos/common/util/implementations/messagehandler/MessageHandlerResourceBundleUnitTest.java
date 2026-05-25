@@ -8,6 +8,7 @@ import java.util.Locale;
 import java.util.MissingResourceException;
 import java.util.ResourceBundle;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -51,5 +52,43 @@ class MessageHandlerResourceBundleUnitTest {
         assertEquals(
                 "Impossibile avviare lo span perch\u00e9 nessun tracer \u00e8 associato a questo handler.",
                 italianBundle.getString("cannotStartSpanNoTracerBound"));
+    }
+
+    @Test
+    @DisplayName("Safe get should return key when entry is missing")
+    void safeGetShouldReturnKeyWhenEntryMissing() {
+        assertEquals("missing.bundle.key", MessageHandlerResourceBundle.get("missing.bundle.key"));
+    }
+
+    @Test
+    @DisplayName("Safe get should return explicit fallback when entry is missing")
+    void safeGetShouldReturnExplicitFallbackWhenEntryMissing() {
+        assertEquals("fallback", MessageHandlerResourceBundle.getOrDefault("missing.bundle.key", "fallback"));
+    }
+
+    @Test
+    @DisplayName("Safe format should return non-throwing fallback when key is missing")
+    void safeFormatShouldReturnNonThrowingFallbackWhenKeyMissing() {
+        assertEquals("missing.bundle.key",
+                MessageHandlerResourceBundle.format("missing.bundle.key", "a", 1));
+    }
+
+    @Test
+    @DisplayName("Strict get should throw when key is missing")
+    void strictGetShouldThrowWhenKeyMissing() {
+        assertThrows(MissingResourceException.class,
+                () -> MessageHandlerResourceBundle.getStrict("missing.bundle.key"));
+    }
+
+    @Test
+    @DisplayName("Strict key validation should pass for existing keys and fail for missing ones")
+    void strictKeyValidationShouldPassForExistingKeysAndFailForMissingOnes() {
+        assertDoesNotThrow(() -> MessageHandlerResourceBundle.validateRequiredKeysStrict(
+                "nullMessageProvided",
+                "cannotStartSpanNoTracerBound"));
+        assertThrows(MissingResourceException.class,
+                () -> MessageHandlerResourceBundle.validateRequiredKeysStrict(
+                        "nullMessageProvided",
+                        "missing.bundle.key"));
     }
 }

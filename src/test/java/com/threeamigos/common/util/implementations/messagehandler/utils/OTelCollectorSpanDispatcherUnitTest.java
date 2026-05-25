@@ -55,6 +55,29 @@ class OTelCollectorSpanDispatcherUnitTest {
     }
 
     @Test
+    @DisplayName("should aggregate runtime and IO delegate failures and continue fan-out")
+    void shouldAggregateRuntimeAndIoDelegateFailuresAndContinueFanOut() {
+        AtomicInteger invocations = new AtomicInteger(0);
+        SpanDispatcher runtimeFail = spanData -> {
+            invocations.incrementAndGet();
+            throw new IllegalStateException("runtime");
+        };
+        SpanDispatcher ok = spanData -> invocations.incrementAndGet();
+        SpanDispatcher ioFail = spanData -> {
+            invocations.incrementAndGet();
+            throw new IOException("io");
+        };
+        OTelCollectorSpanDispatcher collector = new OTelCollectorSpanDispatcher(Arrays.asList(runtimeFail, ok, ioFail));
+
+        IOException ex = assertThrows(IOException.class, () -> collector.dispatchSpan(fakeSpanData()));
+
+        assertEquals(3, invocations.get(), "all delegates should be attempted despite failures");
+        assertEquals(2, ex.getSuppressed().length);
+        assertTrue(Arrays.stream(ex.getSuppressed()).anyMatch(t -> t instanceof IllegalStateException));
+        assertTrue(Arrays.stream(ex.getSuppressed()).anyMatch(t -> t instanceof IOException));
+    }
+
+    @Test
     @DisplayName("delegate management APIs should handle nulls, duplicates and snapshots")
     void delegateManagementApisShouldHandleNullsDuplicatesAndSnapshots() throws Exception {
         SpanDispatcher first = spanData -> {

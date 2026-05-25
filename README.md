@@ -586,14 +586,26 @@ A single transport instance may be shared across multiple dispatcher instances.
 
 ## Global internal error sink (`InnerErrorMessageHandler`)
 
-Internal failures raised by the logging infrastructure itself (for example backend dispatch
-runtime failures or failing per-handler error consumers) are routed through
-`InnerErrorMessageHandler`.
+`InnerErrorMessageHandler` is the package-level safety sink for failures that happen
+while the logging infrastructure is processing a log call.
 
 Default global consumer:
 - `System.err::println`
 
-You can replace it once at bootstrap time:
+Typical events reported to this sink include:
+- backend dispatch/runtime failures in handlers;
+- runtime failures thrown by `Supplier<String>` message producers;
+- failures in user-provided extension points (for example custom error consumers,
+  custom delegates in `CompositeMessageHandler`, or custom `RotationPolicy` code);
+- runtime failures in handler internals that are trapped to preserve caller flow.
+
+Behavior contract:
+- null messages are ignored;
+- runtime exceptions thrown by a custom global consumer trigger a fallback to default `System.err`;
+- `consume(localConsumer, message)` tries the local consumer first, then falls back to the global sink
+  if the local consumer is null or throws a runtime exception.
+
+Configure the global consumer once at bootstrap:
 
 ```java
 import com.threeamigos.common.util.implementations.messagehandler.InnerErrorMessageHandler;
@@ -612,11 +624,34 @@ public class InnerErrorBootstrap {
 }
 ```
 
-`FileMessageHandler`, `CompositeMessageHandler`, `JaegerMessageHandler`, `GrafanaMessageHandler`,
-and `SwingMessageHandler` default their internal error reporting to this global sink.
-Runtime exceptions thrown by user-provided extension points (for example custom error consumers,
-custom delegates used by `CompositeMessageHandler`, or custom `RotationPolicy` logic) are also
-reported through this mechanism to preserve caller flow.
+Operational guidance:
+- keep the global consumer lightweight and non-blocking;
+- avoid routing this consumer back into the same logging pipeline to prevent recursive error loops;
+- use `resetGlobalConsumer()` mainly in tests or controlled bootstrap reconfiguration.
+
+## Internal error handling model (exception boundary)
+
+This library uses a clear boundary between setup-time failures and runtime internal failures.
+
+Setup/bootstrap failures are fail-fast and can throw:
+- invalid constructor/configuration arguments;
+- endpoint/auth/timeout/durability initialization errors;
+- strict trace-context validation failures;
+- strict resource-bundle validation failures (`validateRequiredKeysStrict(...)`).
+
+Runtime logging/tracing paths are best-effort. Internal failures are generally trapped and
+reported through `InnerErrorMessageHandler` (and, for HTTP handlers, also through configured
+error/DLQ consumers), so caller code can continue.
+
+Runtime behavior highlights:
+- `Supplier<String>` failures are trapped and reported (not propagated to log callers);
+- dispatch attempts after `close()` are dropped and reported;
+- `FileMessageHandler`, `SwingMessageHandler`, and HTTP handler runtime dispatch failures are reported instead of breaking caller flow;
+- `OTelCollectorDispatcher` and `OTelCollectorSpanDispatcher` invoke all delegates, aggregate delegate
+  `IOException` + `RuntimeException` failures, and rethrow one `IOException` with suppressed causes.
+
+Fatal JVM conditions are not masked:
+- `CompositeMessageHandler` catches `RuntimeException` from delegates but does not swallow `Error` subclasses.
 
 ## `SwingMessageHandler`: standalone desktop apps
 
@@ -1111,6 +1146,11 @@ You can also load filter rules from properties via:
 - `loadPropertiesFromFile(...)`
 - `loadPropertiesFromResource(...)`
 
+Regex policy:
+- invalid regex patterns are ignored (not fail-fast),
+- each invalid pattern is reported through `InnerErrorMessageHandler`,
+- valid rules in the same configuration are still applied.
+
 From the example, it is clear that the key part of the property is actually a Regex.
 
 The value of the property indicates the minimum `SeverityNumber` the log record should have to be included in the log
@@ -1168,6 +1208,31 @@ export OTEL_ERROR_HANDLER_LENIENT=true
 The environment value is resolved once during class initialization. A runtime override is also
 available through `OpenTelemetryAttributeValidator.setLenientModeOverride(...)` and
 `OpenTelemetryAttributeValidator.clearLenientModeOverride()`.
+
+### Resource bundle reliability (startup vs runtime)
+
+To avoid hard failures caused by missing localization resources:
+- use runtime-safe accessors in normal execution paths: `MessageHandlerResourceBundle.get(...)`, `MessageHandlerResourceBundle.format(...)`, `MessageHandlerResourceBundle.getOrDefault(...)`, `MessageHandlerResourceBundle.formatOrDefault(...)`
+- these methods fallback instead of throwing when the bundle or key is missing.
+
+For deployment correctness, add one strict startup validation step and fail fast before serving traffic:
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
+
+public class BootstrapValidationExample {
+    public static void main(String[] args) {
+        MessageHandlerResourceBundle.validateRequiredKeysStrict(
+                "handlerIsClosed",
+                "nullFormatterProvided",
+                "logRecordMustNotBeNull"
+        );
+        // start application
+    }
+}
+```
+
+If `validateRequiredKeysStrict(...)` throws `MissingResourceException`, treat it as a setup/packaging issue (not a recoverable runtime event).
 
 ## `OTelTags` and the Known Values subpackage
 
@@ -1303,6 +1368,21 @@ Important:
 - `GrafanaMessageHandler` exports log records only (Loki push payload or OTLP logs payload depending on endpoint).
 - Calling `startSpan(...)` / `span.end()` does not export traces by itself.
 - Trace export happens only when a span dispatcher is configured on `TracerProvider`.
+
+### Collector fan-out dispatcher failure policy
+
+When you chain multiple backend dispatchers with:
+- `OTelCollectorDispatcher` (for logs)
+- `OTelCollectorSpanDispatcher` (for spans)
+
+the failure behavior is:
+- all delegates are attempted (no short-circuit on first failure);
+- delegate `IOException` and `RuntimeException` are both captured;
+- after fan-out completes, one aggregated `IOException` is thrown;
+- each delegate failure is attached as a suppressed cause (`ex.getSuppressed()`).
+
+This keeps delivery attempts best-effort across all configured targets while preserving a checked
+failure signal to the caller.
 
 ### Span export (traces) via dispatcher
 
@@ -1665,10 +1745,13 @@ Note: CDI must be enabled for the deployment (add `beans.xml` to `WEB-INF` or `M
 1. Null message strings are ignored (no-op).
 2. Null message suppliers are ignored (no-op).
 3. If a supplier returns null, the message is ignored (no-op).
+   If `supplier.get()` throws a runtime exception, it is trapped and reported through
+   `InnerErrorMessageHandler`; it is not propagated to the logging caller.
 4. A null severity is treated as `SeverityNumber.INFO`.
 5. `MessageHandler.startSpan(name)` works only on tracer-created handlers.
 6. Calling `startSpan(name)` on non-tracer handlers throws `IllegalStateException` (localized message).
-7. Output handlers throw `IllegalStateException` if log methods are called after `close()`.
+7. Output handlers do not throw when log methods are called after `close()`:
+   those dispatch attempts are dropped and reported through `InnerErrorMessageHandler`.
 8. There is no `endSpan(...)` helper on handlers; callers close spans explicitly with `span.end()`.
 9. Async dispatch is optional and available only in output handlers based on `AbstractOutputMessageHandler`:
    - `ConsoleMessageHandler`
@@ -1687,7 +1770,7 @@ Note: CDI must be enabled for the deployment (add `beans.xml` to `WEB-INF` or `M
    **Message-loss guarantee (async mode only):** `close()` drains the queue in two passes
    (worker `finally` drain + caller-thread drain) so tasks already in the queue when `close()` is
    called are executed before the handler shuts down. Tasks submitted *concurrently with* or *after*
-   `close()` throw `IllegalStateException` and are dropped. Synchronous handlers have no queue;
+   `close()` are dropped and reported through `InnerErrorMessageHandler`. Synchronous handlers have no queue;
    `close()` simply seals the handler and releases the output resource immediately.
 10. Other handlers are synchronous unless they implement their own threading model.
 11. `GrafanaMessageHandler` exports logs only; configure `TracerProvider#setDefaultSpanDispatcher(...)`
@@ -1730,6 +1813,9 @@ Note: CDI must be enabled for the deployment (add `beans.xml` to `WEB-INF` or `M
     `1` (single worker, backward-compatible). When `poolSize > 1`, each record is dispatched
     individually; crash-recovery batching (retrieve-all-pending on restart) is disabled in pool
     mode to prevent duplicate dispatch.
+25. Collector fan-out dispatchers (`OTelCollectorDispatcher`, `OTelCollectorSpanDispatcher`) always
+    attempt every delegate; delegate `IOException` and `RuntimeException` are aggregated and
+    rethrown as one `IOException` with suppressed causes.
 
 Default output format by handler:
 

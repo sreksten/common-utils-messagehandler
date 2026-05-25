@@ -22,7 +22,6 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("AbstractMessageHandler unit tests")
@@ -300,14 +299,21 @@ class AbstractMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("supplier exceptions should propagate to caller")
-    void supplierExceptionsShouldPropagateToCaller() {
+    @DisplayName("supplier exceptions should be trapped and reported via InnerErrorMessageHandler")
+    void supplierExceptionsShouldBeTrappedAndReportedViaInnerErrorMessageHandler() {
         ProbeMessageHandler sut = new ProbeMessageHandler();
-        IllegalStateException thrown = assertThrows(IllegalStateException.class, () -> sut.info(() -> {
-            throw new IllegalStateException("supplier-boom");
-        }));
-        assertEquals("supplier-boom", thrown.getMessage());
-        assertEquals(0, sut.callCount);
+        List<String> trapped = new ArrayList<String>();
+        InnerErrorMessageHandler.setGlobalConsumer(trapped::add);
+        try {
+            assertDoesNotThrow(() -> sut.info(() -> {
+                throw new IllegalStateException("supplier-boom");
+            }));
+            assertEquals(0, sut.callCount);
+            assertFalse(trapped.isEmpty());
+            assertTrue(trapped.get(0).contains("supplier-boom"));
+        } finally {
+            InnerErrorMessageHandler.resetGlobalConsumer();
+        }
     }
 
     @Test

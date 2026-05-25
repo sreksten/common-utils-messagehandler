@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler.filters;
 
+import com.threeamigos.common.util.implementations.messagehandler.InnerErrorMessageHandler;
 import com.threeamigos.common.util.implementations.messagehandler.otel.AnyValueFactory;
 import com.threeamigos.common.util.implementations.messagehandler.otel.KeyValueFactory;
 import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordImpl;
@@ -90,6 +91,31 @@ class FilterByClassNameUnitTest {
         assertFalse(filter.getClassSeverityMap().containsKey("com\\.invalid\\..*"));
         assertFalse(filter.getClassSeverityMap().containsKey("com\\.outofrange\\..*"));
         assertFalse(filter.getClassSeverityMap().containsKey("com\\.negative\\..*"));
+    }
+
+    @Test
+    @DisplayName("invalid regex patterns should be ignored and reported through InnerErrorMessageHandler")
+    void invalidRegexPatternsShouldBeIgnoredAndReportedThroughInnerErrorMessageHandler() {
+        FilterByClassName filter = new FilterByClassName();
+        List<String> trapped = new ArrayList<String>();
+        InnerErrorMessageHandler.setGlobalConsumer(trapped::add);
+        try {
+            assertDoesNotThrow(() -> filter.add("com\\.[invalid", SeverityNumber.INFO));
+            assertDoesNotThrow(() -> filter.prune("com\\.[invalid"));
+
+            Properties properties = new Properties();
+            properties.setProperty("class.com\\.[invalid", "ERROR");
+            properties.setProperty("class.com\\.ok\\..*", "INFO");
+
+            assertDoesNotThrow(() -> filter.loadProperties(properties));
+
+            assertFalse(filter.getClassSeverityMap().containsKey("com\\.[invalid"));
+            assertEquals(SeverityNumber.INFO, filter.getClassSeverityMap().get("com\\.ok\\..*"));
+            assertFalse(trapped.isEmpty());
+            assertTrue(trapped.get(0).contains("Ignoring invalid regex pattern"));
+        } finally {
+            InnerErrorMessageHandler.resetGlobalConsumer();
+        }
     }
 
     @Test

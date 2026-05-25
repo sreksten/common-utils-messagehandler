@@ -1069,8 +1069,10 @@ class FileMessageHandlerUnitTest {
         handler.setCloseOnWriteError(true);
         handler.info("trigger");
         assertFalse(errors.isEmpty(), "errorConsumer should be notified on write error");
-        assertThrows(IllegalStateException.class, () -> handler.info("after-close"),
-                "Handler should be closed after write error with closeOnWriteError=true in sync mode");
+        assertDoesNotThrow(() -> handler.info("after-close"),
+                "Dispatch after close should be dropped and reported, not propagated");
+        assertTrue(handler.getHandlerHealthMetrics().isClosed());
+        assertTrue(handler.getHandlerHealthMetrics().getDroppedOperations() >= 1L);
     }
 
     @Test
@@ -1091,8 +1093,10 @@ class FileMessageHandlerUnitTest {
         assertFalse(errors.isEmpty(), "errorConsumer should be notified on write error in async mode");
         // Give the close thread time to finish
         Thread.sleep(500);
-        assertThrows(IllegalStateException.class, () -> handler.info("after-close"),
-                "Handler should be closed after write error with closeOnWriteError=true in async mode");
+        assertDoesNotThrow(() -> handler.info("after-close"),
+                "Dispatch after close should be dropped and reported, not propagated");
+        assertTrue(handler.getHandlerHealthMetrics().isClosed());
+        assertTrue(handler.getHandlerHealthMetrics().getDroppedOperations() >= 1L);
     }
 
     @Test
@@ -1107,11 +1111,7 @@ class FileMessageHandlerUnitTest {
 
         try {
             for (int i = 0; i < 300; i++) {
-                try {
-                    handler.info("trigger-" + i);
-                } catch (IllegalStateException ignored) {
-                    // Expected once the close thread completes.
-                }
+                handler.info("trigger-" + i);
             }
 
             long deadline = System.currentTimeMillis() + 5000;

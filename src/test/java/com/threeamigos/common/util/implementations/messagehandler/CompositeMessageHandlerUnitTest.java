@@ -1164,18 +1164,18 @@ class CompositeMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("forEachHandler should catch Throwable from a child handler and continue to subsequent handlers")
-    void forEachHandlerShouldCatchThrowableAndContinueToSubsequentHandlers() {
+    @DisplayName("forEachHandler should not swallow Error subclasses from child handlers")
+    void forEachHandlerShouldNotSwallowErrorSubclassesFromChildHandlers() {
         List<String> errors = new ArrayList<>();
         doThrow(new Error("forced error")).when(firstMessageHandler).info(eq("msg"));
         CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
         sut.setErrorConsumer(errors::add);
 
-        sut.info("msg");
+        Error thrown = assertThrows(Error.class, () -> sut.info("msg"));
 
-        verify(secondMessageHandler, times(1)).info(eq("msg"));
-        assertFalse(errors.isEmpty(), "errorConsumer should have received the dispatch error");
-        assertTrue(errors.get(0).contains("forced error"), "Error notification should include the throwable message");
+        assertEquals("forced error", thrown.getMessage());
+        verify(secondMessageHandler, never()).info(anyString());
+        assertTrue(errors.isEmpty(), "errorConsumer should not receive Error subclass failures");
     }
 
     @Test

@@ -43,6 +43,8 @@ class AbstractOutputMessageHandlerUnitTest {
     private static final LogRecordFormatter FORMATTER = new RawJsonRecordFormatter();
 
     private static final class ProbeOutputMessageHandler extends AbstractOutputMessageHandler {
+        private RuntimeException removeShutdownHookFailure;
+
         private ProbeOutputMessageHandler(final boolean async, final int queueCapacity) {
             super(FACTORY, FORMATTER);
             initializeOutputDispatch(async, queueCapacity, false,
@@ -83,6 +85,18 @@ class AbstractOutputMessageHandlerUnitTest {
 
         private HandlerHealthMetrics healthMetrics() {
             return getHandlerHealthMetrics();
+        }
+
+        private void failShutdownHookRemovalWith(final RuntimeException failure) {
+            this.removeShutdownHookFailure = failure;
+        }
+
+        @Override
+        protected void removeShutdownHook(final Thread hook) {
+            if (removeShutdownHookFailure != null) {
+                throw removeShutdownHookFailure;
+            }
+            super.removeShutdownHook(hook);
         }
 
         @Override
@@ -212,19 +226,48 @@ class AbstractOutputMessageHandlerUnitTest {
     }
 
     @Test
-    @DisplayName("dispatch() should throw IllegalStateException after close() in both sync and async modes")
-    void dispatchShouldThrowIllegalStateExceptionAfterClose() {
-        ProbeOutputMessageHandler syncHandler = new ProbeOutputMessageHandler(false, 0);
-        syncHandler.close();
-        assertThrows(IllegalStateException.class, () -> syncHandler.submit(() -> {
-        }));
-        assertEquals(1L, syncHandler.healthMetrics().getDroppedOperations());
+    @DisplayName("dispatch() should drop and report when called after close() in both sync and async modes")
+    void dispatchShouldDropAndReportAfterClose() {
+        List<String> trapped = new ArrayList<String>();
+        InnerErrorMessageHandler.setGlobalConsumer(trapped::add);
+        try {
+            ProbeOutputMessageHandler syncHandler = new ProbeOutputMessageHandler(false, 0);
+            syncHandler.close();
+            assertDoesNotThrow(() -> syncHandler.submit(() -> {
+            }));
+            assertEquals(1L, syncHandler.healthMetrics().getDroppedOperations());
 
-        ProbeOutputMessageHandler asyncHandler = new ProbeOutputMessageHandler(true, 100);
-        asyncHandler.close();
-        assertThrows(IllegalStateException.class, () -> asyncHandler.submit(() -> {
-        }));
-        assertEquals(1L, asyncHandler.healthMetrics().getDroppedOperations());
+            ProbeOutputMessageHandler asyncHandler = new ProbeOutputMessageHandler(true, 100);
+            asyncHandler.close();
+            assertDoesNotThrow(() -> asyncHandler.submit(() -> {
+            }));
+            assertEquals(1L, asyncHandler.healthMetrics().getDroppedOperations());
+
+            assertFalse(trapped.isEmpty(), "inner-error sink should report closed-handler dispatch attempts");
+            assertTrue(trapped.stream().anyMatch(message -> message.contains("HandlerClosedException")));
+        } finally {
+            InnerErrorMessageHandler.resetGlobalConsumer();
+        }
+    }
+
+    @Test
+    @DisplayName("close should trap SecurityException from shutdown-hook removal and continue")
+    void closeShouldTrapSecurityExceptionFromShutdownHookRemovalAndContinue() throws Exception {
+        ProbeOutputMessageHandler handler = new ProbeOutputMessageHandler(true, 10);
+        handler.failShutdownHookRemovalWith(new SecurityException("hook-denied"));
+        List<String> trapped = new ArrayList<String>();
+        InnerErrorMessageHandler.setGlobalConsumer(trapped::add);
+        try {
+            Field shutdownHookField = AbstractOutputMessageHandler.class.getDeclaredField("shutdownHook");
+            shutdownHookField.setAccessible(true);
+            shutdownHookField.set(handler, new Thread());
+
+            assertDoesNotThrow(handler::close);
+            assertFalse(trapped.isEmpty(), "inner-error sink should capture shutdown-hook removal failures");
+            assertTrue(trapped.get(0).contains("hook-denied"));
+        } finally {
+            InnerErrorMessageHandler.resetGlobalConsumer();
+        }
     }
 
     @Test

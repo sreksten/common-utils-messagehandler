@@ -243,8 +243,8 @@ public final class OpenTelemetryAttributeValidator {
     private static String resolveBundledMessage(final String errorMessage, final Object... args) {
         try {
             return args == null || args.length == 0
-                    ? MessageHandlerResourceBundle.get(errorMessage)
-                    : MessageHandlerResourceBundle.format(errorMessage, args);
+                    ? MessageHandlerResourceBundle.getStrict(errorMessage)
+                    : MessageHandlerResourceBundle.formatStrict(errorMessage, args);
         } catch (Exception e) {
             if (isLenientMode()) {
                 logWithStackTrace(e.getMessage(), e);

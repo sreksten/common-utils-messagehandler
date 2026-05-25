@@ -496,11 +496,11 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
         for (MessageHandler handler : snapshot) {
             try {
                 consumer.accept(handler);
-            } catch (Throwable t) {
+            } catch (RuntimeException runtimeFailure) {
                 String msg = String.format(
                         MessageHandlerResourceBundle.get("exceptionDuringDispatch"), handler);
                 StringWriter sw = new StringWriter();
-                t.printStackTrace(new PrintWriter(sw, true));
+                runtimeFailure.printStackTrace(new PrintWriter(sw, true));
                 InnerErrorMessageHandler.consume(errorConsumer, msg + System.lineSeparator() + sw);
             }
         }

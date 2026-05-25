@@ -17,6 +17,14 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * <p>
  * This class is useful when the same telemetry should be exported to multiple targets
  * (for example Jaeger-oriented and Grafana-oriented dispatchers) from the same handler call.
+ * <p>
+ * Failure policy:
+ * <ul>
+ *   <li>each delegate is invoked independently;</li>
+ *   <li>{@link IOException} and {@link RuntimeException} raised by delegates are captured;</li>
+ *   <li>after all delegates are attempted, failures are rethrown as one aggregated
+ *   {@link IOException} with individual delegate failures attached as suppressed causes.</li>
+ * </ul>
  */
 public class OTelCollectorDispatcher implements LogRecordDispatcher {
 
@@ -99,7 +107,8 @@ public class OTelCollectorDispatcher implements LogRecordDispatcher {
      * <p>
      * Iterates over all registered delegates and calls
      * {@link LogRecordDispatcher#dispatchLogRecord dispatchLogRecord} on each.
-     * If one or more delegates throw {@link IOException}, their exceptions are aggregated and
+     * If one or more delegates throw {@link IOException} or {@link RuntimeException}, their
+     * exceptions are aggregated and
      * re-thrown as a single {@code IOException} with suppressed causes; all other delegates
      * are still invoked even if earlier ones fail.
      *
@@ -113,14 +122,22 @@ public class OTelCollectorDispatcher implements LogRecordDispatcher {
             try {
                 delegate.dispatchLogRecord(logRecord, logRecordFormatter);
             } catch (IOException ex) {
-                if (aggregated == null) {
-                    aggregated = new IOException("One or more collector delegates failed");
-                }
-                aggregated.addSuppressed(ex);
+                aggregated = appendFailure(aggregated, ex);
+            } catch (RuntimeException ex) {
+                aggregated = appendFailure(aggregated, ex);
             }
         }
         if (aggregated != null) {
             throw aggregated;
         }
+    }
+
+    private static IOException appendFailure(final IOException aggregated, final Throwable failure) {
+        IOException updated = aggregated;
+        if (updated == null) {
+            updated = new IOException("One or more collector delegates failed");
+        }
+        updated.addSuppressed(failure);
+        return updated;
     }
 }

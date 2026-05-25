@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler.filters;
 
+import com.threeamigos.common.util.implementations.messagehandler.InnerErrorMessageHandler;
 import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
 import com.threeamigos.common.util.implementations.messagehandler.utils.ParametersValidator;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.*;
@@ -11,6 +12,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
 
 /**
@@ -155,8 +157,12 @@ public class FilterByClassName implements Filter {
         if (className == null || className.isEmpty()) {
             return;
         }
-        prunedClasses.put(new RegexHolder(className), null);
-        classSeverityMap.remove(new RegexHolder(className));
+        RegexHolder regexHolder = createRegexHolderOrNull(className, "pruning class filter");
+        if (regexHolder == null) {
+            return;
+        }
+        prunedClasses.put(regexHolder, null);
+        classSeverityMap.remove(regexHolder);
     }
 
     /**
@@ -168,10 +174,14 @@ public class FilterByClassName implements Filter {
         if (className == null || className.isEmpty()) {
             return;
         }
+        RegexHolder regexHolder = createRegexHolderOrNull(className, "adding class filter");
+        if (regexHolder == null) {
+            return;
+        }
         if (severityNumber == null) {
-            classSeverityMap.remove(new RegexHolder(className));
+            classSeverityMap.remove(regexHolder);
         } else {
-            classSeverityMap.put(new RegexHolder(className), severityNumber);
+            classSeverityMap.put(regexHolder, severityNumber);
         }
     }
 
@@ -260,6 +270,23 @@ public class FilterByClassName implements Filter {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    private RegexHolder createRegexHolderOrNull(final String regex, final String operation) {
+        try {
+            return new RegexHolder(regex);
+        } catch (PatternSyntaxException patternSyntaxException) {
+            reportInvalidRegex(regex, operation, patternSyntaxException);
+            return null;
+        }
+    }
+
+    private static void reportInvalidRegex(final String regex,
+                                           final String operation,
+                                           final PatternSyntaxException patternSyntaxException) {
+        String message = "Ignoring invalid regex pattern '" + regex + "' while " + operation
+                + ": " + patternSyntaxException.getMessage();
+        InnerErrorMessageHandler.consume(message);
     }
 
     private String searchByFunctionName(LogRecord logRecord) {

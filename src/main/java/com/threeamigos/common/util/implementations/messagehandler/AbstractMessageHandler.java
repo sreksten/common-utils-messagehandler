@@ -239,13 +239,19 @@ public abstract class AbstractMessageHandler implements MessageHandler {
         return disabled.toArray(new SeverityNumber[0]);
     }
 
-    public void log(final @Nonnull SeverityNumber level, final @Nonnull Supplier<String> message) {
-        if (message == null) {
+    public void log(final @Nonnull SeverityNumber level, final @Nonnull Supplier<String> messageSupplier) {
+        if (messageSupplier == null) {
             return;
         }
         SeverityNumber effectiveLevel = normalizeLevel(level);
         if (isEnabled(effectiveLevel)) {
-            String producedMessage = message.get();
+            String producedMessage;
+            try {
+                producedMessage = messageSupplier.get();
+            } catch (RuntimeException supplierFailure) {
+                reportInnerFailure("evaluating message supplier for level " + effectiveLevel.name(), supplierFailure);
+                return;
+            }
             if (producedMessage == null) {
                 return;
             }
@@ -357,8 +363,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
     }
 
     private static boolean isClosedHandlerFailure(final RuntimeException failure) {
-        return failure instanceof IllegalStateException
-                && MessageHandlerResourceBundle.get("handlerIsClosed").equals(failure.getMessage());
+        return failure instanceof HandlerClosedException;
     }
 
     /**

@@ -13,6 +13,10 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * In-process collector dispatcher that fans out one completed span to multiple span dispatchers.
+ * <p>
+ * Failure policy mirrors {@link OTelCollectorDispatcher}: every delegate is attempted, and
+ * delegate-side {@link IOException} / {@link RuntimeException} failures are aggregated into one
+ * {@link IOException} with suppressed causes.
  */
 public class OTelCollectorSpanDispatcher implements SpanDispatcher {
 
@@ -48,6 +52,14 @@ public class OTelCollectorSpanDispatcher implements SpanDispatcher {
         return new ArrayList<SpanDispatcher>(delegates);
     }
 
+    /**
+     * Dispatches one span to every registered delegate.
+     * <p>
+     * Delegate {@link IOException} and {@link RuntimeException} failures are aggregated so that
+     * all delegates are still attempted before failing the call.
+     *
+     * @throws IOException aggregated failure when one or more delegates fail
+     */
     @Override
     public void dispatchSpan(final @Nonnull SpanData spanData) throws IOException {
         IOException aggregated = null;
@@ -55,14 +67,22 @@ public class OTelCollectorSpanDispatcher implements SpanDispatcher {
             try {
                 delegate.dispatchSpan(spanData);
             } catch (IOException ex) {
-                if (aggregated == null) {
-                    aggregated = new IOException("One or more span collector delegates failed");
-                }
-                aggregated.addSuppressed(ex);
+                aggregated = appendFailure(aggregated, ex);
+            } catch (RuntimeException ex) {
+                aggregated = appendFailure(aggregated, ex);
             }
         }
         if (aggregated != null) {
             throw aggregated;
         }
+    }
+
+    private static IOException appendFailure(final IOException aggregated, final Throwable failure) {
+        IOException updated = aggregated;
+        if (updated == null) {
+            updated = new IOException("One or more span collector delegates failed");
+        }
+        updated.addSuppressed(failure);
+        return updated;
     }
 }

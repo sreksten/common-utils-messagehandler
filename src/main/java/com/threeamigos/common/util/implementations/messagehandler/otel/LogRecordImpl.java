@@ -316,10 +316,6 @@ public class LogRecordImpl implements LogRecord, Serializable {
     }
 
     private static String safeBundleGet(final String key, final String fallback) {
-        try {
-            return MessageHandlerResourceBundle.get(key);
-        } catch (RuntimeException ex) {
-            return fallback;
-        }
+        return MessageHandlerResourceBundle.getOrDefault(key, fallback);
     }
 }

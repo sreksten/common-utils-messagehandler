@@ -61,6 +61,31 @@ class OTelCollectorDispatcherUnitTest {
     }
 
     @Test
+    @DisplayName("should aggregate runtime and IO delegate failures and continue fan-out")
+    void shouldAggregateRuntimeAndIoDelegateFailuresAndContinueFanOut() {
+        AtomicInteger invocations = new AtomicInteger(0);
+        LogRecordDispatcher runtimeFail = (logRecord, formatter) -> {
+            invocations.incrementAndGet();
+            throw new IllegalStateException("runtime");
+        };
+        LogRecordDispatcher ok = (logRecord, formatter) -> invocations.incrementAndGet();
+        LogRecordDispatcher ioFail = (logRecord, formatter) -> {
+            invocations.incrementAndGet();
+            throw new IOException("io");
+        };
+        OTelCollectorDispatcher collector = new OTelCollectorDispatcher(Arrays.asList(runtimeFail, ok, ioFail));
+
+        LogRecord logRecord = new LogRecordFactoryImpl().create(SeverityNumber.INFO, "hello");
+        LogRecordFormatter formatter = lr -> "{}";
+        IOException ex = assertThrows(IOException.class, () -> collector.dispatchLogRecord(logRecord, formatter));
+
+        assertEquals(3, invocations.get(), "all delegates should be attempted despite failures");
+        assertEquals(2, ex.getSuppressed().length);
+        assertTrue(Arrays.stream(ex.getSuppressed()).anyMatch(t -> t instanceof IllegalStateException));
+        assertTrue(Arrays.stream(ex.getSuppressed()).anyMatch(t -> t instanceof IOException));
+    }
+
+    @Test
     @DisplayName("delegate management APIs should handle nulls, duplicates and snapshots")
     void delegateManagementApisShouldHandleNullsDuplicatesAndSnapshots() throws Exception {
         LogRecordDispatcher first = (logRecord, formatter) -> {
