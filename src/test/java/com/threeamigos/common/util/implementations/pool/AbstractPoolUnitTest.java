@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.pool;
 
+import jakarta.annotation.Nonnull;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -44,6 +45,7 @@ class AbstractPoolUnitTest {
             super(capacity);
         }
 
+        @Nonnull
         @Override
         protected String createResource() throws Exception {
             if (createShouldThrow) {
@@ -570,6 +572,7 @@ class AbstractPoolUnitTest {
         AbstractPool<String> pool = new AbstractPool<String>(1) {
             private int count = 0;
 
+            @Nonnull
             @Override
             protected String createResource() {
                 return "r" + (++count);

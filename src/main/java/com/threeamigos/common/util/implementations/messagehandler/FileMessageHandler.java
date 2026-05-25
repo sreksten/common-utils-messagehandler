@@ -66,7 +66,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
     private static final int LINE_SEPARATOR_BYTES_LENGTH =
             System.lineSeparator().getBytes(StandardCharsets.UTF_8).length;
     private static final String LOCK_FILE_SUFFIX = ".lck";
-    private static final ConcurrentMap<Path, ReentrantLock> LOCK_GUARDS = new ConcurrentHashMap<Path, ReentrantLock>();
+    private static final ConcurrentMap<Path, ReentrantLock> LOCK_GUARDS = new ConcurrentHashMap<>();
     /**
      * Default maximum file size (in bytes) used by no-policy constructors before size-based
      * rotation archives the current log file and starts a new one.
@@ -82,7 +82,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
     private final Path lockFilePath;
     private final ReentrantLock lockGuard;
     private FileChannel lockFileChannel;
-    private long bytesWritten = 0;
+    private long bytesWritten;
     private volatile Consumer<String> errorConsumer = InnerErrorMessageHandler::consume;
     private volatile boolean closeOnWriteError = false;
 
@@ -477,7 +477,7 @@ public class FileMessageHandler extends AbstractOutputMessageHandler {
      * resolved by the automatic recovery attempt) triggers {@link #close()}. In async mode the
      * close is dispatched on a new thread to avoid a deadlock with the worker thread.
      * <p>
-     * In async mode, only the first failure schedules a close thread; subsequent failures will
+     * In async mode, only the first failure schedules a close thread; later failures will
      * not schedule additional close threads.
      *
      * @param closeOnWriteError {@code true} to auto-close on unrecoverable write error

@@ -133,7 +133,7 @@ public interface Tracer {
     FileMessageHandler getFileMessageHandler(String filePath, Filter filter);
 
     /**
-     * Creates a file-backed handler enriched with this tracer context, using the provided formatter,
+     * Creates a file-backed handler enriched with this tracer context, using the provided formatter
      * and the provided file path.
      * <p>
      * If {@code filePath} is {@code null} or blank, implementations may use a provider default file path.
@@ -178,7 +178,7 @@ public interface Tracer {
     FileMessageHandler getFileMessageHandler(File file, Filter filter);
 
     /**
-     * Creates a file-backed handler enriched with this tracer context, using the provided formatter,
+     * Creates a file-backed handler enriched with this tracer context, using the provided formatter
      * and the provided file reference.
      *
      * @param file target file reference

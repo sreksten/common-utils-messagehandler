@@ -14,7 +14,7 @@ import java.util.List;
  *   <li><a href="https://github.com/open-telemetry/opentelemetry-proto/blob/main/opentelemetry/proto/logs/v1/logs.proto">OTLP
  *   logs.proto (ScopeLogs)</a></li>
  * </ul>
- *  Scope attributes are internally capped to the default OpenTelemetry attribute count limit and  any overflow is
+ *  Scope attributes are internally capped to the default OpenTelemetry attribute count limit and any overflow is
  *  reported through {@link #getDroppedAttributesCount()}.
  *
  * @author Stefano Reksten

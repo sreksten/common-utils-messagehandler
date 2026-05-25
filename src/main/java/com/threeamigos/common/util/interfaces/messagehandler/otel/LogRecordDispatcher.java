@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.interfaces.messagehandler.otel;
 
+import com.threeamigos.common.util.implementations.messagehandler.utils.ParametersValidator;
 import jakarta.annotation.Nonnull;
 
 import java.io.IOException;
@@ -8,7 +9,7 @@ import java.util.List;
 /**
  * Generic dispatcher contract for exporting {@link LogRecord} instances to a backend.
  * <p>
- * Implementations can decide which wire payload to produce (for example OTLP logs JSON
+ * Implementations can decide which wire payload to produce (for example, OTLP logs JSON
  * or backend-specific JSON) as long as dispatch preserves the information available in
  * the incoming {@link LogRecord}.
  */
@@ -36,12 +37,8 @@ public interface LogRecordDispatcher {
      */
     default void dispatchLogRecords(final @Nonnull List<LogRecord> logRecords,
                                     final @Nonnull LogRecordFormatter logRecordFormatter) throws IOException {
-        if (logRecords == null) {
-            throw new NullPointerException("logRecords must not be null");
-        }
-        if (logRecordFormatter == null) {
-            throw new NullPointerException("logRecordFormatter must not be null");
-        }
+        ParametersValidator.validateNotNull(logRecords, "logRecords");
+        ParametersValidator.validateNotNull(logRecordFormatter, "logRecordFormatter");
         if (logRecords.isEmpty()) {
             return;
         }

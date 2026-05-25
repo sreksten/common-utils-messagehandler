@@ -10,21 +10,16 @@ import java.util.function.Consumer;
  * Global non-throwing sink for internal logging-system failures.
  * <p>
  * This utility centralizes reporting for errors raised while handlers process user log calls
- * (for example: backend dispatch failures or failing error-consumer callbacks).
+ * (for example, backend dispatch failures or failing error-consumer callbacks).
  * <p>
- * The global consumer is process-wide and thread-safe. By default it writes to {@code System.err}.
+ * The global consumer is process-wide and thread-safe. By default, it writes to {@code System.err}.
  */
 public final class InnerErrorMessageHandler {
 
-    private static final Consumer<String> DEFAULT_GLOBAL_CONSUMER = new Consumer<String>() {
-        @Override
-        public void accept(final String message) {
-            System.err.println(message);
-        }
-    };
+    private static final Consumer<String> DEFAULT_GLOBAL_CONSUMER = System.err::println;
 
     private static final AtomicReference<Consumer<String>> GLOBAL_CONSUMER =
-            new AtomicReference<Consumer<String>>(DEFAULT_GLOBAL_CONSUMER);
+            new AtomicReference<>(DEFAULT_GLOBAL_CONSUMER);
 
     private InnerErrorMessageHandler() {
         // Utility class
@@ -87,7 +82,7 @@ public final class InnerErrorMessageHandler {
         if (message == null) {
             return;
         }
-        if (localConsumer != null && safeConsume(localConsumer, message)) {
+        if (safeConsume(localConsumer, message)) {
             return;
         }
         consume(message);

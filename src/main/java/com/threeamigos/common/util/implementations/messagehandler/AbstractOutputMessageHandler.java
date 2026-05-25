@@ -62,7 +62,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * window between the interrupt and the worker's own drain, then calls {@link #closeOutput()} to
  * release the underlying output resource.
  * <p>
- * <strong>Scope of the guarantee:</strong> this no-loss behaviour applies only to
+ * <strong>Scope of the guarantee:</strong> this no-loss behavior applies only to
  * <em>async mode</em> and only to tasks already in the queue when {@code close()} is called.
  * Tasks submitted concurrently with or after {@code close()} receive an
  * {@link IllegalStateException} and are dropped. Synchronous handlers have no queue;
@@ -569,8 +569,8 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
     /**
      * Submits an internal task for execution without applying overload controls.
      * <p>
-     * This variant is intended for control-plane tasks (for example flush/close sequencing) that
-     * should not be shed by sampling/rate-limit policy.
+     * This variant is intended for control-plane tasks (for example, flush/close sequencing) that
+     * should not be shed by the sampling / rate-limit policy.
      *
      * @param task the operation to execute
      */
@@ -1032,7 +1032,7 @@ public abstract class AbstractOutputMessageHandler extends AbstractMessageHandle
      * In asynchronous mode, {@link #close()} is dispatched on a dedicated thread to avoid
      * deadlocking the single async worker, and only the first request spawns that thread.
      *
-     * @param closeOnError whether close-on-error behavior is enabled by the subclass
+     * @param closeOnError whether the subclass enables close-on-error behavior
      * @param closeThreadName thread name to use when asynchronous close must be scheduled
      */
     protected final void requestCloseOnErrorIfEnabled(final boolean closeOnError,

@@ -7,7 +7,7 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
 /**
  * Internal utility that binds tracer instances to handlers.
  */
-final class HandlerTracerBinder {
+public final class HandlerTracerBinder {
 
     private HandlerTracerBinder() {
     }

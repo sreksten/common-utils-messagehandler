@@ -7,6 +7,8 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFacto
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
+import com.threeamigos.common.util.implementations.messagehandler.otel.HandlerTracerBinder;
+import com.threeamigos.common.util.implementations.messagehandler.otel.TracerMessageHandlerFactory;
 import jakarta.annotation.Nonnull;
 
 import java.util.ArrayList;
@@ -83,12 +85,12 @@ public abstract class AbstractMessageHandler implements MessageHandler {
      * This method is {@code public} solely because Java's access-control rules prevent
      * code in a sub-package ({@code .otel}) from calling a {@code protected} method on an
      * instance of a class defined in a parent package, unless the caller is itself a
-     * subclass. {@link com.threeamigos.common.util.implementations.messagehandler.otel.HandlerTracerBinder}
+     * subclass. {@link HandlerTracerBinder}
      * is not a subclass, so {@code public} is the minimum access level that avoids
      * reflection.
      * <p>
      * Tracer binding is managed exclusively by
-     * {@link com.threeamigos.common.util.implementations.messagehandler.otel.TracerMessageHandlerFactory}.
+     * {@link TracerMessageHandlerFactory}.
      * Calling this method directly will override the framework-managed tracer, silently
      * breaking span correlation, log-record factory resolution, and trace context
      * propagation. There is intentionally no unbind method — a bound tracer remains
@@ -111,7 +113,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
     /**
      * Resolves the log-record factory to use for the current call.
      * <p>
-     * If a tracer is bound, uses the tracer-provided factory. Otherwise falls back to this
+     * If a tracer is bound, uses the tracer-provided factory. Otherwise, it falls back to this
      * handler instance's own default factory.
      */
     private LogRecordFactory resolveLogRecordFactory() {
@@ -294,7 +296,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
     }
 
     /**
-     * Dispatches a throwable with contextual message when error-level handling is enabled.
+     * Dispatches a throwable with a contextual message when error-level handling is enabled.
      * <p>
      * If either {@code message} or {@code throwable} is {@code null}, the call is treated
      * as a no-op and returns immediately.

@@ -25,7 +25,7 @@ import java.util.Map;
  *
  * @author Stefano Reksten
  */
-final class TracerMessageHandlerFactory {
+public final class TracerMessageHandlerFactory {
 
     private final Tracer tracer;
     private final LogRecordFormatter formatter = new RawJsonRecordFormatter();

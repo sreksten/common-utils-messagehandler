@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
-import com.threeamigos.common.util.implementations.messagehandler.durability.HttpDispatchDurabilityStore;
+import com.threeamigos.common.util.interfaces.messagehandler.durability.HttpDispatchDurabilityStore;
 import com.threeamigos.common.util.implementations.messagehandler.durability.InMemoryHttpDispatchDurabilityStore;
 import com.threeamigos.common.util.implementations.messagehandler.otel.LogRecordFactoryImpl;
 import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.ExportLogsServiceRequestLogRecordFormatter;
@@ -243,7 +243,7 @@ public class GrafanaMessageHandler extends AbstractHTTPOutputMessageHandler {
                                  final boolean async,
                                  final int queueCapacity,
                                  final boolean registerShutdownHook) {
-        this(logRecordFactory, logRecordFormatter, (LogRecordDispatcher) dispatcher, async, queueCapacity,
+        this(logRecordFactory, logRecordFormatter, dispatcher, async, queueCapacity,
                 registerShutdownHook, new InMemoryHttpDispatchDurabilityStore(), System.err::println);
     }
 
@@ -403,7 +403,7 @@ public class GrafanaMessageHandler extends AbstractHTTPOutputMessageHandler {
     private void dispatchRecord(final LogRecord logRecord) {
         dispatchHttpRecord(
                 logRecord,
-                (records, formatter) -> dispatcher.dispatchLogRecords(records, formatter),
+                dispatcher::dispatchLogRecords,
                 errorConsumer,
                 "grafanaDispatchError",
                 closeOnDispatchError,

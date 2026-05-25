@@ -14,7 +14,7 @@ import java.util.function.Consumer;
  * to one or more other {@link MessageHandler}s.
  * <p>
  * <strong>Dispatch model:</strong> the composite itself has no asynchronous queue. Fan-out to
- * delegates happens synchronously on the calling thread; any asynchronous behaviour is provided
+ * delegates happens synchronously on the calling thread; any asynchronous behavior is provided
  * by individual delegates that extend {@link AbstractOutputMessageHandler}.
  * <p>
  * Level control behavior is configurable via {@link LevelControlMode}:
@@ -419,9 +419,9 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
     /**
      * Closes all currently registered delegates.
      * <p>
-     * The delegate list is snapshotted under the read lock, then each delegate is closed
+     * A snapshot of the delegate list is taken under the read lock, then each delegate is closed
      * independently. Failures from one delegate are reported through {@code errorConsumer}
-     * and do not prevent closing subsequent delegates.
+     * and do not prevent closing later delegates.
      */
     @Override
     public void close() {

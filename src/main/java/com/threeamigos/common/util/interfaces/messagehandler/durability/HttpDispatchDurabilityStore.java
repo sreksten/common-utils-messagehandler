@@ -1,5 +1,6 @@
-package com.threeamigos.common.util.implementations.messagehandler.durability;
+package com.threeamigos.common.util.interfaces.messagehandler.durability;
 
+import com.threeamigos.common.util.implementations.messagehandler.durability.DurableLogRecordEntry;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import jakarta.annotation.Nonnull;
 

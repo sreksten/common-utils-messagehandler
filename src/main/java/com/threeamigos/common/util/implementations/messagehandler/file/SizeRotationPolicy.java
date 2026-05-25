@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler.file;
 
+import com.threeamigos.common.util.implementations.messagehandler.utils.ParametersValidator;
 import com.threeamigos.common.util.interfaces.messagehandler.file.RotationPolicy;
 import jakarta.annotation.Nonnull;
 
@@ -37,14 +38,11 @@ public class SizeRotationPolicy implements RotationPolicy {
      * Creates a {@code SizeRotationPolicy} that triggers rotation when the byte count
      * reaches {@code maxBytes}.
      *
-     * @param maxBytes maximum approximate bytes to write before rotating; must be positive
-     * @throws IllegalArgumentException if {@code maxBytes} is not positive
+     * @param maxBytes maximum approximate bytes to write before rotating; must be greater than zero
+     * @throws IllegalArgumentException if {@code maxBytes} is not greater than zero
      */
     public SizeRotationPolicy(final long maxBytes) {
-        if (maxBytes <= 0) {
-            throw new IllegalArgumentException("maxBytes must be positive, was: " + maxBytes);
-        }
-        this.maxBytes = maxBytes;
+        this.maxBytes = ParametersValidator.validateGreaterThanZero(maxBytes, "maxBytes");
     }
 
     /**

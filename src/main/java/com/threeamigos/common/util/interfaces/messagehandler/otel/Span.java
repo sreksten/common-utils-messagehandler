@@ -45,7 +45,7 @@ public interface Span {
     }
 
     /**
-     * Creates a child span using this span as parent.
+     * Creates a child span using this span as its parent.
      * <p>
      * Implementations with tracer context should return a fully recording child span.
      * Implementations without child-creation capabilities may return a non-recording span.
@@ -108,7 +108,7 @@ public interface Span {
      * Specification reference:
      * <a href="https://opentelemetry.io/docs/specs/otel/trace/api/#wrapping-a-spancontext-in-a-span">OpenTelemetry Trace API: wrapping a SpanContext in a Span</a>.
      *
-     * @param spanContext context to wrap; when null an invalid context is used
+     * @param spanContext context to wrap; when null, an invalid context is used
      * @return a non-recording span
      */
     static Span wrap(final SpanContext spanContext) {

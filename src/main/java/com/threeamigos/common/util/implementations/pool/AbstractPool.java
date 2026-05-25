@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * protected abstract T  createResource()   throws Exception;
  * protected abstract void destroyResource(T resource) throws Exception;
  * }</pre>
- * Optionally, override {@link #isValid(Object)} to perform a lightweight health-check
+ * Optionally, override {@link #isValid(Object)} to perform a lightweight health check
  * before reuse (e.g. {@code connection.isValid(1)} for JDBC):
  * <pre>{@code
  * @Override
@@ -47,7 +47,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <h3>Thread safety</h3>
  * <p>
  * All public methods are fully thread-safe. The semaphore and the blocking queue handle
- * concurrent access without additional synchronisation in subclasses (assuming
+ * concurrent access without additional synchronization in subclasses (assuming
  * {@link #isValid} is side-effect-free and {@link #createResource}/{@link #destroyResource}
  * are thread-safe with respect to the underlying resource type).
  *
@@ -98,7 +98,7 @@ public abstract class AbstractPool<T> implements Pool<T> {
      * <p>
      * Called when a resource is invalidated, found stale during reuse, or drained
      * at pool close. Implementations should not throw if the resource is already
-     * closed or partially initialised.
+     * closed or partially initialized.
      *
      * @param resource the resource to destroy; never {@code null}
      * @throws Exception if an error occurs during destruction

@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.interfaces.messagehandler.otel;
 
+import jakarta.annotation.Nonnull;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -27,8 +28,8 @@ class LogRecordDispatcherDefaultMethodUnitTest {
         final List<LogRecord> dispatched = new ArrayList<LogRecord>();
 
         @Override
-        public void dispatchLogRecord(final LogRecord logRecord,
-                                      final LogRecordFormatter logRecordFormatter) throws IOException {
+        public void dispatchLogRecord(@Nonnull final LogRecord logRecord,
+                                      @Nonnull final LogRecordFormatter logRecordFormatter) throws IOException {
             dispatched.add(logRecord);
         }
     }

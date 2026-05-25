@@ -10,6 +10,7 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanDispatcher
 import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanContext;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.StatusCode;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
+import jakarta.annotation.Nonnull;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -530,7 +531,7 @@ class SpanImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
                 null,
                 new SpanDispatcher() {
                     @Override
-                    public void dispatchSpan(final SpanData spanData) throws java.io.IOException {
+                    public void dispatchSpan(@Nonnull final SpanData spanData) throws java.io.IOException {
                         throw new java.io.IOException("io failure");
                     }
                 });
@@ -547,7 +548,7 @@ class SpanImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
                 null,
                 new SpanDispatcher() {
                     @Override
-                    public void dispatchSpan(final SpanData spanData) {
+                    public void dispatchSpan(@Nonnull final SpanData spanData) {
                         throw new RuntimeException("runtime failure");
                     }
                 });
@@ -568,7 +569,7 @@ class SpanImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
                 null,
                 new SpanDispatcher() {
                     @Override
-                    public void dispatchSpan(final SpanData spanData) {
+                    public void dispatchSpan(@Nonnull final SpanData spanData) {
                         throw new AssertionError("dispatch should not be called");
                     }
                 });

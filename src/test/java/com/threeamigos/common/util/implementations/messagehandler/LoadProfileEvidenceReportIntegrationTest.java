@@ -6,6 +6,7 @@ import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordDispatcher;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFactory;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
+import jakarta.annotation.Nonnull;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -367,14 +368,14 @@ class LoadProfileEvidenceReportIntegrationTest {
         }
 
         @Override
-        public void dispatchLogRecord(final LogRecord logRecord,
-                                      final LogRecordFormatter logRecordFormatter) throws IOException {
+        public void dispatchLogRecord(@Nonnull final LogRecord logRecord,
+                                      @Nonnull final LogRecordFormatter logRecordFormatter) throws IOException {
             dispatchLogRecords(java.util.Collections.singletonList(logRecord), logRecordFormatter);
         }
 
         @Override
-        public void dispatchLogRecords(final List<LogRecord> logRecords,
-                                       final LogRecordFormatter logRecordFormatter) throws IOException {
+        public void dispatchLogRecords(@Nonnull final List<LogRecord> logRecords,
+                                       @Nonnull final LogRecordFormatter logRecordFormatter) throws IOException {
             dispatchCalls.incrementAndGet();
             long latency = dispatchLatencyMillis;
             if (latency > 0L) {

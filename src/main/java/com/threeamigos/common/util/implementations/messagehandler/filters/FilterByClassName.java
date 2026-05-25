@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler.filters;
 
 import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
+import com.threeamigos.common.util.implementations.messagehandler.utils.ParametersValidator;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.*;
 import jakarta.annotation.Nullable;
 
@@ -61,11 +62,8 @@ public class FilterByClassName implements Filter {
      * @throws IOException if the file cannot be opened or read
      */
     public void loadPropertiesFromFile(final String filename) throws IOException {
-        Objects.requireNonNull(filename, MessageHandlerResourceBundle.get("filterByClassNameNullFilenameProvided"));
-        if (filename.trim().isEmpty()) {
-            throw new IllegalArgumentException(MessageHandlerResourceBundle.get("filterByClassNameBlankFilenameProvided"));
-        }
-        loadProperties(new File(filename));
+        String trimmedFilename = ParametersValidator.validateNotBlank(filename, "filename");
+        loadProperties(new File(trimmedFilename));
     }
 
     /**
@@ -77,14 +75,11 @@ public class FilterByClassName implements Filter {
      * @throws IOException if the resource cannot be read
      */
     public void loadPropertiesFromResource(final String resourceName) throws IOException {
-        Objects.requireNonNull(resourceName, MessageHandlerResourceBundle.get("filterByClassNameNullResourceNameProvided"));
-        if (resourceName.trim().isEmpty()) {
-            throw new IllegalArgumentException(MessageHandlerResourceBundle.get("filterByClassNameBlankResourceNameProvided"));
-        }
-        InputStream inputStream = Thread.currentThread().getContextClassLoader().getResourceAsStream(resourceName);
+        String trimmedResourceName = ParametersValidator.validateNotBlank(resourceName, "resourceName");
+        InputStream inputStream = Thread.currentThread().getContextClassLoader().getResourceAsStream(trimmedResourceName);
         if (inputStream == null) {
             throw new IllegalArgumentException(
-                    MessageHandlerResourceBundle.format("filterByClassNameResourceNotFound", resourceName));
+                    MessageHandlerResourceBundle.format("resourceNotFound", trimmedResourceName));
         }
         try (InputStream stream = inputStream) {
             loadProperties(stream);
@@ -99,7 +94,7 @@ public class FilterByClassName implements Filter {
      * @throws IOException if the file cannot be opened or read
      */
     public void loadProperties(final File file) throws IOException {
-        Objects.requireNonNull(file, MessageHandlerResourceBundle.get("filterByClassNameNullFileProvided"));
+        ParametersValidator.validateNotNull(file, "file");
         try (InputStream inputStream = new FileInputStream(file)) {
             loadProperties(inputStream);
         }
@@ -115,7 +110,7 @@ public class FilterByClassName implements Filter {
      * @throws IOException if the properties cannot be loaded
      */
     public void loadProperties(final InputStream inputStream) throws IOException {
-        Objects.requireNonNull(inputStream, MessageHandlerResourceBundle.get("filterByClassNameNullInputStreamProvided"));
+        ParametersValidator.validateNotNull(inputStream, "inputStream");
         Properties properties = new Properties();
         properties.load(inputStream);
         loadProperties(properties);

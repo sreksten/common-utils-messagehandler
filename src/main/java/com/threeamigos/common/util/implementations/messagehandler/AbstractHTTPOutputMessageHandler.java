@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.implementations.messagehandler.durability.DurableLogRecordEntry;
-import com.threeamigos.common.util.implementations.messagehandler.durability.HttpDispatchDurabilityStore;
+import com.threeamigos.common.util.interfaces.messagehandler.durability.HttpDispatchDurabilityStore;
 import com.threeamigos.common.util.implementations.messagehandler.durability.InMemoryHttpDispatchDurabilityStore;
 import com.threeamigos.common.util.implementations.messagehandler.utils.HttpDispatchStatusException;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
@@ -22,13 +22,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
- * Base class for HTTP-oriented output handlers (for example Jaeger/Grafana log exporters).
+ * Base class for HTTP-oriented output handlers (for example, Jaeger/Grafana log exporters).
  * <p>
  * This class extends {@link AbstractOutputMessageHandler} with transport concerns shared by HTTP handlers:
  * <ul>
  *   <li>bounded retry with exponential backoff</li>
  *   <li>adaptive retry budget and jitter tied to observed dispatch throughput</li>
- *   <li>retryability classification for I/O and HTTP status failures</li>
+ *   <li>retry-ability classification for I/O and HTTP status failures</li>
  *   <li>circuit breaker with closed/open/half-open transitions</li>
  *   <li>best-effort JVM keep-alive configuration for {@link java.net.HttpURLConnection}</li>
  *   <li>pluggable durability store (in-memory/file/Redis) for pending dispatch records</li>
@@ -42,7 +42,7 @@ import java.util.function.Consumer;
  * <p>
  * Dead-letter policy: after retry handling completes, records are routed to the dead-letter
  * consumer only for permanent failures (non-retryable HTTP status errors and runtime failures).
- * Transient/retryable I/O failures are reported through the normal error-consumer path and
+ * Transient/retryable I/O failures are reported through the normal error-consumer path, and
  * records remain in the durability store for later dispatch attempts.
  *
  * @author Stefano Reksten
@@ -295,7 +295,7 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
      * that were pending before a JVM restart) is important for your use-case, keep the pool at 1.
      * <p>
      * If the pool size is changed while the handler is active, the old pool is shut down gracefully
-     * (in-flight tasks are allowed to complete) and a new pool is created. To avoid races, prefer
+     * (in-flight tasks are allowed to complete), and a new pool is created. To avoid races, prefer
      * calling this method during handler construction before any messages are dispatched.
      *
      * @param poolSize number of HTTP worker threads (must be >= 1)
@@ -349,7 +349,7 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
      * <p>
      * This method is intentionally non-throwing for dispatch-related failures; it preserves caller flow.
      *
-     * @param logRecord current log record being emitted
+     * @param logRecord log record being emitted
      * @param dispatchOperation transport callback to execute dispatch
      * @param errorConsumer consumer used to receive localized failure messages
      * @param dispatchErrorMessageKey resource-bundle key for dispatch error message formatting
@@ -418,15 +418,10 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
                         executeHttpDispatchWithRetry(recordsToDispatch, dispatchOperation);
                         acknowledgeDispatchedBatch(durableBatch);
                         recordOutputSuccess();
-                    } catch (IOException dispatchException) {
+                    } catch (IOException | RuntimeException dispatchException) {
                         recordOutputFailure();
                         deadLetterIfPermanentFailure(durableBatch, dispatchException);
                         reportDispatchFailure(dispatchException, errorConsumer, dispatchErrorMessageKey,
-                                closeOnDispatchError, closeThreadName);
-                    } catch (RuntimeException runtimeException) {
-                        recordOutputFailure();
-                        deadLetterIfPermanentFailure(durableBatch, runtimeException);
-                        reportDispatchFailure(runtimeException, errorConsumer, dispatchErrorMessageKey,
                                 closeOnDispatchError, closeThreadName);
                     }
                 }, logRecord.getSeverityNumber());
@@ -437,7 +432,7 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
                     closeOnDispatchError, closeThreadName);
         } catch (RuntimeException runtimeException) {
             recordOutputFailure();
-            deadLetterIfPermanentFailure(Collections.<DurableLogRecordEntry>emptyList(), runtimeException);
+            deadLetterIfPermanentFailure(Collections.emptyList(), runtimeException);
             reportDispatchFailure(runtimeException, errorConsumer, dispatchErrorMessageKey,
                     closeOnDispatchError, closeThreadName);
         }
@@ -468,15 +463,10 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
             executeHttpDispatchWithRetry(singleRecord, dispatchOperation);
             acknowledgeDispatchedBatch(singleBatch);
             recordOutputSuccess();
-        } catch (IOException dispatchException) {
+        } catch (IOException | RuntimeException dispatchException) {
             recordOutputFailure();
             deadLetterIfPermanentFailure(singleBatch, dispatchException);
             reportDispatchFailure(dispatchException, errorConsumer, dispatchErrorMessageKey,
-                    closeOnDispatchError, closeThreadName);
-        } catch (RuntimeException runtimeException) {
-            recordOutputFailure();
-            deadLetterIfPermanentFailure(singleBatch, runtimeException);
-            reportDispatchFailure(runtimeException, errorConsumer, dispatchErrorMessageKey,
                     closeOnDispatchError, closeThreadName);
         }
     }
@@ -485,7 +475,7 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
      * Records one failed output operation and reports the provided failure through the configured
      * error handling path.
      * <p>
-     * Intended for failures that happen before HTTP dispatch starts (for example record creation/formatting).
+     * Intended for failures that happen before HTTP dispatch starts (for example, record creation/formatting).
      *
      * @param failure failure to report
      * @param errorConsumer consumer receiving localized failure details
@@ -564,20 +554,16 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
     }
 
     private List<DurableLogRecordEntry> retrievePendingBatch() throws IOException {
-        List<DurableLogRecordEntry> pendingEntries = durabilityStore.retrievePending();
-        if (pendingEntries == null) {
-            throw new IOException("Durability store returned null pending list");
-        }
-        return pendingEntries;
+        return durabilityStore.retrievePending();
     }
 
     private static List<LogRecord> extractLogRecords(final List<DurableLogRecordEntry> durableBatch) {
         if (durableBatch == null || durableBatch.isEmpty()) {
             return Collections.emptyList();
         }
-        List<LogRecord> logRecords = new ArrayList<LogRecord>(durableBatch.size());
+        List<LogRecord> logRecords = new ArrayList<>(durableBatch.size());
         for (DurableLogRecordEntry durableEntry : durableBatch) {
-            if (durableEntry == null || durableEntry.getLogRecord() == null) {
+            if (durableEntry == null) {
                 continue;
             }
             logRecords.add(durableEntry.getLogRecord());
@@ -589,9 +575,9 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
         if (durableBatch == null || durableBatch.isEmpty()) {
             return Collections.emptyList();
         }
-        List<String> entryIds = new ArrayList<String>(durableBatch.size());
+        List<String> entryIds = new ArrayList<>(durableBatch.size());
         for (DurableLogRecordEntry durableEntry : durableBatch) {
-            if (durableEntry == null || durableEntry.getEntryId() == null) {
+            if (durableEntry == null) {
                 continue;
             }
             entryIds.add(durableEntry.getEntryId());
@@ -623,7 +609,7 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
             }
         }
         for (DurableLogRecordEntry durableEntry : durableBatch) {
-            if (durableEntry == null || durableEntry.getLogRecord() == null) {
+            if (durableEntry == null) {
                 continue;
             }
             safeConsume(deadLetterConsumer, formatDeadLetterMessage(durableEntry, failure));
@@ -658,7 +644,7 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
      * <p>
      * Retryable HTTP status errors: 408, 429, and 5xx.
      *
-     * @param dispatchException caught dispatch exception
+     * @param dispatchException dispatch exception caught
      * @param retriesUsed number of retries already consumed
      * @param maxRetries configured retry budget
      * @return {@code true} when retry should be attempted
@@ -684,7 +670,7 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
     }
 
     /**
-     * Sleeps according to exponential backoff policy before the next retry.
+     * Sleeps according to exponential backoff policy, before the next retry.
      *
      * @param retryNumber retry ordinal (1-based)
      * @param initialBackoffMillis initial backoff delay
@@ -756,7 +742,7 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
         }
         double maxMultiplier = 1.0d + jitterFactor;
         double multiplier = ThreadLocalRandom.current().nextDouble(minMultiplier, maxMultiplier);
-        long jitteredBackoffMillis = (long) Math.round((double) baseBackoffMillis * multiplier);
+        long jitteredBackoffMillis = Math.round((double) baseBackoffMillis * multiplier);
         if (jitteredBackoffMillis < 0L) {
             jitteredBackoffMillis = 0L;
         }
@@ -939,7 +925,7 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
     /**
      * Applies JVM-level keep-alive settings used by {@link java.net.HttpURLConnection}.
      * <p>
-     * Settings are best effort and silently ignored in restricted environments.
+     * Settings are best-effort and silently ignored in restricted environments.
      *
      * @param maxConnections desired keep-alive max connection hint
      */
@@ -950,7 +936,7 @@ public abstract class AbstractHTTPOutputMessageHandler extends AbstractOutputMes
         synchronized (HTTP_TRANSPORT_CONFIGURATION_LOCK) {
             try {
                 String currentKeepAlive = System.getProperty(HTTP_KEEP_ALIVE_PROPERTY);
-                if (currentKeepAlive == null || !"false".equalsIgnoreCase(currentKeepAlive)) {
+                if (!"false".equalsIgnoreCase(currentKeepAlive)) {
                     System.setProperty(HTTP_KEEP_ALIVE_PROPERTY, Boolean.TRUE.toString());
                 }
 

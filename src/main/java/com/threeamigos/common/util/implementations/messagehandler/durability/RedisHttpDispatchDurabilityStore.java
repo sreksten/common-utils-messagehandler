@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler.durability;
 
+import com.threeamigos.common.util.implementations.messagehandler.utils.ParametersValidator;
+import com.threeamigos.common.util.interfaces.messagehandler.durability.HttpDispatchDurabilityStore;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import jakarta.annotation.Nonnull;
 import redis.clients.jedis.Jedis;
@@ -10,7 +12,6 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -29,28 +30,28 @@ public class RedisHttpDispatchDurabilityStore implements HttpDispatchDurabilityS
 
     public RedisHttpDispatchDurabilityStore(final @Nonnull String redisUri,
                                             final @Nonnull String redisListKey) {
-        this(new JedisPool(URI.create(Objects.requireNonNull(redisUri, "redisUri must not be null"))), redisListKey);
+        this(new JedisPool(URI.create(ParametersValidator.validateNotBlank(redisUri, "redisUri"))), redisListKey);
     }
 
     public RedisHttpDispatchDurabilityStore(final @Nonnull String redisHost,
                                             final int redisPort,
                                             final @Nonnull String redisListKey) {
         this(new JedisPool(
-                Objects.requireNonNull(redisHost, "redisHost must not be null"),
-                requirePositive(redisPort, "redisPort")),
+                ParametersValidator.validateNotBlank(redisHost, "redisHost"),
+                        ParametersValidator.validateGreaterThanZero(redisPort, "redisPort")),
                 redisListKey);
     }
 
     RedisHttpDispatchDurabilityStore(final @Nonnull JedisPool jedisPool,
                                      final @Nonnull String redisListKey) {
-        this.jedisPool = Objects.requireNonNull(jedisPool, "jedisPool must not be null");
-        this.redisListKey = normalizeRequired(redisListKey, "redisListKey");
+        this.jedisPool = ParametersValidator.validateNotNull(jedisPool, "jedisPool");
+        this.redisListKey = ParametersValidator.validateNotBlank(redisListKey, "redisListKey");
     }
 
     @Override
     @Nonnull
     public String store(final @Nonnull LogRecord logRecord) throws IOException {
-        Objects.requireNonNull(logRecord, "logRecord must not be null");
+        ParametersValidator.validateNotNull(logRecord, "logRecord");
         String entryId = UUID.randomUUID().toString();
         DurableLogRecordEntry durableEntry = new DurableLogRecordEntry(entryId, System.currentTimeMillis(), logRecord);
         String encodedPayload = DurableLogRecordSerialization.toBase64(durableEntry);
@@ -67,7 +68,7 @@ public class RedisHttpDispatchDurabilityStore implements HttpDispatchDurabilityS
     public List<DurableLogRecordEntry> retrievePending() throws IOException {
         try (Jedis jedis = jedisPool.getResource()) {
             List<String> encodedEntries = jedis.lrange(redisListKey, 0, -1);
-            List<DurableLogRecordEntry> pendingEntries = new ArrayList<DurableLogRecordEntry>(encodedEntries.size());
+            List<DurableLogRecordEntry> pendingEntries = new ArrayList<>(encodedEntries.size());
             for (String encodedEntry : encodedEntries) {
                 pendingEntries.add(DurableLogRecordSerialization.fromBase64(encodedEntry));
             }
@@ -79,18 +80,18 @@ public class RedisHttpDispatchDurabilityStore implements HttpDispatchDurabilityS
 
     @Override
     public void remove(final @Nonnull List<String> entryIds) throws IOException {
-        Objects.requireNonNull(entryIds, "entryIds must not be null");
+        ParametersValidator.validateNotNull(entryIds, "entryIds");
         if (entryIds.isEmpty()) {
             return;
         }
-        Set<String> idsToRemove = new HashSet<String>(entryIds);
+        Set<String> idsToRemove = new HashSet<>(entryIds);
         synchronized (lock) {
             try (Jedis jedis = jedisPool.getResource()) {
                 List<String> encodedEntries = jedis.lrange(redisListKey, 0, -1);
                 if (encodedEntries.isEmpty()) {
                     return;
                 }
-                List<String> survivors = new ArrayList<String>(encodedEntries.size());
+                List<String> survivors = new ArrayList<>(encodedEntries.size());
                 for (String encodedEntry : encodedEntries) {
                     DurableLogRecordEntry durableEntry = DurableLogRecordSerialization.fromBase64(encodedEntry);
                     if (!idsToRemove.contains(durableEntry.getEntryId())) {
@@ -110,23 +111,5 @@ public class RedisHttpDispatchDurabilityStore implements HttpDispatchDurabilityS
     @Override
     public void close() {
         jedisPool.close();
-    }
-
-    private static int requirePositive(final int value, final String fieldName) {
-        if (value <= 0) {
-            throw new IllegalArgumentException(fieldName + " must be > 0");
-        }
-        return value;
-    }
-
-    private static String normalizeRequired(final String value, final String fieldName) {
-        if (value == null) {
-            throw new IllegalArgumentException(fieldName + " must not be null");
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
-        }
-        return trimmed;
     }
 }

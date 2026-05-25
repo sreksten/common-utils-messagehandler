@@ -1,5 +1,8 @@
 package com.threeamigos.common.util.implementations.messagehandler.durability;
 
+import com.threeamigos.common.util.implementations.messagehandler.utils.ParametersValidator;
+import jakarta.annotation.Nonnull;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -15,7 +18,8 @@ final class DurableLogRecordSerialization {
     private DurableLogRecordSerialization() {
     }
 
-    static String toBase64(final DurableLogRecordEntry durableEntry) throws IOException {
+    static String toBase64(final @Nonnull DurableLogRecordEntry durableEntry) throws IOException {
+        ParametersValidator.validateNotNull(durableEntry, "durableEntry");
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         try (ObjectOutputStream objectOutputStream = new ObjectOutputStream(byteArrayOutputStream)) {
             objectOutputStream.writeObject(durableEntry);
@@ -24,9 +28,7 @@ final class DurableLogRecordSerialization {
     }
 
     static DurableLogRecordEntry fromBase64(final String encodedEntry) throws IOException {
-        if (encodedEntry == null || encodedEntry.trim().isEmpty()) {
-            throw new IOException("encodedEntry must not be null or blank");
-        }
+        ParametersValidator.validateNotBlank(encodedEntry, "encodedEntry");
         byte[] serializedBytes;
         try {
             serializedBytes = Base64.getDecoder().decode(encodedEntry);
@@ -45,9 +47,7 @@ final class DurableLogRecordSerialization {
     }
 
     static DurableLogRecordEntry fromBytes(final byte[] serializedBytes) throws IOException {
-        if (serializedBytes == null || serializedBytes.length == 0) {
-            throw new IOException("serializedBytes must not be null or empty");
-        }
+        ParametersValidator.validateNonEmpty(serializedBytes, "serializedBytes");
         try (ObjectInputStream objectInputStream = new ObjectInputStream(new ByteArrayInputStream(serializedBytes))) {
             Object deserialized = objectInputStream.readObject();
             if (!(deserialized instanceof DurableLogRecordEntry)) {

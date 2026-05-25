@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler.durability;
 
+import com.threeamigos.common.util.implementations.messagehandler.utils.ParametersValidator;
+import com.threeamigos.common.util.interfaces.messagehandler.durability.HttpDispatchDurabilityStore;
 import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecord;
 import jakarta.annotation.Nonnull;
 
@@ -17,7 +19,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -35,18 +36,18 @@ public class FileHttpDispatchDurabilityStore implements HttpDispatchDurabilitySt
     private final List<DurableLogRecordEntry> pendingEntries;
 
     public FileHttpDispatchDurabilityStore(final @Nonnull String storageFilePath) throws IOException {
-        this(Paths.get(Objects.requireNonNull(storageFilePath, "storageFilePath must not be null")));
+        this(Paths.get(ParametersValidator.validateNotNull(storageFilePath, "storageFilePath")));
     }
 
     public FileHttpDispatchDurabilityStore(final @Nonnull Path storagePath) throws IOException {
-        this.storagePath = Objects.requireNonNull(storagePath, "storagePath must not be null");
+        this.storagePath = ParametersValidator.validateNotNull(storagePath, "storagePath");
         this.pendingEntries = loadFromDisk(storagePath);
     }
 
     @Override
     @Nonnull
     public String store(final @Nonnull LogRecord logRecord) throws IOException {
-        Objects.requireNonNull(logRecord, "logRecord must not be null");
+        ParametersValidator.validateNotNull(logRecord, "logRecord");
         String entryId = UUID.randomUUID().toString();
         DurableLogRecordEntry durableEntry = new DurableLogRecordEntry(entryId, System.currentTimeMillis(), logRecord);
         synchronized (lock) {
@@ -60,17 +61,17 @@ public class FileHttpDispatchDurabilityStore implements HttpDispatchDurabilitySt
     @Nonnull
     public List<DurableLogRecordEntry> retrievePending() {
         synchronized (lock) {
-            return new ArrayList<DurableLogRecordEntry>(pendingEntries);
+            return new ArrayList<>(pendingEntries);
         }
     }
 
     @Override
     public void remove(final @Nonnull List<String> entryIds) throws IOException {
-        Objects.requireNonNull(entryIds, "entryIds must not be null");
+        ParametersValidator.validateNotNull(entryIds, "entryIds");
         if (entryIds.isEmpty()) {
             return;
         }
-        Set<String> idsToRemove = new HashSet<String>(entryIds);
+        Set<String> idsToRemove = new HashSet<>(entryIds);
         synchronized (lock) {
             boolean removedAny = false;
             Iterator<DurableLogRecordEntry> iterator = pendingEntries.iterator();
@@ -108,11 +109,11 @@ public class FileHttpDispatchDurabilityStore implements HttpDispatchDurabilitySt
 
     private static List<DurableLogRecordEntry> loadFromDisk(final Path storagePath) throws IOException {
         if (!Files.exists(storagePath)) {
-            return new ArrayList<DurableLogRecordEntry>();
+            return new ArrayList<>();
         }
         byte[] serialized = Files.readAllBytes(storagePath);
         if (serialized.length == 0) {
-            return new ArrayList<DurableLogRecordEntry>();
+            return new ArrayList<>();
         }
         try (ObjectInputStream objectInputStream = new ObjectInputStream(new ByteArrayInputStream(serialized))) {
             Object deserialized = objectInputStream.readObject();
@@ -120,7 +121,7 @@ public class FileHttpDispatchDurabilityStore implements HttpDispatchDurabilitySt
                 throw new IOException("Unexpected durable file payload type: " + deserialized.getClass().getName());
             }
             List<?> rawEntries = (List<?>) deserialized;
-            List<DurableLogRecordEntry> loaded = new ArrayList<DurableLogRecordEntry>(rawEntries.size());
+            List<DurableLogRecordEntry> loaded = new ArrayList<>(rawEntries.size());
             for (Object rawEntry : rawEntries) {
                 if (!(rawEntry instanceof DurableLogRecordEntry)) {
                     throw new IOException("Unexpected durable file entry type: " + rawEntry.getClass().getName());

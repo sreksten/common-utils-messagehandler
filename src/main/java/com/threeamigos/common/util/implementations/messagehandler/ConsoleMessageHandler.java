@@ -19,7 +19,7 @@ import java.io.PrintStream;
  * Default constructors use {@link ConsoleLogRecordFormatter}, which is human-readable text output
  * (not JSON). To emit JSON, provide a custom formatter such as
  * {@link com.threeamigos.common.util.implementations.messagehandler.otel.formatters.RawJsonRecordFormatter}.
- * For server deployments, prefer constructing handlers through a centralized bootstrap/factory so
+ * For server deployments, prefer constructing handlers through a centralized bootstrap/factory, so
  * formatter selection is uniform across modules and environments.
  *
  * @author Stefano Reksten

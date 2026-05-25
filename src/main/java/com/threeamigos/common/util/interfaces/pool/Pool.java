@@ -94,7 +94,7 @@ public interface Pool<T> extends AutoCloseable {
      * Marks a previously acquired resource as invalid and permanently removes it from the pool.
      * <p>
      * Call this instead of {@link #release(Object)} when the resource is found to be broken,
-     * expired, or otherwise unusable (for example a dropped database connection or a closed HTTP
+     * expired, or otherwise unusable (for example, a dropped database connection or a closed HTTP
      * connection). Implementations may asynchronously create a replacement resource to maintain
      * the configured pool capacity.
      * <p>
@@ -148,7 +148,7 @@ public interface Pool<T> extends AutoCloseable {
      *       implementation.</li>
      * </ul>
      * Resources currently on loan at the time of the call are not forcibly reclaimed. The
-     * behaviour of unreturned resources after close is implementation-defined; implementations
+     * behavior of unreturned resources after close is implementation-defined; implementations
      * should document whether they wait for active loans to complete or close resources
      * immediately.
      * <p>

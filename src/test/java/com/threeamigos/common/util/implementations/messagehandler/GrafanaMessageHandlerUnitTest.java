@@ -571,8 +571,9 @@ class GrafanaMessageHandlerUnitTest {
     }
 
     private static final class MinimalThrowableFormatter implements LogRecordFormatter {
+        @Nonnull
         @Override
-        public String format(final LogRecord logRecord) {
+        public String format(@Nonnull final LogRecord logRecord) {
             String body = logRecord.getBody() == null || logRecord.getBody().asString() == null
                     ? "" : logRecord.getBody().asString();
             return "{\"severity\":\"" + logRecord.getSeverityText() + "\",\"body\":\"" + body + "\"}";
