@@ -114,6 +114,7 @@ public interface Tracer {
      * Creates a file-backed handler enriched with this tracer context.
      * <p>
      * If {@code filePath} is {@code null} or blank, implementations may use a provider default file path.
+     * Handlers created via this API are expected to enable sidecar inter-process locking automatically.
      *
      * @param filePath target file path, nullable
      * @return a tracer-aware file message handler
@@ -125,6 +126,7 @@ public interface Tracer {
      * <p>
      * If {@code filePath} is {@code null} or blank, implementations may use a provider default file path.
      * If {@code filter} is {@code null}, implementations may fall back to tracer-level filter configuration.
+     * Sidecar inter-process locking is expected to be enabled automatically.
      *
      * @param filePath target file path, nullable
      * @param filter per-handler filter, nullable
@@ -137,6 +139,7 @@ public interface Tracer {
      * and the provided file path.
      * <p>
      * If {@code filePath} is {@code null} or blank, implementations may use a provider default file path.
+     * Sidecar inter-process locking is expected to be enabled automatically.
      *
      * @param filePath target file path, nullable
      * @param logRecordFormatter formatter used to render produced log records
@@ -150,6 +153,7 @@ public interface Tracer {
      * <p>
      * If {@code filePath} is {@code null} or blank, implementations may use a provider default file path.
      * If {@code filter} is {@code null}, implementations may fall back to tracer-level filter configuration.
+     * Sidecar inter-process locking is expected to be enabled automatically.
      *
      * @param filePath target file path, nullable
      * @param logRecordFormatter formatter used to render produced log records
@@ -160,6 +164,7 @@ public interface Tracer {
 
     /**
      * Creates a file-backed handler enriched with this tracer context.
+     * Sidecar inter-process locking is expected to be enabled automatically.
      *
      * @param file target file reference
      * @return a tracer-aware file message handler
@@ -170,6 +175,7 @@ public interface Tracer {
      * Creates a file-backed handler enriched with this tracer context and filtered by the provided rules.
      * <p>
      * If {@code filter} is {@code null}, implementations may fall back to tracer-level filter configuration.
+     * Sidecar inter-process locking is expected to be enabled automatically.
      *
      * @param file target file reference
      * @param filter per-handler filter, nullable
@@ -180,6 +186,7 @@ public interface Tracer {
     /**
      * Creates a file-backed handler enriched with this tracer context, using the provided formatter
      * and the provided file reference.
+     * Sidecar inter-process locking is expected to be enabled automatically.
      *
      * @param file target file reference
      * @param logRecordFormatter formatter used to render produced log records
@@ -192,6 +199,7 @@ public interface Tracer {
      * and filtered by the provided rules.
      * <p>
      * If {@code filter} is {@code null}, implementations may fall back to tracer-level filter configuration.
+     * Sidecar inter-process locking is expected to be enabled automatically.
      *
      * @param file target file reference
      * @param logRecordFormatter formatter used to render produced log records

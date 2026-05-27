@@ -1,38 +1,32 @@
-# common-utils-messagehandler
+# common-util-messagehandler
 
-Part of the common-utils classes, that can help when writing standalone Java applications.
-
-This package is primarily intended for small standalone Java applications.
-HTTP handlers (Jaeger/Grafana/OTel Collector) ship with built-in retry/backoff, circuit breaker,
-opportunistic request batching, and a configurable worker pool (`setHttpWorkerPoolSize`).
-For server/high-throughput deployments, also configure a non-volatile durability store
-(`FileHttpDispatchDurabilityStore` or `RedisHttpDispatchDurabilityStore`) and a dead-letter
-consumer explicitly — the defaults (in-memory store, `System.err`) are not suitable for production.
+Part of the common-util classes, designed to help when writing standalone Java applications.
 
 This subpackage addresses the following needs:
 
 ### Logging and message handling
 
-The `com.threeamigos.common.util.interfaces.messagehandler` package contains some functional interfaces (`Handler`s)
+The `com.threeamigos.common.util.interfaces.messagehandler` package contains some `Handler`s
 that can be used to deal with info, warn, error, fatal, debug, or trace messages, and `Throwable`s.
-For convenience, all those interfaces are grouped in a `MessageHandler` interface.
-Implementations include a console logger, an optionally rotable file, an in-memory store (useful to run tests),
+
+Implementations include a console logger, a rotable file, an in-memory store (useful to run tests),
 a popup dialog, and a composite used to route messages to one or more other handlers.
-For each of those, you can enable or disable any given level of messages. Thus, you can disable debug
+Bridges for Log4J, SLF4J, and JUL are also provided.
+
+For each of those, you can enable or disable any given level of messages. For example, you can disable debug
 or trace messages if you want to run your application in production mode. Or, using the composite,
 you can forward a certain level of messages to a log file while sending other messages to the user via a popup window.
 
-The common class for those handlers is the `AbstractMessageHandler`, from which you can derive your own handlers.
+The same package also exposes an [OpenTelemetry](https://opentelemetry.io)-like tracing model (`TracerProvider`,
+`Tracer`, `Span`) and W3C Trace Context helpers (`TraceContextValidator`) for `traceparent`/`tracestate` ingestion and 
+propagation, together with OTLP/HTTP handlers for Jaeger- and Grafana-compatible backends.
 
-Being an interface, you can replace the MessageHandler passed to your application while keeping the rest of your code
-unchanged. Should not be too difficult to e.g., implement a handler that sends messages to a Slack channel.
-
-These handlers can accept a simple `String` or a `Supplier<String>`, which can be useful for lazy evaluation of messages.
-
-Bridges for Log4J, SLF4J, and JUL are also provided, together with OTLP/HTTP handlers
-for Jaeger- and Grafana-compatible backends.
-The same package also exposes an OTel-like tracing model (`TracerProvider`, `Tracer`, `Span`) and
-W3C Trace Context helpers (`TraceContextValidator`) for `traceparent`/`tracestate` ingestion and propagation.
+HTTP handlers (Jaeger/Grafana/OTel Collector) ship with built-in retry/backoff, circuit breaker,
+opportunistic request batching, and a configurable worker pool (`setHttpWorkerPoolSize`).
+For server/high-throughput deployments, also a non-volatile durability store should be configured
+(`FileHttpDispatchDurabilityStore` or `RedisHttpDispatchDurabilityStore`) along with a dead-letter
+consumer — the defaults (in-memory store, `System.err`) are not suitable for production. Note that
+HTTP handlers are anyway provided for convenience and testing purposes only.
 
 # Primer
 
@@ -95,8 +89,8 @@ can be filtered by looking, for example, for log entries where an ERROR was pres
 
 Following this approach, this package provides a series of interfaces designed to handle messages and their severity.
 Moreover, instead of passing a `String` directly, the message itself may be lazily produced by a `Supplier<String>`, 
-thus effectively producing it only when needed. In this way, useless calculation time for a complex `String` that formats 
-various parameters can be avoided.
+thus effectively producing it only when needed. In this way, useless calculation time for a complex `String` that
+formats multiple parameters can be avoided.
 
 The severities this package supports are as follows, along with Java's `Throwable`s. For each severity, a couple of
 interfaces are provided that accept a `String` or a `Supplier<String>`, depending on the flavor you're using:
@@ -114,36 +108,45 @@ interfaces are provided that accept a `String` or a `Supplier<String>`, dependin
 The Throwable part does not have the Supplier equivalent (if you are handling a Throwable, it's already there!),
 but it has a `ThrowableWithMessageHandler` with an `exception(Throwable, String)` method, to pass a custom message.
 
+## The `MessageHandler` interface
+
 As these interfaces are quite a lot, a composite interface called `MessageHandler` is defined,
 which collects all of them.
 
-The MessageHandler exposes additional methods:
-- `handleMessage(SeverityNumber, String)` to specify directly the severity level of a message;
-- `startSpan(String)` to start a Span directly (more on that later) from the handler when the handler is tracer-bound.
+The `MessageHandler` exposes additional methods:
+- `handleMessage(SeverityNumber, String)` to directly specify the severity level of a message;
+- `startSpan(String)` to start a Span directly from the handler, when the handler is tracer-bound (more on that later).
 
-Internally the package supports the whole OpenTelemetry `SeverityNumber`s:
-`INFO`, `INFO2`, `INFO3`, `INFO4`, `WARN`, `WARN2`, ...
-For more information, see [OpenTelemetry Logs Data Model - 
-field SeverityNumber](https://opentelemetry.io/docs/specs/otel/logs/data-model/#field-severitynumber).
+### Important behavior notes
 
-This package provides a series of classes that implement the `MessageHandler` interface out of the hood:
+In order not to break the flow of the logging caller,
+
+1. Null message strings are ignored (no-op).
+2. Null message suppliers are ignored (no-op).
+3. If a supplier returns null, the message is ignored (no-op).
+4. If `supplier.get()` throws a runtime exception, it is trapped and reported; it is not propagated to the caller.
+5. A null SeverityNumber is treated as `SeverityNumber.INFO`.
+6. `exception(...)` overloads treat null message/throwable inputs as no-op.
+7. Output handlers do not throw when log methods are called after `close()`: those dispatch attempts are dropped and 
+   reported.
+
+The following classes implement the `MessageHandler` interface out of the hood. The common class for those handlers is
+the `AbstractMessageHandler`, from which you can derive your own handlers.
 
 ```
-AbstractMessageHandler (implements MessageHandler)
+AbstractMessageHandler (basic implementation of MessageHandler)
 ├── AbstractOutputMessageHandler (may handle the message asynchronously)
 │   ├── AbstractHTTPOutputMessageHandler
 │   │   ├── JaegerMessageHandler (OTLP/HTTP log transport for Jaeger-compatible pipelines)
 │   │   └── GrafanaMessageHandler (OTLP/HTTP log transport for Grafana-compatible pipelines)
-│   ├── ConsoleMessageHandler
-│   └── FileMessageHandler
+│   ├── ConsoleMessageHandler (prints to the console)
+│   └── FileMessageHandler (writes to a file)
 ├── SwingMessageHandler (JOptionPane dialogs)
 ├── CompositeMessageHandler (fan-out pattern)
 ├── InMemoryMessageHandler (capture for testing)
 ├── JULMessageHandler (java.util.logging bridge)
 ├── Log4JMessageHandler (Apache Log4j 2 bridge)
 ├── SLF4JMessageHandler (SLF4J bridge)
-├── JaegerMessageHandler (OTLP/HTTP log transport for Jaeger-compatible pipelines)
-├── GrafanaMessageHandler (OTLP/HTTP log transport for Grafana-compatible pipelines)
 └── VoidMessageHandler (does nothing)
 ```
 
@@ -181,18 +184,13 @@ public class ConsoleHandlerExample {
 To identify the severity level of a message, a `SeverityNumber` (`INFO`, `WARN`, `ERROR`, `DEBUG`, `TRACE`, with 
 numbered variants) is used. This is used to categorize messages by their importance and urgency, allowing for 
 fine-grained control over what information is logged and when. The `SeverityNumber` enum is equivalent to that used by
-[OpenTelemetry](https://opentelemetry.io/docs/specs/otel/logs/data-model/#field-severitynumber). For a practical 
-approach, have a look at the [OpenTelemetry SeverityNumber example 
+[OpenTelemetry](https://opentelemetry.io/docs/specs/otel/logs/data-model/#field-severitynumber).
+For a practical approach, have a look at the [OpenTelemetry SeverityNumber example 
 mappings](https://opentelemetry.io/docs/specs/otel/logs/data-model-appendix/#appendix-b-severitynumber-example-mappings).
 
 Default enabled levels are `INFO*`, `WARN*`, `ERROR*`, `FATAL*`, while `DEBUG*` and `TRACE*` are disabled.
 
-All `MessageHandler` implementations extend `AbstractMessageHandler` which offers methods to enable or disable severity 
-levels: `enable` and `disable` both accept a collection or a varargs list of `SeverityNumber`s; as shortcuts,
-`setXXXEnabled` or `setXXXDisabled` will enable or disable a whole range of SeverityNumbers (e.g., `setInfoEnabled(true)`
-will enable from `INFO` to `INFO4`).
-
-Granularity notes:
+`AbstractMessageHandler` offers methods to enable or disable severity levels:
 - `setInfoEnabled(...)`, `setWarnEnabled(...)`, `setErrorEnabled(...)`, `setFatalEnabled(...)`,
   `setDebugEnabled(...)`, and `setTraceEnabled(...)` are group toggles for the related numbered variants.
 - For per-variant control, use `setEnabled(SeverityNumber, boolean)`, `enable(...)`, and `disable(...)`.
@@ -243,13 +241,12 @@ Logs can grow quite large, so a form of rotation is often needed. When you rotat
 the old log file and start writing to a new file.
 
 By default, `FileMessageHandler` constructors that do not accept a `RotationPolicy` use size-based
-rotation with a threshold of `10 MB` (`10 * 1024 * 1024` bytes, exposed as
-`FileMessageHandler.DEFAULT_SIZE_ROTATION_MAX_BYTES`).
+rotation with a threshold of 10 MB (`FileMessageHandler.DEFAULT_SIZE_ROTATION_MAX_BYTES`).
 
-This package supports three rotation-policy options: size-based, daily, and an explicit no-rotation
-policy.
-Constructors that accept a `RotationPolicy` expect a non-null value; use `new NoRotationPolicy()`
-when you want to disable rotation.
+This package supports three rotation-policy options: size-based, daily, and an explicit no-rotation policy.
+Constructors that accept a `RotationPolicy` expect a non-null value; use `new NoRotationPolicy()` when you want to
+disable rotation.
+
 By default, inter-process locking is disabled. You can opt in when multiple JVMs may write to the
 same file.
 
@@ -294,7 +291,7 @@ public class DailyRotationExample {
 ```
 When the day changes, the log file gets rotated: the old file gets a `.yyyy-MM-dd` suffix and a new one is created.
 
-### Disable rotation explicitly (opt-in)
+### Disable rotation
 
 ```java
 import com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler;
@@ -330,328 +327,8 @@ When enabled, `FileMessageHandler` acquires an exclusive lock on a sidecar file
 (`app.log.lck`) for each write operation. This is a cooperative lock: all writers must use the
 same locking strategy to guarantee serialization.
 
-## Output handler health metrics
-
-All handlers based on `AbstractOutputMessageHandler` expose runtime health counters:
-- `getHandlerHealthMetrics()`
-- `isHealthy()`
-
-This applies to:
-- `ConsoleMessageHandler`
-- `FileMessageHandler`
-- `JaegerMessageHandler`
-- `GrafanaMessageHandler`
-
-`getHandlerHealthMetrics()` returns an immutable snapshot with:
-- successful/failed/total output operations
-- consecutive failure count
-- last success/failure timestamps (epoch millis)
-- async mode flag and pending queue size
-- closed flag and derived health flag
-- dropped operation count (for example, dispatch attempts after close)
-- retry telemetry counters (attempts/successes/failures; available for retry-capable handlers)
-- saturation telemetry (dispatch attempts, enqueue count, sync fallback count, saturation events,
-  max observed queue size, configured queue capacity, bounded/unbounded flag, saturation ratio)
-- overload policy telemetry (current overflow policy, overflow timeout, drop-newest/drop-oldest counters,
-  block-timeout counter)
-- overload shedding telemetry (rate-limited count, sampled-out count, active rate-limit settings)
-
-Async backpressure behavior for these handlers:
-- `async=true` uses one background worker and a queue.
-- With a bounded queue (`queueCapacity > 0`), overflow handling is configurable via
-  `setQueueOverflowPolicy(...)`:
-  - `CALLER_RUNS` (default, backward-compatible): queue full -> sync fallback on caller thread
-  - `DROP_NEWEST`: shed the incoming message
-  - `DROP_OLDEST`: shed one queued message and keep the newest
-  - `BLOCK_WITH_TIMEOUT`: wait up to `queueOverflowBlockTimeoutMillis`, then shed on timeout
-- `queueCapacity <= 0` creates an unbounded queue.
-
-```java
-import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
-import com.threeamigos.common.util.implementations.messagehandler.AbstractOutputMessageHandler;
-
-public class HandlerHealthExample {
-    public static void main(String[] args) {
-        ConsoleMessageHandler handler = new ConsoleMessageHandler();
-        try {
-            handler.info("startup complete");
-
-            AbstractOutputMessageHandler.HandlerHealthMetrics metrics =
-                    handler.getHandlerHealthMetrics();
-
-            System.out.println("successful=" + metrics.getSuccessfulOperations());
-            System.out.println("failed=" + metrics.getFailedOperations());
-            System.out.println("healthy=" + handler.isHealthy());
-        } finally {
-            handler.close();
-        }
-    }
-}
-```
-
-### Overload-control configuration example
-
-```java
-import com.threeamigos.common.util.implementations.messagehandler.AbstractOutputMessageHandler;
-import com.threeamigos.common.util.implementations.messagehandler.GrafanaMessageHandler;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
-
-public class OverloadControlsExample {
-    public static void main(String[] args) {
-        GrafanaMessageHandler handler = new GrafanaMessageHandler(
-                "http://localhost:4318/v1/logs",
-                true,
-                1000
-        );
-
-        // Queue overflow policy (default is CALLER_RUNS)
-        handler.setQueueOverflowPolicy(AbstractOutputMessageHandler.QueueOverflowPolicy.DROP_OLDEST);
-        handler.setQueueOverflowBlockTimeoutMillis(25L); // used only by BLOCK_WITH_TIMEOUT
-
-        // Token bucket rate limit (disabled when permitsPerSecond <= 0)
-        handler.setRateLimitPolicy(5000L, 10000L);
-        handler.setRateLimitBypassSeverity(SeverityNumber.ERROR);
-
-        // Severity-bucket sampling rates (TRACE, DEBUG, INFO, WARN, ERROR, FATAL)
-        handler.setSeveritySamplingPolicy(0.05d, 0.10d, 0.25d, 1.0d, 1.0d, 1.0d);
-    }
-}
-```
-
-## HTTP durability policies (Jaeger/Grafana)
-
-`JaegerMessageHandler` and `GrafanaMessageHandler` now accept a pluggable durability policy via
-`HttpDispatchDurabilityStore`:
-- `InMemoryHttpDispatchDurabilityStore` (default)
-- `FileHttpDispatchDurabilityStore`
-- `RedisHttpDispatchDurabilityStore` (Jedis)
-
-Default constructors use:
-- durability store: `InMemoryHttpDispatchDurabilityStore`
-- dead-letter consumer: `System.err::println`
-
-For standalone applications, these defaults are usually acceptable.
-For server/high-throughput workloads, explicitly set both:
-- a non-volatile durability policy (`FileHttpDispatchDurabilityStore` or `RedisHttpDispatchDurabilityStore`);
-- a production DLQ consumer (`Consumer<String>`) aligned with your operational tooling.
-
-When dispatch fails with a permanent/non-retryable failure (for example HTTP 400), entries are
-routed to dead-letter reporting (`Consumer<String>`), so callers can redirect DLQ output to
-console, file, or any custom sink. Retryable/transient I/O failures are instead reported through
-the handler error-consumer path and records remain in the durability store for later retries.
-
-```java
-import com.threeamigos.common.util.implementations.messagehandler.JaegerMessageHandler;
-import com.threeamigos.common.util.implementations.messagehandler.durability.FileHttpDispatchDurabilityStore;
-import com.threeamigos.common.util.implementations.messagehandler.durability.RedisHttpDispatchDurabilityStore;
-
-import java.nio.file.Paths;
-
-public class HttpDurabilityExample {
-    public static void main(String[] args) throws Exception {
-        JaegerMessageHandler fileDurable = new JaegerMessageHandler(
-                "http://localhost:4318/v1/logs",
-                new FileHttpDispatchDurabilityStore(Paths.get("logs", "jaeger-pending.bin")),
-                msg -> System.err.println("[DLQ] " + msg)
-        );
-
-        JaegerMessageHandler redisDurable = new JaegerMessageHandler(
-                "http://localhost:4318/v1/logs",
-                new RedisHttpDispatchDurabilityStore("redis://localhost:6379", "mh:jaeger:pending"),
-                msg -> System.err.println("[DLQ] " + msg)
-        );
-
-        fileDurable.info("persisted locally before dispatch");
-        redisDurable.info("persisted in Redis before dispatch");
-
-        fileDurable.close();
-        redisDurable.close();
-    }
-}
-```
-
-## HTTP worker pool (Jaeger/Grafana throughput scaling)
-
-By default each HTTP handler dispatches one HTTP POST at a time (single worker). For RTT-bound
-transports this limits throughput to roughly `1000 ms / backend-latency-ms` records per second.
-Use `setHttpWorkerPoolSize(int)` to enable concurrent in-flight HTTP calls:
-
-```java
-JaegerMessageHandler handler = new JaegerMessageHandler("http://localhost:4318/v1/logs");
-handler.setHttpWorkerPoolSize(4);   // up to 4 concurrent HTTP POSTs
-```
-
-The pool size can also be read back:
-
-```java
-int size = handler.getHttpWorkerPoolSize();   // 1 (default) or the configured value
-```
-
-**Behaviour when `poolSize > 1`:**
-- Each log record is dispatched individually by a dedicated pool thread; no batching across workers.
-- The durability-store catch-up batch (retrieve-all-pending on startup) is disabled to prevent
-  duplicate dispatch between concurrent workers.
-- `close()` waits up to 5 seconds for in-flight HTTP calls to complete before closing the
-  durability store, so no records are left orphaned on normal shutdown.
-
-**When to keep `poolSize = 1` (the default):**
-- You rely on crash-recovery batching — records pending before a JVM restart are re-dispatched as
-  a batch on the next startup only when a single worker is active.
-- You prefer the simpler, lower-resource profile for low-throughput workloads.
-
-The underlying queue/overload controls (rate limiting, sampling, queue overflow policy) remain
-active in both modes; the worker pool only parallelises the outbound HTTP leg.
-
-## HTTP transport layer (`HttpTransport`)
-
-All HTTP dispatchers (`JaegerLogRecordDispatcher`, `GrafanaLogRecordDispatcher`, and span
-dispatchers) delegate the low-level HTTP POST to a pluggable `HttpTransport` instance. Two
-implementations are provided:
-
-| Transport | Dependencies | Connection handling | When to use |
-|---|---|---|---|
-| `HttpUrlConnectionTransport` | None (JDK only) | One connection per call; JVM keep-alive cache may reuse sockets | Default; suitable for low-to-medium throughput |
-| `ApacheHttpClientTransport` | `org.apache.httpcomponents:httpclient` (optional) | Shared `PoolingHttpClientConnectionManager`; persistent connections | Sustained high-throughput workloads; explicit pool sizing |
-
-### Default: `HttpUrlConnectionTransport`
-
-Used automatically when no transport is specified. Requires no additional dependencies:
-
-```java
-// Default — uses HttpUrlConnectionTransport implicitly
-JaegerMessageHandler handler = new JaegerMessageHandler("http://localhost:4318/v1/logs");
-```
-
-### Connection pooling: `ApacheHttpClientTransport`
-
-For workloads where per-call TCP handshake overhead is measurable, use `ApacheHttpClientTransport`.
-It creates a single `PoolingHttpClientConnectionManager` (50 total / 10 per-route by default)
-shared across all dispatch calls.
-
-**Step 1** — add the optional dependency to `pom.xml`:
-
-```xml
-<dependency>
-    <groupId>org.apache.httpcomponents</groupId>
-    <artifactId>httpclient</artifactId>
-    <version>4.5.14</version>
-</dependency>
-```
-
-**Step 2** — supply the transport to the dispatcher constructor:
-
-```java
-import com.threeamigos.common.util.implementations.messagehandler.transport.ApacheHttpClientTransport;
-import com.threeamigos.common.util.implementations.messagehandler.utils.GrafanaLogRecordDispatcher;
-
-ApacheHttpClientTransport transport = new ApacheHttpClientTransport();
-
-GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher(
-        "https://logs-prod.example.com/loki/api/v1/push",
-        null, null, "bearer-token",
-        5_000, 10_000, null,
-        transport  // connection-pooled transport
-);
-
-// ... use dispatcher ...
-
-transport.close();  // release pooled connections on shutdown
-```
-
-Custom pool sizing is available via the second constructor:
-
-```java
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
-
-PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
-cm.setMaxTotal(100);
-cm.setDefaultMaxPerRoute(20);
-
-CloseableHttpClient customClient = HttpClients.custom()
-        .setConnectionManager(cm)
-        .build();
-
-ApacheHttpClientTransport transport = new ApacheHttpClientTransport(customClient);
-```
-
-### Lifecycle note
-
-`ApacheHttpClientTransport` implements `Closeable`. Call `transport.close()` at application
-shutdown to release pooled sockets. `HttpUrlConnectionTransport` is stateless and does not need
-explicit closing.
-
-A single transport instance may be shared across multiple dispatcher instances.
-
-## Global internal error sink (`InnerErrorMessageHandler`)
-
-`InnerErrorMessageHandler` is the package-level safety sink for failures that happen
-while the logging infrastructure is processing a log call.
-
-Default global consumer:
-- `System.err::println`
-
-Typical events reported to this sink include:
-- backend dispatch/runtime failures in handlers;
-- runtime failures thrown by `Supplier<String>` message producers;
-- failures in user-provided extension points (for example custom error consumers,
-  custom delegates in `CompositeMessageHandler`, or custom `RotationPolicy` code);
-- runtime failures in handler internals that are trapped to preserve caller flow.
-
-Behavior contract:
-- null messages are ignored;
-- runtime exceptions thrown by a custom global consumer trigger a fallback to default `System.err`;
-- `consume(localConsumer, message)` tries the local consumer first, then falls back to the global sink
-  if the local consumer is null or throws a runtime exception.
-
-Configure the global consumer once at bootstrap:
-
-```java
-import com.threeamigos.common.util.implementations.messagehandler.InnerErrorMessageHandler;
-
-public class InnerErrorBootstrap {
-    public static void main(String[] args) {
-        InnerErrorMessageHandler.setGlobalConsumer(
-                msg -> System.err.println("[INNER-ERROR] " + msg)
-        );
-
-        // ... create and use handlers
-
-        // Optional: restore default behavior.
-        InnerErrorMessageHandler.resetGlobalConsumer();
-    }
-}
-```
-
-Operational guidance:
-- keep the global consumer lightweight and non-blocking;
-- avoid routing this consumer back into the same logging pipeline to prevent recursive error loops;
-- use `resetGlobalConsumer()` mainly in tests or controlled bootstrap reconfiguration.
-
-## Internal error handling model (exception boundary)
-
-This library uses a clear boundary between setup-time failures and runtime internal failures.
-
-Setup/bootstrap failures are fail-fast and can throw:
-- invalid constructor/configuration arguments;
-- endpoint/auth/timeout/durability initialization errors;
-- strict trace-context validation failures;
-- strict resource-bundle validation failures (`validateRequiredKeysStrict(...)`).
-
-Runtime logging/tracing paths are best-effort. Internal failures are generally trapped and
-reported through `InnerErrorMessageHandler` (and, for HTTP handlers, also through configured
-error/DLQ consumers), so caller code can continue.
-
-Runtime behavior highlights:
-- `Supplier<String>` failures are trapped and reported (not propagated to log callers);
-- dispatch attempts after `close()` are dropped and reported;
-- `FileMessageHandler`, `SwingMessageHandler`, and HTTP handler runtime dispatch failures are reported instead of breaking caller flow;
-- `OTelCollectorDispatcher` and `OTelCollectorSpanDispatcher` invoke all delegates, aggregate delegate
-  `IOException` + `RuntimeException` failures, and rethrow one `IOException` with suppressed causes.
-
-Fatal JVM conditions are not masked:
-- `CompositeMessageHandler` catches `RuntimeException` from delegates but does not swallow `Error` subclasses.
+For tracer-created file handlers (`Tracer#getFileMessageHandler(...)` overloads), sidecar locking
+is enabled automatically.
 
 ## `SwingMessageHandler`: standalone desktop apps
 
@@ -673,17 +350,18 @@ public class SwingHandlerExample {
     }
 }
 ```
+
 `SwingMessageHandler` requires a graphical runtime. In headless environments, dialogs are
 silently suppressed by design (calls become no-ops). Runtime UI invocation failures are treated as
-internal handler failures and reported through `InnerErrorMessageHandler` instead of being
-propagated to logging callers.
+internal handler failures and reported instead of being propagated to logging callers.
 
-Very probably, when dealing with a standalone application, you might want to show info messages to the user, while
+Very probably, when dealing with a standalone application, you might want to show info messages to the user while
 writing debug and error information to a file. You can do this using the next `MessageHandler`.
 
 ## `CompositeMessageHandler`: fan-out to multiple outputs
 
 Use it when one log call must go to multiple destinations. For example, to the console and to a file.
+
 Level control can be configured through `CompositeMessageHandler.LevelControlMode`:
 - `COMPOSITE_ONLY` (default): only the composite gates levels. **All delegates must have all
   severity levels enabled** — a delegate with a level disabled will silently drop messages at
@@ -716,7 +394,7 @@ public class CompositeExample {
 }
 ```
 
-With some fine-tuning, you can also have different output for the underlying handlers. For example, you could enable
+With some fine-tuning, you can have different output for the underlying handlers. For example, you could enable
 debug and trace to the console while managing errors in a file.
 
 ```java
@@ -773,7 +451,6 @@ public class InMemoryHandlerExample {
 }
 ```
 
-Key properties:
 - Thread-safe via `ReentrantLock`.
 - Optionally bounded: construct with `maxEntries` to limit stored messages (FIFO eviction).
 - `snapshot()` returns an immutable, atomic view of all stored messages at that instant.
@@ -822,137 +499,20 @@ public class AdaptersExample {
 }
 ```
 
-## Side note: MDC / ThreadContext (only for mixed logging stacks)
+## OpenTelemetry
 
-Most users can ignore this section.
-
-If all logs go through `MessageHandler` implementations from this package, correlation is already
-handled by `TracerProvider` and the tracer-bound `LogRecordFactory`.
-
-Use backend thread-context (`MDC` for SLF4J, `ThreadContext` for Log4J) only when you intentionally
-mix:
-- handler-based logging from this package
-- direct logger calls (`org.slf4j.Logger`, `org.apache.logging.log4j.Logger`, etc.)
-
-At a request/task boundary, attach package correlation and mirror IDs into MDC/ThreadContext:
-
-```java
-import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
-import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanContext;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
-
-public class MixedLoggingExample {
-    private static final Logger LOGGER = LoggerFactory.getLogger(MixedLoggingExample.class);
-
-    public void handle(TracerProvider provider, Tracer tracer, SpanContext incomingContext) {
-        MessageHandler handler = tracer.getConsoleMessageHandler();
-        try (TracerProvider.CorrelationScope ignored =
-                     provider.attachCorrelation(incomingContext, tracer.getInstrumentationScope())) {
-            if (incomingContext != null && incomingContext.isValid()) {
-                MDC.put("traceId", incomingContext.getTraceId());
-                MDC.put("spanId", incomingContext.getSpanId());
-            }
-            try {
-                handler.info("message via MessageHandler");
-                LOGGER.info("direct SLF4J message");
-            } finally {
-                MDC.remove("traceId");
-                MDC.remove("spanId");
-            }
-        } finally {
-            handler.close();
-        }
-    }
-}
-```
-
-For async execution, continue using `provider.wrap(...)` or
-`provider.contextAwareExecutorService(...)` for this package correlation propagation.
-If worker threads also write direct SLF4J/Log4J logs, propagate MDC/ThreadContext there as well.
-
-## Custom output format with `LogRecordFormatter`
-
-You can customize the output by passing to a class that extends the `AbstractOutputMessageHandler` (Console or File)
-an implementation of the `LogRecordFormatter` interface. By default, both of those classes use the
-`ConsoleLogRecordFormatter`, although you could use the `RawJsonRecordFormatter`. This because even if you pass a
-simple `String` to a `MessageHandler`, internally this package uses a representation of the
-[OpenTelemetry LogRecord format](https://opentelemetry.io/docs/concepts/signals/logs/#log-record).
-Thus, having a grasp of how it works, you can choose what to show. Of course, this
-has greater effectiveness if you have instrumented your application properly with a `Tracer` (more on that later).
-
-`JaegerMessageHandler` and `GrafanaMessageHandler` differ here: their default constructors already
-emit JSON payloads (OTLP `ExportLogsServiceRequest` JSON; Grafana can also emit Loki push JSON
-when targeting a Loki push endpoint).
-
-For server deployments that ingest local console/file logs, formatter choice should be an
-application bootstrap policy, not an ad hoc per-call-site decision. A practical baseline is:
-centralized handler factory/bootstrap + fixed JSON formatter + schema/golden-output tests
-to keep fields stable across modules and environments.
-
-```java
-import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
-import com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler;
-import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.RawJsonRecordFormatter;
-import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
-
-public final class HandlerFactory {
-    private static final LogRecordFormatter JSON_FORMATTER = new RawJsonRecordFormatter();
-
-    private HandlerFactory() {
-    }
-
-    public static MessageHandler newConsoleHandler() {
-        return new ConsoleMessageHandler(JSON_FORMATTER);
-    }
-
-    public static MessageHandler newFileHandler(String path) {
-        return new FileMessageHandler(path, JSON_FORMATTER);
-    }
-}
-```
-
-A utility class is bundled that offers a static method to reduce a long class name by replacing the package name with
-an abbreviation (initial letters only): the `ClassNameReducer.reduce`. E.g., it could replace
-`com.threeamigos.common.utils.TestClass` with `c.t.c.u.TestClass`, a-la SpringBoot.
-
-```java
-import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
-import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
-
-public class CustomFormatterExample {
-    public static void main(String[] args) {
-        LogRecordFormatter formatter = logRecord -> {
-            String severity = logRecord.getSeverityText();
-            String body = logRecord.getBody() == null ? "" : String.valueOf(logRecord.getBody().asString());
-            return logRecord.getTimestamp() + " | " + severity + " | " + body;
-        };
-
-        try (MessageHandler handler = new ConsoleMessageHandler(formatter)) {
-            handler.info("Hello with custom format");
-        }
-    }
-}
-```
-
-## Tracer
-
-This part of the package tries to produce an output compliant with [OpenTelemetry](https://opentelemetry.io/) and helps
-deal with systems composed by one or more parts (for example, a web application interacting with many microservices). 
+This package tries to produce an output compliant with [OpenTelemetry](https://opentelemetry.io/) and to help dealing
+with systems composed by one or more parts (for example, a web application interacting with many microservices).
 For distributed ingress/egress, it also supports W3C Trace Context (`traceparent`, `tracestate`)
 through `TraceContextValidator` (see the HTTP ingress section below).
 
 In such an environment, one server could start a user request, but it could have to delegate something to
-another server or microservice. In this case, logs could be produced in more than one server. Usually, all those logs
-are ingested by a log aggregator, like ELK, Splunk, or Grafana Loki; and all those logs are bound via a `traceId`, 
-created by the server that first handles the user request, and sent to all other components interacting with it.
+another server or microservice. In this case, logs will be produced in more than one server. Usually, all those logs
+are ingested by a log aggregator, like ELK, Splunk, or Grafana Loki; and all those logs are bound via a `traceId`,
+created by the server that first handles the user request, and sent to all other components interacting with it,
+to correlate the various logs.
 
-When dealing with that request, each component is responsible for creating a `Span` for each operation it performs.
+When dealing with such a request, each component is responsible for creating a `Span` for each operation it performs.
 The `Span` is the basic unit of work in the tracing system. It represents a single operation or task that is being
 performed by that component. Spans can be nested, forming a tree-like structure that represents the flow of operations
 within a system.
@@ -968,27 +528,58 @@ traceId=9f4a6a52c2d54f6a8d7b67e2a9c3f1b4
 
 You can then query a system like Grafana or Jaeger to visualize the trace and understand the flow of operations.
 
----
+To achieve this, the package includes an OTel-like model (`LogRecord`, `Span`, `SpanContext`, `Resource`,
+`InstrumentationScope`, etc.) and a `TracerProvider`/`Tracer` API to produce enriched logs and spans.
+So, even if you pass a simple `String` to a `MessageHandler`, internally a representation of the
+[OpenTelemetry LogRecord format](https://opentelemetry.io/docs/concepts/signals/logs/#log-record) is used.
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.otel.OTelTags;
+import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
+
+public class TracerQuickStart {
+    public static void main(String[] args) {
+        TracerProvider provider = TracerProvider.builder()
+                .serviceName("checkout-api")
+                .serviceVersion("1.0.0")
+                .deploymentEnvironment("prod")
+                .resourceAttribute(OTelTags.SERVICE_NAMESPACE, "payments")
+                .commonAttribute("app.region", "eu-west-1")
+                .build();
+
+        Tracer tracer = provider.getTracer("checkout-api", "1.0.0");
+        MessageHandler handler = tracer.getConsoleMessageHandler();
+        handler.info("Structured/enriched message");
+    }
+}
+```
 
 ### Workflow
 
 THe `TracerProvider` is the application-level factory/configuration point. You have to build one `TracerProvider` for
-your service (`serviceName`, `serviceVersion`, environment, shared attributes), where the service might be a standalone 
-application (in this case the `serviceName` is your application name), or a microservice. 
+your service (`serviceName`, `serviceVersion`, environment, shared attributes), where the service might be a standalone
+application (in this case the `serviceName` is your application name), or a microservice.
 
- A `Tracer` is scoped to an instrumentation name/version. Basically, it could be a library, or module, or a component of
+A `Tracer` is scoped to an instrumentation name/version. Basically, it could be a library, or module, or a component of
 your service. So for each module you want to instrument, you have to obtain a `Tracer` from that provider for the module
-or component (`provider.getTracer(instrumentationName, version, ...)`). 
+or component (`provider.getTracer(instrumentationName, version, ...)`).
 
 A `Span` represents one timed operation. Start a `Span` either with `tracer.createSpan(...)`, or directly from a
 tracer-created handler with `handler.startSpan(...)`.
 Once you have a parent span, you can create child spans directly from it with `parentSpan.create("child-name")`
 (equivalent to `tracer.createSpan("child-name", parentSpan.getSpanContext())`).
 
-Use a `MessageHandler` created from that `Tracer` (`tracer.getConsoleMessageHandler()`, `getFileMessageHandler(...)`, 
+### Important note
+
+`MessageHandler.startSpan(name)` works only on tracer-created handlers.
+Calling `startSpan(name)` on non-tracer handlers throws an `IllegalStateException`.
+
+Use a `MessageHandler` created from that `Tracer` (`tracer.getConsoleMessageHandler()`, `getFileMessageHandler(...)`,
 etc.) to log your messages.
 
-End the span with `span.end()`.
+There is no `endSpan(...)` on handlers; callers close spans explicitly with `span.end()`.
 
 This produces a series of logs that are correlated by a `traceId` (root operation) and one or more `spanId`s.
 
@@ -998,8 +589,6 @@ If your goal is one output file and multiple tracers (for different modules/comp
 1. one shared `TracerProvider`
 2. multiple `Tracer` instances from that provider (`provider.getTracer(...)`)
 3. one tracer-created file handler per tracer, targeting the same file path
-
-For this setup, an OpenTelemetry Collector is not required.
 
 ```java
 import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
@@ -1039,7 +628,8 @@ public class MultipleTracersSingleFileExample {
 }
 ```
 
-Note: creating many file handlers for the same file can cause interleaved writes.
+Note: creating many file handlers for the same file could cause interleaved writes, so the sidecar mechanism is
+silently enabled.
 
 ### How `MessageHandler`, `Tracer`, and `Span` are related
 
@@ -1047,7 +637,7 @@ Note: creating many file handlers for the same file can cause interleaved writes
 - The same tracer-created handler can start spans directly with `startSpan(name)`.
 - A `Span` can produce child spans directly with `span.create(childName)`, without injecting `Tracer` at call sites.
 - When a span is active on the current thread, emitted logs are automatically correlated with that span context
-  (trace id + span id).
+  (trace id and span id).
 - The same log can also be appended as a span event (`"log"`) on the active span.
 - If there is no active span, logging still works; it just has no trace/span correlation fields.
 
@@ -1113,132 +703,13 @@ public class ParentChildSpanExample {
 }
 ```
 
-## Class filtering with `FilterByClassName`
-
-`FilterByClassName` is an OTel-log filter. Typical usage is through `Tracer` handlers:
-
-```java
-import com.threeamigos.common.util.implementations.messagehandler.filters.FilterByClassName;
-import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
-import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
-
-public class FilterByClassNameExample {
-    public static void main(String[] args) {
-        FilterByClassName filter = new FilterByClassName();
-        filter.add("com\\.example\\.critical\\..*", SeverityNumber.INFO);
-        filter.add("com\\.example\\.noisy\\..*", SeverityNumber.ERROR);
-        filter.prune("com\\.example\\.chatty\\..*");
-
-        Tracer tracer = TracerProvider.builder()
-                .serviceName("checkout-api")
-                .build()
-                .getTracer("checkout-api", filter);
-
-        MessageHandler handler = tracer.getConsoleMessageHandler();
-        handler.info("Filtered according to source class attributes");
-    }
-}
-```
-
-You can also load filter rules from properties via:
-- `loadPropertiesFromFile(...)`
-- `loadPropertiesFromResource(...)`
-
-Regex policy:
-- invalid regex patterns are ignored (not fail-fast),
-- each invalid pattern is reported through `InnerErrorMessageHandler`,
-- valid rules in the same configuration are still applied.
-
-From the example, it is clear that the key part of the property is actually a Regex.
-
-The value of the property indicates the minimum `SeverityNumber` the log record should have to be included in the log
-output. To completely remove a class or package, use OFF instead of INFO n a property file, or use the `prune(...)`
-method to disable it programmatically.
-
-## Advanced OTel-like model in this package
-
-The package includes an OTel-like model (`LogRecord`, `Span`, `SpanContext`, `Resource`, `InstrumentationScope`, etc.)
-and a `TracerProvider`/`Tracer` API to produce enriched logs and spans.
-
-```java
-import com.threeamigos.common.util.implementations.messagehandler.otel.OTelTags;
-import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
-import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
-
-public class TracerQuickStart {
-    public static void main(String[] args) {
-        TracerProvider provider = TracerProvider.builder()
-                .serviceName("checkout-api")
-                .serviceVersion("1.0.0")
-                .deploymentEnvironment("prod")
-                .resourceAttribute(OTelTags.SERVICE_NAMESPACE, "payments")
-                .commonAttribute("app.region", "eu-west-1")
-                .build();
-
-        Tracer tracer = provider.getTracer("checkout-api", "1.0.0");
-        MessageHandler handler = tracer.getConsoleMessageHandler();
-        handler.info("Structured/enriched message");
-    }
-}
-```
-
-### Validation mode: `OTEL_ERROR_HANDLER_LENIENT`
-
-OTel attribute validation uses `OpenTelemetryAttributeValidator` with two modes:
-- strict mode (default): invalid input throws `IllegalArgumentException`
-- lenient mode: invalid input is reported and processing continues with safe fallbacks where possible
-
-Default resolution rules:
-- `OTEL_ERROR_HANDLER_LENIENT=true` (case-insensitive) -> lenient mode enabled
-- variable missing, empty, or any value other than `true` -> strict mode (`false`)
-
-Recommended environment policy:
-- production: set `OTEL_ERROR_HANDLER_LENIENT=true`
-- development/test: keep strict mode (unset the variable or set `OTEL_ERROR_HANDLER_LENIENT=false`)
-
-Set the environment variable before starting the JVM:
-
-```bash
-export OTEL_ERROR_HANDLER_LENIENT=true
-```
-
-The environment value is resolved once during class initialization. A runtime override is also
-available through `OpenTelemetryAttributeValidator.setLenientModeOverride(...)` and
-`OpenTelemetryAttributeValidator.clearLenientModeOverride()`.
-
-### Resource bundle reliability (startup vs runtime)
-
-To avoid hard failures caused by missing localization resources:
-- use runtime-safe accessors in normal execution paths: `MessageHandlerResourceBundle.get(...)`, `MessageHandlerResourceBundle.format(...)`, `MessageHandlerResourceBundle.getOrDefault(...)`, `MessageHandlerResourceBundle.formatOrDefault(...)`
-- these methods fallback instead of throwing when the bundle or key is missing.
-
-For deployment correctness, add one strict startup validation step and fail fast before serving traffic:
-
-```java
-import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
-
-public class BootstrapValidationExample {
-    public static void main(String[] args) {
-        MessageHandlerResourceBundle.validateRequiredKeysStrict(
-                "handlerIsClosed",
-                "nullFormatterProvided",
-                "logRecordMustNotBeNull"
-        );
-        // start application
-    }
-}
-```
-
-If `validateRequiredKeysStrict(...)` throws `MissingResourceException`, treat it as a setup/packaging issue (not a recoverable runtime event).
-
 ## `OTelTags` and the Known Values subpackage
 
-`OTelTags` is the central catalog of semantic-convention attribute keys. Use it when setting
-resource or common attributes on `TracerProvider.builder()` to avoid typos and keep keys
-aligned with OTel semantic conventions.
+Other than the service name and version, OpenTelemetry supports a rich set of attributes which can be set in the log
+record. For example, host name, cloud provider, and so on.
+
+`OTelTags` is the central catalog of semantic-convention attribute keys. Use it when setting resource or common
+attributes on `TracerProvider.builder()` to avoid typos and keep keys aligned with OTel semantic conventions.
 
 ### Dynamic prefix tags
 
@@ -1310,6 +781,131 @@ public class OTelTagsExample {
 }
 ```
 
+### Validation mode: `OTEL_ERROR_HANDLER_LENIENT`
+
+OTel attribute validation uses `OpenTelemetryAttributeValidator` with two modes:
+- strict mode (default): invalid input throws `IllegalArgumentException`.
+- lenient mode: invalid input is reported and processing continues with safe fallbacks where possible.
+
+This is handled by the `OTEL_ERROR_HANDLER_LENIENT` environment variable. If `true` (case-insensitive), 
+the validation will report invalid input and continue processing with safe fallbacks.
+
+Recommended environment policy:
+- production: set `OTEL_ERROR_HANDLER_LENIENT=true`
+- development/test: keep strict mode (unset the variable or set `OTEL_ERROR_HANDLER_LENIENT=false`)
+
+The environment value is resolved once during class initialization. A runtime override is also
+available through `OpenTelemetryAttributeValidator.setLenientModeOverride(...)` and
+`OpenTelemetryAttributeValidator.clearLenientModeOverride()`.
+
+## Custom output format with `LogRecordFormatter`
+
+You can customize the output by passing to a class that extends the `AbstractOutputMessageHandler` (Console or File)
+an implementation of the `LogRecordFormatter` interface. By default, both of those classes use the
+`ConsoleLogRecordFormatter`, although you could use the `RawJsonRecordFormatter`. Knowing what the
+[OpenTelemetry LogRecord format](https://opentelemetry.io/docs/concepts/signals/logs/#log-record) holds, 
+you can choose what to show. Of course, this has greater effectiveness if you have instrumented your application 
+properly with a `Tracer`.
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.FileMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.otel.formatters.RawJsonRecordFormatter;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
+
+public final class HandlerFactory {
+    private static final LogRecordFormatter JSON_FORMATTER = new RawJsonRecordFormatter();
+
+    private HandlerFactory() {
+    }
+
+    public static MessageHandler newConsoleHandler() {
+        return new ConsoleMessageHandler(JSON_FORMATTER);
+    }
+
+    public static MessageHandler newFileHandler(String path) {
+        return new FileMessageHandler(path, JSON_FORMATTER);
+    }
+}
+```
+
+A utility class is bundled that offers a static method to reduce a long class name by replacing the package name with
+an abbreviation (initial letters only): the `ClassNameReducer.reduce`. E.g., it could replace
+`com.threeamigos.common.utils.TestClass` with `c.t.c.u.TestClass`, a-la SpringBoot.
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.LogRecordFormatter;
+
+public class CustomFormatterExample {
+    public static void main(String[] args) {
+        LogRecordFormatter formatter = logRecord -> {
+            String severity = logRecord.getSeverityText();
+            String body = logRecord.getBody() == null ? "" : String.valueOf(logRecord.getBody().asString());
+            return logRecord.getTimestamp() + " | " + severity + " | " + body;
+        };
+
+        try (MessageHandler handler = new ConsoleMessageHandler(formatter)) {
+            handler.info("Hello with custom format");
+        }
+    }
+}
+```
+
+## Side note: MDC / ThreadContext (only for mixed logging stacks)
+
+Most users can ignore this section.
+
+If all logs go through `MessageHandler` implementations from this package, correlation is already
+handled by `TracerProvider` and the tracer-bound `LogRecordFactory`.
+
+Use backend thread-context (`MDC` for SLF4J, `ThreadContext` for Log4J) only when you intentionally
+mix:
+- handler-based logging from this package
+- direct logger calls (`org.slf4j.Logger`, `org.apache.logging.log4j.Logger`, etc.)
+
+At a request/task boundary, attach package correlation and mirror IDs into MDC/ThreadContext:
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SpanContext;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
+
+public class MixedLoggingExample {
+    private static final Logger LOGGER = LoggerFactory.getLogger(MixedLoggingExample.class);
+
+    public void handle(TracerProvider provider, Tracer tracer, SpanContext incomingContext) {
+        MessageHandler handler = tracer.getConsoleMessageHandler();
+        try (TracerProvider.CorrelationScope ignored =
+                     provider.attachCorrelation(incomingContext, tracer.getInstrumentationScope())) {
+            if (incomingContext != null && incomingContext.isValid()) {
+                MDC.put("traceId", incomingContext.getTraceId());
+                MDC.put("spanId", incomingContext.getSpanId());
+            }
+            try {
+                handler.info("message via MessageHandler");
+                LOGGER.info("direct SLF4J message");
+            } finally {
+                MDC.remove("traceId");
+                MDC.remove("spanId");
+            }
+        } finally {
+            handler.close();
+        }
+    }
+}
+```
+
+For async execution, continue using `provider.wrap(...)` or
+`provider.contextAwareExecutorService(...)` for this package correlation propagation.
+If worker threads also write direct SLF4J/Log4J logs, propagate MDC/ThreadContext there as well.
+
 ## Log enrichment precedence
 
 When a `LogRecord` is emitted through a tracer-aware handler, enrichment fields are applied
@@ -1324,124 +920,6 @@ Specifically:
 - `instrumentationScope` is set only when absent.
 - `traceId`, `spanId`, `traceFlags` are set only when the record's correlation fields are missing.
 - Common attributes are appended only for keys not already present on the record.
-
-## Jaeger/Grafana backend usage (logs vs traces)
-
-A **trace** represents one end-to-end request flow.  
-A **span** is one timed operation inside that trace (DB call, HTTP call, business step, etc.).
-
-### Log export handlers
-
-```java
-import com.threeamigos.common.util.implementations.messagehandler.GrafanaMessageHandler;
-import com.threeamigos.common.util.implementations.messagehandler.JaegerMessageHandler;
-
-public class BackendLogExportExample {
-    public static void main(String[] args) {
-        JaegerMessageHandler jaegerLogs = new JaegerMessageHandler("http://localhost:4318/v1/traces");
-        jaegerLogs.info("log transformed into span event for Jaeger OTLP traces endpoint");
-
-        GrafanaMessageHandler grafanaLogs = new GrafanaMessageHandler("http://localhost:3100/loki/api/v1/push");
-        grafanaLogs.error("log to Grafana Loki push endpoint");
-
-        jaegerLogs.close();
-        grafanaLogs.close();
-    }
-}
-```
-
-If you are exporting to a shared OpenTelemetry Collector instead of directly to backends,
-both handlers can target the same collector OTLP endpoint (commonly `http://localhost:4318/v1/logs`).
-
-Transport behavior for both handlers (`AbstractHTTPOutputMessageHandler`):
-- bounded retry/backoff is enabled by default (`maxRetries=1`, exponential backoff from `50 ms`, capped at `500 ms`);
-- retryable failures include I/O exceptions and HTTP `408`, `429`, and `5xx`;
-- failures are buffered and retried on subsequent emissions as a batch (single-worker mode);
-- for OTLP log endpoints and `ExportLogsServiceRequestLogRecordFormatter`, buffered retries and the
-  current record are sent in one `ExportLogsServiceRequest` envelope;
-- for Jaeger `/v1/traces` transform mode and Grafana Loki push mode, records are retried but sent
-  with per-record backend semantics;
-- throughput can be scaled with `setHttpWorkerPoolSize(N)` — see the
-  [HTTP worker pool](#http-worker-pool-jaebergrafana-throughput-scaling) section.
-
-Important:
-- `GrafanaMessageHandler` exports log records only (Loki push payload or OTLP logs payload depending on endpoint).
-- Calling `startSpan(...)` / `span.end()` does not export traces by itself.
-- Trace export happens only when a span dispatcher is configured on `TracerProvider`.
-
-### Collector fan-out dispatcher failure policy
-
-When you chain multiple backend dispatchers with:
-- `OTelCollectorDispatcher` (for logs)
-- `OTelCollectorSpanDispatcher` (for spans)
-
-the failure behavior is:
-- all delegates are attempted (no short-circuit on first failure);
-- delegate `IOException` and `RuntimeException` are both captured;
-- after fan-out completes, one aggregated `IOException` is thrown;
-- each delegate failure is attached as a suppressed cause (`ex.getSuppressed()`).
-
-This keeps delivery attempts best-effort across all configured targets while preserving a checked
-failure signal to the caller.
-
-### Span export (traces) via dispatcher
-
-```java
-import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
-import com.threeamigos.common.util.implementations.messagehandler.utils.JaegerSpanDispatcher;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
-
-public class SpanExportExample {
-    public static void main(String[] args) {
-        TracerProvider provider = TracerProvider.builder()
-                .serviceName("checkout-api")
-                .build();
-        provider.setDefaultSpanDispatcher(new JaegerSpanDispatcher("http://localhost:4318/v1/traces"));
-
-        Tracer tracer = provider.getTracer("checkout-api", "1.0.0");
-        Span span = tracer.createSpan("checkout.validate");
-        span.addEvent("validation-started");
-        span.end(); // dispatches SpanData through configured SpanDispatcher
-    }
-}
-```
-
-For Grafana Tempo, use `GrafanaSpanDispatcher` similarly.
-
-### Grafana Loki logs + Tempo traces (full example)
-
-```java
-import com.threeamigos.common.util.implementations.messagehandler.GrafanaMessageHandler;
-import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
-import com.threeamigos.common.util.implementations.messagehandler.utils.GrafanaSpanDispatcher;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
-import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
-
-public class GrafanaLogsAndTracesExample {
-    public static void main(String[] args) {
-        TracerProvider provider = TracerProvider.builder()
-                .serviceName("checkout-api")
-                .serviceVersion("1.0.0")
-                .build();
-
-        // Required for trace export (Tempo OTLP traces endpoint)
-        provider.setDefaultSpanDispatcher(new GrafanaSpanDispatcher("http://localhost:14318/v1/traces"));
-
-        Tracer tracer = provider.getTracer("checkout-api", "1.0.0");
-        GrafanaMessageHandler logs = tracer.getGrafanaMessageHandler("http://localhost:3100/loki/api/v1/push");
-
-        Span span = logs.startSpan("checkout.request");
-        try {
-            logs.info("checkout request started");
-            logs.info("checkout request completed");
-        } finally {
-            span.end(); // exported to Tempo because default span dispatcher is configured
-            logs.close(); // log records exported to Loki
-        }
-    }
-}
-```
 
 ## Correlation mechanism (with examples)
 
@@ -1737,22 +1215,537 @@ public class CheckoutServlet extends HttpServlet {
     }
 }
 ```
-
 Note: CDI must be enabled for the deployment (add `beans.xml` to `WEB-INF` or `META-INF`).
+
+## Class filtering with `FilterByClassName`
+
+`FilterByClassName` is an OTel-log filter. Typical usage is through `Tracer` handlers:
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.filters.FilterByClassName;
+import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
+
+public class FilterByClassNameExample {
+    public static void main(String[] args) {
+        FilterByClassName filter = new FilterByClassName();
+        filter.add("com\\.example\\.critical\\..*", SeverityNumber.INFO);
+        filter.add("com\\.example\\.noisy\\..*", SeverityNumber.ERROR);
+        filter.prune("com\\.example\\.chatty\\..*");
+
+        Tracer tracer = TracerProvider.builder()
+                .serviceName("checkout-api")
+                .build()
+                .getTracer("checkout-api", filter);
+
+        MessageHandler handler = tracer.getConsoleMessageHandler();
+        handler.info("Filtered according to source class attributes");
+    }
+}
+```
+From the example, it is clear that the key part of the property is actually a Regex.
+
+Its task is to filter logs produced from certain classes. It filters `LogRecord`s on SeverityNumber and function (or
+class) name. Rules:
+- if SeverityNumber was not included, the record is not filtered.
+- if the function name (or the class name) was not included, or it is not present in the filter list, the record is not
+  filtered.
+- if the function (or class) name os mapped to `OFF` then every log from that function (or class) is filtered.
+- if the SeverityNumber is greater or equal to the minimum SeverityNumber in the filter collection, the record is not
+  filtered.
+- Otherwise, the record is filtered.
+
+You can also load filter rules from properties via:
+- `loadPropertiesFromFile(...)`
+- `loadPropertiesFromResource(...)`
+
+Regex policy:
+- invalid regex patterns are ignored (not fail-fast) and each invalid pattern is reported,
+- valid rules in the same configuration are still applied.
+
+## Jaeger/Grafana export handlers
+
+Two `MessageHandler`s are provided which can send LogRecord to Jaeger and Grafana Loki: `JaegerMessageHandler` and
+`GrafanaMessageHandler`. Those are experimental and should not be used in a production environment!
+
+They use JSON payloads by default (`ExportLogsServiceRequestLogRecordFormatter`) that will be sent directly to an 
+endpoint.
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.GrafanaMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.JaegerMessageHandler;
+
+public class BackendLogExportExample {
+    public static void main(String[] args) {
+        JaegerMessageHandler jaegerLogs = new JaegerMessageHandler("http://localhost:4318/v1/traces");
+        jaegerLogs.info("log transformed into span event for Jaeger OTLP traces endpoint");
+
+        GrafanaMessageHandler grafanaLogs = new GrafanaMessageHandler("http://localhost:3100/loki/api/v1/push");
+        grafanaLogs.error("log to Grafana Loki push endpoint");
+
+        jaegerLogs.close();
+        grafanaLogs.close();
+    }
+}
+```
+
+If you are exporting to a shared OpenTelemetry Collector instead of directly to backends,
+both handlers can target the same collector OTLP endpoint (commonly `http://localhost:4318/v1/logs`).
+
+Transport behavior for both handlers (`AbstractHTTPOutputMessageHandler`):
+- bounded retry/backoff is enabled by default (`maxRetries=1`, exponential backoff from `50 ms`, capped at `500 ms`);
+- retryable failures include I/O exceptions and HTTP `408`, `429`, and `5xx`;
+- failures are buffered and retried on later emissions as a batch (single-worker mode);
+- for OTLP log endpoints and `ExportLogsServiceRequestLogRecordFormatter`, buffered retries and the
+  current record are sent in one `ExportLogsServiceRequest` envelope;
+- for Jaeger `/v1/traces` transform mode and Grafana Loki push mode, records are retried but sent
+  with per-record backend semantics;
+- throughput can be scaled with `setHttpWorkerPoolSize(N)` — see the
+  [HTTP worker pool](#http-worker-pool-jaebergrafana-throughput-scaling) section.
+
+Important:
+- `GrafanaMessageHandler` exports log records only (Loki push payload or OTLP logs payload depending on endpoint).
+- Calling `startSpan(...)` / `span.end()` does not export traces by itself.
+- Trace export happens only when a span dispatcher is configured on `TracerProvider`. See next section.
+
+### Span export (traces) via dispatcher
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
+import com.threeamigos.common.util.implementations.messagehandler.utils.JaegerSpanDispatcher;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
+
+public class SpanExportExample {
+    public static void main(String[] args) {
+        TracerProvider provider = TracerProvider.builder()
+                .serviceName("checkout-api")
+                .build();
+        provider.setDefaultSpanDispatcher(new JaegerSpanDispatcher("http://localhost:4318/v1/traces"));
+
+        Tracer tracer = provider.getTracer("checkout-api", "1.0.0");
+        Span span = tracer.createSpan("checkout.validate");
+        span.addEvent("validation-started");
+        span.end(); // dispatches SpanData through configured SpanDispatcher
+    }
+}
+```
+
+For Grafana Tempo, use `GrafanaSpanDispatcher` similarly.
+
+### Grafana Loki logs + Tempo traces (full example)
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.GrafanaMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.otel.TracerProvider;
+import com.threeamigos.common.util.implementations.messagehandler.utils.GrafanaSpanDispatcher;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Span;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.Tracer;
+
+public class GrafanaLogsAndTracesExample {
+    public static void main(String[] args) {
+        TracerProvider provider = TracerProvider.builder()
+                .serviceName("checkout-api")
+                .serviceVersion("1.0.0")
+                .build();
+
+        // Required for trace export (Tempo OTLP traces endpoint)
+        provider.setDefaultSpanDispatcher(new GrafanaSpanDispatcher("http://localhost:14318/v1/traces"));
+
+        Tracer tracer = provider.getTracer("checkout-api", "1.0.0");
+        GrafanaMessageHandler logs = tracer.getGrafanaMessageHandler("http://localhost:3100/loki/api/v1/push");
+
+        Span span = logs.startSpan("checkout.request");
+        try {
+            logs.info("checkout request started");
+            logs.info("checkout request completed");
+        } finally {
+            span.end(); // exported to Tempo because default span dispatcher is configured
+            logs.close(); // log records exported to Loki
+        }
+    }
+}
+```
+
+### Collector fan-out dispatcher failure policy
+
+When you chain multiple backend dispatchers with:
+- `OTelCollectorDispatcher` (for logs)
+- `OTelCollectorSpanDispatcher` (for spans)
+
+the failure behavior is:
+- all delegates are attempted (no short-circuit on first failure);
+- delegate `IOException` and `RuntimeException` are both captured;
+- after fan-out completes, one aggregated `IOException` is thrown;
+- each delegate failure is attached as a suppressed cause (`ex.getSuppressed()`).
+
+This keeps delivery attempts best-effort across all configured targets while preserving a checked
+failure signal to the caller.
+
+## HTTP transport layer (`HttpTransport`)
+
+All HTTP dispatchers (`JaegerLogRecordDispatcher`, `GrafanaLogRecordDispatcher`, and span
+dispatchers) delegate the low-level HTTP POST to a pluggable `HttpTransport` instance. Two
+implementations are provided:
+
+| Transport | Dependencies | Connection handling | When to use |
+|---|---|---|---|
+| `HttpUrlConnectionTransport` | None (JDK only) | One connection per call; JVM keep-alive cache may reuse sockets | Default; suitable for low-to-medium throughput |
+| `ApacheHttpClientTransport` | `org.apache.httpcomponents:httpclient` (optional) | Shared `PoolingHttpClientConnectionManager`; persistent connections | Sustained high-throughput workloads; explicit pool sizing |
+
+### Default: `HttpUrlConnectionTransport`
+
+Used automatically when no transport is specified. Requires no additional dependencies:
+
+```java
+// Default — uses HttpUrlConnectionTransport implicitly
+JaegerMessageHandler handler = new JaegerMessageHandler("http://localhost:4318/v1/logs");
+```
+
+### Connection pooling: `ApacheHttpClientTransport`
+
+For workloads where per-call TCP handshake overhead is measurable, use `ApacheHttpClientTransport`.
+It creates a single `PoolingHttpClientConnectionManager` (50 total / 10 per-route by default)
+shared across all dispatch calls.
+
+**Step 1** — add the optional dependency to `pom.xml`:
+
+```xml
+<dependency>
+    <groupId>org.apache.httpcomponents</groupId>
+    <artifactId>httpclient</artifactId>
+    <version>4.5.14</version>
+</dependency>
+```
+
+**Step 2** — supply the transport to the dispatcher constructor:
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.transport.ApacheHttpClientTransport;
+import com.threeamigos.common.util.implementations.messagehandler.utils.GrafanaLogRecordDispatcher;
+
+...
+ApacheHttpClientTransport transport = new ApacheHttpClientTransport();
+
+GrafanaLogRecordDispatcher dispatcher = new GrafanaLogRecordDispatcher(
+        "https://logs-prod.example.com/loki/api/v1/push",
+        null, null, "bearer-token",
+        5_000, 10_000, null,
+        transport  // connection-pooled transport
+);
+
+// ... use dispatcher ...
+
+transport.close();  // release pooled connections on shutdown
+...
+```
+
+Custom pool sizing is available via the second constructor:
+
+```java
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
+
+...
+PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
+cm.setMaxTotal(100);
+cm.setDefaultMaxPerRoute(20);
+
+CloseableHttpClient customClient = HttpClients.custom()
+        .setConnectionManager(cm)
+        .build();
+
+ApacheHttpClientTransport transport = new ApacheHttpClientTransport(customClient);
+...
+```
+
+### Lifecycle note
+
+`ApacheHttpClientTransport` implements `Closeable`. Call `transport.close()` at application
+shutdown to release pooled sockets. `HttpUrlConnectionTransport` is stateless and does not need
+explicit closing.
+
+A single transport instance may be shared across multiple dispatcher instances.
+
+## HTTP durability policies
+
+`JaegerMessageHandler` and `GrafanaMessageHandler` accept a pluggable durability policy via
+`HttpDispatchDurabilityStore`:
+- `InMemoryHttpDispatchDurabilityStore` (default)
+- `FileHttpDispatchDurabilityStore`
+- `RedisHttpDispatchDurabilityStore` (Jedis)
+
+Default constructors use:
+- durability store: `InMemoryHttpDispatchDurabilityStore`
+- dead-letter consumer: `System.err::println`
+
+For standalone applications, these defaults are usually acceptable.
+For server/high-throughput workloads, explicitly set both:
+- a non-volatile durability policy (`FileHttpDispatchDurabilityStore` or `RedisHttpDispatchDurabilityStore`);
+- a production DLQ consumer (`Consumer<String>`) aligned with your operational tooling.
+
+When dispatch fails with a permanent/non-retryable failure (for example, HTTP 400), entries are
+routed to dead-letter reporting (`Consumer<String>`), so callers can redirect DLQ output to
+console, file, or any custom sink. Retryable/transient I/O failures are instead reported through
+the handler error-consumer path, and records remain in the durability store for later retries.
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.JaegerMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.durability.FileHttpDispatchDurabilityStore;
+import com.threeamigos.common.util.implementations.messagehandler.durability.RedisHttpDispatchDurabilityStore;
+
+import java.nio.file.Paths;
+
+public class HttpDurabilityExample {
+    public static void main(String[] args) throws Exception {
+        JaegerMessageHandler fileDurable = new JaegerMessageHandler(
+                "http://localhost:4318/v1/logs",
+                new FileHttpDispatchDurabilityStore(Paths.get("logs", "jaeger-pending.bin")),
+                msg -> System.err.println("[DLQ] " + msg)
+        );
+
+        JaegerMessageHandler redisDurable = new JaegerMessageHandler(
+                "http://localhost:4318/v1/logs",
+                new RedisHttpDispatchDurabilityStore("redis://localhost:6379", "mh:jaeger:pending"),
+                msg -> System.err.println("[DLQ] " + msg)
+        );
+
+        fileDurable.info("persisted locally before dispatch");
+        redisDurable.info("persisted in Redis before dispatch");
+
+        fileDurable.close();
+        redisDurable.close();
+    }
+}
+```
+
+## HTTP worker pool (Jaeger/Grafana throughput scaling)
+
+By default each HTTP handler dispatches one HTTP POST at a time (single worker). For RTT-bound
+transports this limits throughput to roughly `1000 ms / backend-latency-ms` records per second.
+Use `setHttpWorkerPoolSize(int)` to enable concurrent in-flight HTTP calls:
+
+```java
+JaegerMessageHandler handler = new JaegerMessageHandler("http://localhost:4318/v1/logs");
+handler.setHttpWorkerPoolSize(4);   // up to 4 concurrent HTTP POSTs
+```
+
+The pool size can also be read back:
+
+```java
+int size = handler.getHttpWorkerPoolSize();   // 1 (default) or the configured value
+```
+
+**Behavior when `poolSize > 1`:**
+- Each log record is dispatched individually by a dedicated pool thread; no batching across workers.
+- The durability-store catch-up batch (retrieve-all-pending on startup) is disabled to prevent
+  duplicate dispatch between concurrent workers.
+- `close()` waits up to 5 seconds for in-flight HTTP calls to complete before closing the
+  durability store, so no records are left orphaned on normal shutdown.
+
+**When to keep `poolSize = 1` (the default):**
+- You rely on crash-recovery batching — records pending before a JVM restart are re-dispatched as
+  a batch on the next startup only when a single worker is active.
+- You prefer the simpler, lower-resource profile for low-throughput workloads.
+
+The underlying queue/overload controls (rate limiting, sampling, queue overflow policy) remain
+active in both modes; the worker pool only parallelizes the outbound HTTP leg.
+
+---
+
+## Global internal error sink (`InnerErrorMessageHandler`)
+
+`InnerErrorMessageHandler` is the package-level safety sink for failures that happen
+while the logging infrastructure is processing a log call.
+
+Default global consumer:
+- `System.err::println`
+
+Typical events reported to this sink include:
+- backend dispatch/runtime failures in handlers;
+- runtime failures thrown by `Supplier<String>` message producers;
+- failures in user-provided extension points (for example, custom error consumers,
+  custom delegates in `CompositeMessageHandler`, or custom `RotationPolicy` code);
+- runtime failures in handler internals that are trapped to preserve caller flow.
+
+Behavior contract:
+- null messages are ignored;
+- runtime exceptions thrown by a custom global consumer trigger a fallback to default `System.err`;
+- `consume(localConsumer, message)` tries the local consumer first, then falls back to the global sink
+  if the local consumer is null or throws a runtime exception.
+
+Configure the global consumer once at bootstrap:
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.InnerErrorMessageHandler;
+
+public class InnerErrorBootstrap {
+    public static void main(String[] args) {
+        InnerErrorMessageHandler.setGlobalConsumer(
+                msg -> System.err.println("[INNER-ERROR] " + msg)
+        );
+
+        // ... create and use handlers
+
+        // Optional: restore default behavior.
+        InnerErrorMessageHandler.resetGlobalConsumer();
+    }
+}
+```
+
+Operational guidance:
+- keep the global consumer lightweight and non-blocking;
+- avoid routing this consumer back into the same logging pipeline to prevent recursive error loops;
+- use `resetGlobalConsumer()` mainly in tests or controlled bootstrap reconfiguration.
+
+## Internal error handling model (exception boundary)
+
+This library uses a clear boundary between setup-time failures and runtime internal failures.
+
+Setup/bootstrap failures are fail-fast and can throw:
+- invalid constructor/configuration arguments;
+- endpoint/auth/timeout/durability initialization errors;
+- strict trace-context validation failures;
+- strict resource-bundle validation failures (`validateRequiredKeysStrict(...)`).
+
+Runtime logging/tracing paths are best-effort. Internal failures are generally trapped and
+reported through `InnerErrorMessageHandler` (and, for HTTP handlers, also through configured
+error/DLQ consumers), so caller code can continue.
+
+Runtime behavior highlights:
+- `Supplier<String>` failures are trapped and reported (not propagated to log callers);
+- dispatch attempts after `close()` are dropped and reported;
+- `FileMessageHandler`, `SwingMessageHandler`, and HTTP handler runtime dispatch failures are reported instead of breaking caller flow;
+- `OTelCollectorDispatcher` and `OTelCollectorSpanDispatcher` invoke all delegates, aggregate delegate
+  `IOException` + `RuntimeException` failures, and rethrow one `IOException` with suppressed causes.
+
+Fatal JVM conditions are not masked:
+- `CompositeMessageHandler` catches `RuntimeException` from delegates but does not swallow `Error` subclasses.
+
+---
+
+### Resource bundle reliability (startup vs runtime)
+
+To avoid hard failures caused by missing localization resources:
+- use runtime-safe accessors in normal execution paths: `MessageHandlerResourceBundle.get(...)`,
+ `MessageHandlerResourceBundle.format(...)`, `MessageHandlerResourceBundle.getOrDefault(...)`,
+ `MessageHandlerResourceBundle.formatOrDefault(...)`
+- these methods fallback instead of throwing when the bundle or key is missing.
+
+For deployment correctness, add one strict startup validation step and fail fast before serving traffic:
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.MessageHandlerResourceBundle;
+
+public class BootstrapValidationExample {
+    public static void main(String[] args) {
+        MessageHandlerResourceBundle.validateRequiredKeysStrict(
+                "handlerIsClosed",
+                "nullFormatterProvided",
+                "logRecordMustNotBeNull"
+        );
+        // start application
+    }
+}
+```
+
+If `validateRequiredKeysStrict(...)` throws `MissingResourceException`, treat it as a setup/packaging issue (not a recoverable runtime event).
+
+---
+
+## Output handler health metrics
+
+All handlers based on `AbstractOutputMessageHandler` expose runtime health counters:
+- `getHandlerHealthMetrics()`
+- `isHealthy()`
+
+This applies to:
+- `ConsoleMessageHandler`
+- `FileMessageHandler`
+- `JaegerMessageHandler`
+- `GrafanaMessageHandler`
+
+`getHandlerHealthMetrics()` returns an immutable snapshot with:
+- successful/failed/total output operations
+- consecutive failure count
+- last success/failure timestamps (epoch millis)
+- async mode flag and pending queue size
+- closed flag and derived health flag
+- dropped operation count (for example, dispatch attempts after close)
+- retry telemetry counters (attempts/successes/failures; available for retry-capable handlers)
+- saturation telemetry (dispatch attempts, enqueue count, sync fallback count, saturation events,
+  max observed queue size, configured queue capacity, bounded/unbounded flag, saturation ratio)
+- overload policy telemetry (current overflow policy, overflow timeout, drop-newest/drop-oldest counters,
+  block-timeout counter)
+- overload shedding telemetry (rate-limited count, sampled-out count, active rate-limit settings)
+
+Async backpressure behavior for these handlers:
+- `async=true` uses one background worker and a queue.
+- With a bounded queue (`queueCapacity > 0`), overflow handling is configurable via
+  `setQueueOverflowPolicy(...)`:
+  - `CALLER_RUNS` (default, backward-compatible): queue full -> sync fallback on caller thread
+  - `DROP_NEWEST`: shed the incoming message
+  - `DROP_OLDEST`: shed one queued message and keep the newest
+  - `BLOCK_WITH_TIMEOUT`: wait up to `queueOverflowBlockTimeoutMillis`, then shed on timeout
+- `queueCapacity <= 0` creates an unbounded queue.
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.AbstractOutputMessageHandler;
+
+public class HandlerHealthExample {
+    public static void main(String[] args) {
+        ConsoleMessageHandler handler = new ConsoleMessageHandler();
+        try {
+            handler.info("startup complete");
+
+            AbstractOutputMessageHandler.HandlerHealthMetrics metrics =
+                    handler.getHandlerHealthMetrics();
+
+            System.out.println("successful=" + metrics.getSuccessfulOperations());
+            System.out.println("failed=" + metrics.getFailedOperations());
+            System.out.println("healthy=" + handler.isHealthy());
+        } finally {
+            handler.close();
+        }
+    }
+}
+```
+
+### Overload-control configuration example
+
+```java
+import com.threeamigos.common.util.implementations.messagehandler.AbstractOutputMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.GrafanaMessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.otel.SeverityNumber;
+
+public class OverloadControlsExample {
+    public static void main(String[] args) {
+        GrafanaMessageHandler handler = new GrafanaMessageHandler(
+                "http://localhost:4318/v1/logs",
+                true,
+                1000
+        );
+
+        // Queue overflow policy (default is CALLER_RUNS)
+        handler.setQueueOverflowPolicy(AbstractOutputMessageHandler.QueueOverflowPolicy.DROP_OLDEST);
+        handler.setQueueOverflowBlockTimeoutMillis(25L); // used only by BLOCK_WITH_TIMEOUT
+
+        // Token bucket rate limit (disabled when permitsPerSecond <= 0)
+        handler.setRateLimitPolicy(5000L, 10000L);
+        handler.setRateLimitBypassSeverity(SeverityNumber.ERROR);
+
+        // Severity-bucket sampling rates (TRACE, DEBUG, INFO, WARN, ERROR, FATAL)
+        handler.setSeveritySamplingPolicy(0.05d, 0.10d, 0.25d, 1.0d, 1.0d, 1.0d);
+    }
+}
+```
 
 ## Important behavior notes
 
-1. Null message strings are ignored (no-op).
-2. Null message suppliers are ignored (no-op).
-3. If a supplier returns null, the message is ignored (no-op).
-   If `supplier.get()` throws a runtime exception, it is trapped and reported through
-   `InnerErrorMessageHandler`; it is not propagated to the logging caller.
-4. A null severity is treated as `SeverityNumber.INFO`.
-5. `MessageHandler.startSpan(name)` works only on tracer-created handlers.
-6. Calling `startSpan(name)` on non-tracer handlers throws `IllegalStateException` (localized message).
-7. Output handlers do not throw when log methods are called after `close()`:
-   those dispatch attempts are dropped and reported through `InnerErrorMessageHandler`.
-8. There is no `endSpan(...)` helper on handlers; callers close spans explicitly with `span.end()`.
 9. Async dispatch is optional and available only in output handlers based on `AbstractOutputMessageHandler`:
    - `ConsoleMessageHandler`
    - `FileMessageHandler`
@@ -1773,20 +1766,6 @@ Note: CDI must be enabled for the deployment (add `beans.xml` to `WEB-INF` or `M
    `close()` are dropped and reported through `InnerErrorMessageHandler`. Synchronous handlers have no queue;
    `close()` simply seals the handler and releases the output resource immediately.
 10. Other handlers are synchronous unless they implement their own threading model.
-11. `GrafanaMessageHandler` exports logs only; configure `TracerProvider#setDefaultSpanDispatcher(...)`
-    (for example with `GrafanaSpanDispatcher`) to export spans/traces.
-12. `CompositeMessageHandler.close()` closes all currently registered delegates.
-13. `SwingMessageHandler` dialogs are no-ops in headless environments; runtime UI invocation
-    failures are reported through `InnerErrorMessageHandler` and are not propagated to logging callers.
-14. `exception(...)` overloads treat null message/throwable inputs as no-op.
-15. `FileMessageHandler` constructors without an explicit `RotationPolicy` use default size-based
-    rotation (`FileMessageHandler.DEFAULT_SIZE_ROTATION_MAX_BYTES` = 10 MB). Use
-    `new NoRotationPolicy()` to disable rotation explicitly.
-16. `FileMessageHandler` inter-process locking is opt-in (`new FileMessageHandler(path, true)` or
-    full constructor with `interProcessLocking=true`) and uses a sidecar `.lck` file.
-17. `JaegerMessageHandler` and `GrafanaMessageHandler` use JSON payloads by default
-    (`ExportLogsServiceRequestLogRecordFormatter`); `ConsoleMessageHandler` and
-    `FileMessageHandler` default to `ConsoleLogRecordFormatter` (human-readable text).
 18. For server deployments that ingest console/file logs, enforce formatter selection centrally
     (bootstrap/factory), keep a stable JSON schema, and verify it with parser or golden-output tests.
 19. Output handlers (`ConsoleMessageHandler`, `FileMessageHandler`, `JaegerMessageHandler`,
@@ -1795,15 +1774,6 @@ Note: CDI must be enabled for the deployment (add `beans.xml` to `WEB-INF` or `M
 20. `JaegerMessageHandler` and `GrafanaMessageHandler` do not propagate dispatch/transport exceptions
     back to logging callers; failures are reported through the configured error consumer and reflected
     in handler health metrics.
-21. Internal logging-system failures are reported through `InnerErrorMessageHandler` (default:
-    `System.err::println`). You can override this globally via
-    `InnerErrorMessageHandler.setGlobalConsumer(...)`.
-22. `JaegerMessageHandler` and `GrafanaMessageHandler` use a pluggable pending-record durability
-    policy (`HttpDispatchDurabilityStore`): default is in-memory, with optional file/Redis
-    implementations. Constructors that do not expose DLQ configuration use
-    `System.err::println` for dead-letter reporting. This package targets small standalone
-    applications; for server/high-throughput use, set durability policy and DLQ handling
-    explicitly.
 23. Output handlers also expose optional overload controls:
     queue overflow policy (`setQueueOverflowPolicy(...)`), token-bucket rate limiting
     (`setRateLimitPolicy(...)` + `setRateLimitBypassSeverity(...)`), and
@@ -1816,15 +1786,6 @@ Note: CDI must be enabled for the deployment (add `beans.xml` to `WEB-INF` or `M
 25. Collector fan-out dispatchers (`OTelCollectorDispatcher`, `OTelCollectorSpanDispatcher`) always
     attempt every delegate; delegate `IOException` and `RuntimeException` are aggregated and
     rethrown as one `IOException` with suppressed causes.
-
-Default output format by handler:
-
-| Handler | Default formatter / payload | Default output style |
-|---|---|---|
-| `ConsoleMessageHandler` | `ConsoleLogRecordFormatter` | Human-readable text |
-| `FileMessageHandler` | `ConsoleLogRecordFormatter` | Human-readable text |
-| `JaegerMessageHandler` | `ExportLogsServiceRequestLogRecordFormatter` | OTLP `ExportLogsServiceRequest` JSON |
-| `GrafanaMessageHandler` | `ExportLogsServiceRequestLogRecordFormatter` (OTLP endpoints) / Loki push payload (Loki endpoints) | JSON |
 
 ## Java compatibility
 

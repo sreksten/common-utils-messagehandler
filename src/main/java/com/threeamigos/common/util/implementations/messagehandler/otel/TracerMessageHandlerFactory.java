@@ -44,12 +44,14 @@ public final class TracerMessageHandlerFactory {
     }
 
     FileMessageHandler createFile(final String filePath) {
-        return bind(new FileMessageHandler(new LogRecordFactoryImpl(), formatter, filePath));
+        return bind(new FileMessageHandler(new LogRecordFactoryImpl(), formatter, filePath,
+                false, 0, false, true));
     }
 
     FileMessageHandler createFile(final String filePath,
                                   final LogRecordFormatter logRecordFormatter) {
-        return bind(new FileMessageHandler(new LogRecordFactoryImpl(), logRecordFormatter, filePath));
+        return bind(new FileMessageHandler(new LogRecordFactoryImpl(), logRecordFormatter, filePath,
+                false, 0, false, true));
     }
 
     InMemoryMessageHandler createInMemory() {

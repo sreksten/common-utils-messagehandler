@@ -22,6 +22,7 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -509,6 +510,47 @@ class TracerImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
     }
 
     @Test
+    @DisplayName("file handler overloads should create sidecar lock files automatically")
+    void fileHandlerOverloadsShouldCreateSidecarLockFilesAutomatically() throws Exception {
+        Path pathFromString = Files.createTempFile("tracer-impl-lock-string-", ".log");
+        Path pathFromStringFormatter = Files.createTempFile("tracer-impl-lock-string-formatter-", ".log");
+        Path pathFromFile = Files.createTempFile("tracer-impl-lock-file-", ".log");
+        Path pathFromFileFormatter = Files.createTempFile("tracer-impl-lock-file-formatter-", ".log");
+        TracerProvider provider = TracerProvider.builder()
+                .serviceName("orders")
+                .build();
+        TracerImpl tracer = (TracerImpl) provider.getTracer("orders-api", "1.0.0");
+        LogRecordFormatter formatter = logRecord -> "LOCK:" + logRecord.getBody().asString();
+        Filter passThrough = new Filter() {
+            @Override
+            public LogRecord filter(final LogRecord logRecord) {
+                return logRecord;
+            }
+        };
+
+        try (MessageHandler fromString = tracer.getFileMessageHandler(pathFromString.toString(), passThrough);
+             MessageHandler fromStringFormatter = tracer.getFileMessageHandler(
+                     pathFromStringFormatter.toString(),
+                     formatter,
+                     passThrough);
+             MessageHandler fromFile = tracer.getFileMessageHandler(pathFromFile.toFile(), passThrough);
+             MessageHandler fromFileFormatter = tracer.getFileMessageHandler(
+                     pathFromFileFormatter.toFile(),
+                     formatter,
+                     passThrough)) {
+            fromString.info("string");
+            fromStringFormatter.info("string-formatter");
+            fromFile.info("file");
+            fromFileFormatter.info("file-formatter");
+        }
+
+        assertTrue(Files.exists(resolveLockSidecarPath(pathFromString)));
+        assertTrue(Files.exists(resolveLockSidecarPath(pathFromStringFormatter)));
+        assertTrue(Files.exists(resolveLockSidecarPath(pathFromFile)));
+        assertTrue(Files.exists(resolveLockSidecarPath(pathFromFileFormatter)));
+    }
+
+    @Test
     @DisplayName("console formatter overloads should render formatted output and respect filters")
     void consoleFormatterOverloadsShouldRenderFormattedOutputAndRespectFilters() throws Exception {
         PrintStream originalOut = System.out;
@@ -784,5 +826,14 @@ class TracerImplUnitTest extends AbstractOtelValidatorLogTrapUnitTest {
         fromNullPath.close();
         fromBlankPath.close();
         fromNullFile.close();
+        assertDoesNotThrow(() -> Files.deleteIfExists(Paths.get("message-handler.log")));
+        assertDoesNotThrow(() -> Files.deleteIfExists(Paths.get("message-handler.log.lck")));
+    }
+
+    private static Path resolveLockSidecarPath(final Path logFilePath) {
+        Path absolute = logFilePath.toAbsolutePath().normalize();
+        String lockFileName = absolute.getFileName().toString() + ".lck";
+        Path parent = absolute.getParent();
+        return parent != null ? parent.resolve(lockFileName) : absolute.resolveSibling(lockFileName);
     }
 }
