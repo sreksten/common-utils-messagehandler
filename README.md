@@ -1746,7 +1746,7 @@ public class OverloadControlsExample {
 
 ## Important behavior notes
 
-9. Async dispatch is optional and available only in output handlers based on `AbstractOutputMessageHandler`:
+1. Async dispatch is optional and available only in output handlers based on `AbstractOutputMessageHandler`:
    - `ConsoleMessageHandler`
    - `FileMessageHandler`
    - `JaegerMessageHandler`
@@ -1765,25 +1765,20 @@ public class OverloadControlsExample {
    called are executed before the handler shuts down. Tasks submitted *concurrently with* or *after*
    `close()` are dropped and reported through `InnerErrorMessageHandler`. Synchronous handlers have no queue;
    `close()` simply seals the handler and releases the output resource immediately.
-10. Other handlers are synchronous unless they implement their own threading model.
-18. For server deployments that ingest console/file logs, enforce formatter selection centrally
-    (bootstrap/factory), keep a stable JSON schema, and verify it with parser or golden-output tests.
-19. Output handlers (`ConsoleMessageHandler`, `FileMessageHandler`, `JaegerMessageHandler`,
-    `GrafanaMessageHandler`) expose health metrics via `getHandlerHealthMetrics()` and a
-    quick health status via `isHealthy()`.
-20. `JaegerMessageHandler` and `GrafanaMessageHandler` do not propagate dispatch/transport exceptions
+2. Other handlers are synchronous unless they implement their own threading model.
+3. `JaegerMessageHandler` and `GrafanaMessageHandler` do not propagate dispatch/transport exceptions
     back to logging callers; failures are reported through the configured error consumer and reflected
     in handler health metrics.
-23. Output handlers also expose optional overload controls:
+4. Output handlers also expose optional overload controls:
     queue overflow policy (`setQueueOverflowPolicy(...)`), token-bucket rate limiting
     (`setRateLimitPolicy(...)` + `setRateLimitBypassSeverity(...)`), and
     severity-bucket sampling (`setSeveritySamplingPolicy(...)`).
-24. HTTP handlers (`JaegerMessageHandler`, `GrafanaMessageHandler`) expose
+5. HTTP handlers (`JaegerMessageHandler`, `GrafanaMessageHandler`) expose
     `setHttpWorkerPoolSize(int)` to run multiple concurrent HTTP dispatch threads. Default is
     `1` (single worker, backward-compatible). When `poolSize > 1`, each record is dispatched
     individually; crash-recovery batching (retrieve-all-pending on restart) is disabled in pool
     mode to prevent duplicate dispatch.
-25. Collector fan-out dispatchers (`OTelCollectorDispatcher`, `OTelCollectorSpanDispatcher`) always
+6. Collector fan-out dispatchers (`OTelCollectorDispatcher`, `OTelCollectorSpanDispatcher`) always
     attempt every delegate; delegate `IOException` and `RuntimeException` are aggregated and
     rethrown as one `IOException` with suppressed causes.
 
