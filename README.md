@@ -1,6 +1,6 @@
-# common-util-messagehandler
+# common-utils-messagehandler
 
-Part of the common-util classes, designed to help when writing standalone Java applications.
+Part of the common-utils classes, designed to help when writing standalone Java applications.
 
 This subpackage addresses the following needs:
 
